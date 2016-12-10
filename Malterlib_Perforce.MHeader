@@ -1,0 +1,78 @@
+// Copyright © 2015 Hansoft AB 
+// Distributed under the MIT license, see license text in LICENSE.Malterlib
+
+Import "../Core/Lib_Malterlib.MTarget"
+Import "../../SDK/p4/p4.MHeader"
+
+%Group "{Malterlib}/{Lib_Malterlib_Perforce}"
+{
+	Property
+	{
+		MalterlibNoShortcuts false
+		AddIncludePaths_p4api true
+	}
+	%Group Perforce
+	{
+		%Group Include
+		{
+			Compile.Type "C++"
+			{
+				!!DocumentationEnabled true
+			}
+			%File "Include/Mib/Perforce/^*"
+		}
+		%File "Source/^*"
+		%Group Documentation
+		{
+			%File "Documentation/*"
+		}
+	}
+	%Dependency Lib_Malterlib_Network
+	{
+		Dependency.Indirect true
+	}
+	%Dependency Lib_p4api
+	{
+		Dependency.Indirect true
+	}
+}
+
+Property
+{
+	MalterlibLibrary_Perforce true
+	{
+		&
+		{
+			MalterlibLibrary_Perforce ""
+			MalterlibLibrary_All true
+		}
+	}
+	MalterlibSubLibraries "Perforce;@(MalterlibSubLibraries)"
+	{
+		!!MalterlibLibrary_Perforce true
+	}
+	MalterlibLibrarySeparate_Lib_Malterlib_Perforce true
+//	MalterlibSubLibrarySeparate_Lib_Malterlib_Perforce true
+	MalterlibIncludeRoots "@('Include'->MakeAbsolute());@(MalterlibIncludeRoots)"
+	{
+		!!MalterlibLibrary_Perforce true
+	}
+}
+
+%Group "{Test}/{Malterlib_Perforce}"
+{
+	Property
+	{
+		MalterlibLinkWithOpenSSL true
+	}
+}
+
+Property
+{
+	!!MalterlibEnableInternalTests true
+	
+	MalterlibTests "Malterlib_Perforce;@(MalterlibTests)"
+	MalterlibTestFiles_Malterlib_Perforce "@('Test/*'->MakeAbsolute())"
+	MalterlibTestDependencies_Malterlib_Perforce "Lib_Malterlib_Perforce"
+	MalterlibTestExtraGroups_Malterlib_Perforce "{Test}/{Malterlib_Perforce}"
+}
