@@ -154,8 +154,19 @@ void CPerforceClient::CP4Client::OutputInfo( char level, const char *data )
 
 void CPerforceClient::CP4Client::OutputBinary( const char *data, int length )
 {
+	CStr Temp;
+	Temp.f_AddStr(data, length);
+	if (m_OnText)
+	{
+		m_OnText(Temp);
+		return;
+	}
+	
+	m_OutputTextRaw += Temp;
+	Temp = m_pClient->f_DecodeStr(Temp);
+	m_OutputText += Temp;
 //			DConOut("P4: OutputBinary" DNewLine, 0);
-	return ClientUser::OutputBinary( data, length );
+//	return ClientUser::OutputBinary( data, length );
 }
 
 
