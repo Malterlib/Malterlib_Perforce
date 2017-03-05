@@ -33,6 +33,8 @@ Import "../../SDK/p4/p4.MHeader"
 	}
 	%Dependency Lib_p4api
 	{
+		!DocumentationEnabled true
+		
 		Dependency.Indirect true
 	}
 }
