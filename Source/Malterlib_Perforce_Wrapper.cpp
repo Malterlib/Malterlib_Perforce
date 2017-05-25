@@ -314,6 +314,12 @@ CPerforceClient::CPerforceClient(CPerforceClient::CConnectionInfo const& _Info)
 		//m_pAPI->SetProtocol("api", "58");
 
 		m_pAPI->Init( &P4error );
+		if (P4error.IsError())
+		{
+			StrBuf Buffer;
+			P4error.Fmt(&Buffer);
+			m_InitError = Buffer.Text();
+		}
 		m_pAPI->SetBreak(m_pClient);
 		m_pAPI->SetProg( "Malterlib Perforce Wrapper" );
 
@@ -340,7 +346,13 @@ CStr CPerforceClient::f_GetLastError() const
 #define	DCheckApi(_Function) \
 		m_LastError.f_Clear();\
 		auto fOnError = [&]{m_LastFunction = _Function ;};\
-		if(!m_pAPI || m_pAPI->Dropped())\
+		if (!m_InitError.f_IsEmpty())\
+		{\
+			m_LastError = m_InitError;\
+			fOnError();\
+			return false;\
+		}\
+		if (!m_pAPI || m_pAPI->Dropped())\
 		{\
 			m_LastError = "The Perforce client was dropped.";\
 			fOnError();\

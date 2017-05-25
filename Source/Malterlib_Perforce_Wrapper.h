@@ -327,6 +327,7 @@ namespace NMib::NPerforce
 
 		class CP4Client;
 
+		CStr m_InitError;
 		CStr m_LastError;
 		CStr m_LastFunction;
 		CP4Client *m_pClient;
