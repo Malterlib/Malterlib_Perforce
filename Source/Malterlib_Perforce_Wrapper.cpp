@@ -4,6 +4,10 @@
 #include "PCH.h"
 #include "Malterlib_Perforce_Wrapper.h"
 
+#if defined(DPlatformFamily_Windows)
+	#include <Mib/Core/PlatformSpecific/WindowsRegistry>
+#endif
+
 #undef SetPort
 
 #ifdef DCompiler_MSVC
@@ -2688,8 +2692,6 @@ namespace NMib::NPerforce
 	}
 
 	#if defined(DPlatformFamily_Windows)
-
-	#include <Mib/Core/PlatformSpecific/WindowsRegistry>
 
 	bint CPerforceClient::f_GetEnvVar(CStr const &_Var, CStr &_Value)
 	{
