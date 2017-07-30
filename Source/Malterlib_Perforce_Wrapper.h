@@ -700,7 +700,8 @@ namespace NMib::NPerforce
 		
 		void f_CreateBranch(CStr const &_Name, CPerforceClient::CBranchSpec const &_BranchSpec);
 		void f_DeleteBranch(CStr const &_Name);
-		
+
+		static bool fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client);
 	};
 }
 

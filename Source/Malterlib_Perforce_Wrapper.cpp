@@ -5603,5 +5603,27 @@ namespace NMib::NPerforce
 	{
 		fp_Throw(mp_Client.f_DeleteBranch(_Name));
 	}
+
+	bool CPerforceClientThrow::fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client)
+	{
+		CStr P4Config = o_Client.f_GetEnvVar("P4CONFIG");
+		
+		if (P4Config.f_IsEmpty())
+			return false;
+
+		CStr Path = CFile::fs_GetPath(_Path);
+		while (!Path.f_IsEmpty())
+		{
+			if (CFile::fs_FileExists(CFile::fs_AppendPath(Path, P4Config)))
+			{
+				// Perforce checkout
+				o_Client.f_Login(CStr(), Path);
+				return true;
+			}
+													
+			Path = CFile::fs_GetPath(Path);
+		}
+		return false;
+	}
 }
 
