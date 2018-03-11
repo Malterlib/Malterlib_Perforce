@@ -17,6 +17,7 @@
 #include "i18napi.h"
 #include "enviro.h"
 #include "hostenv.h"
+#include "errornum.h"
 #ifdef DCompiler_MSVC
 #pragma warning(pop)
 #endif
@@ -47,6 +48,7 @@ namespace NMib::NPerforce
 		TCFunction<void (CStr const &)> m_OnText;
 		bint m_bError;
 		CStr m_LastError;
+		TCFunction<CStr (CStr const &, Error *_pError)> m_fOnPrompt;
 
 		void OutputText( const char *data, int length ) override;
 		void InputData( StrBuf *strbuf, Error *e ) override;
@@ -185,7 +187,13 @@ namespace NMib::NPerforce
 	void CPerforceClient::CP4Client::Prompt( const StrPtr &msg, StrBuf &rsp, int noEcho, Error *e )
 	{
 	//			DConOut("P4: Prompt" DNewLine, 0);
-		if (m_PromtOverride != "")
+		if (m_fOnPrompt)
+		{
+			CStr PromptResult = m_fOnPrompt(CStr(msg.Value(), msg.Length()), e);
+			CStr Temp = m_pClient->f_EncodeStr(PromptResult);
+			rsp.Set(Temp, Temp.f_GetLen());
+		}
+		else if (m_PromtOverride != "")
 		{
 			CStr Temp = m_pClient->f_EncodeStr(m_PromtOverride);
 			rsp.Set(Temp, Temp.f_GetLen());
@@ -414,80 +422,27 @@ namespace NMib::NPerforce
 			m_pAPI->SetCwd(CurrentDir);
 		}
 
-		if (_Password != "")
+		m_bUTF8 = false;
+		m_pAPI->SetCharset("");
+		m_pAPI->SetTrans(CharSetApi::NOCONV);
+		if (m_ConnectionInfo.m_User != "")
+			m_pAPI->SetUser(f_EncodeStr(m_ConnectionInfo.m_User));
+		if (m_ConnectionInfo.m_Host != "")
+			m_pAPI->SetHost(f_EncodeStr(m_ConnectionInfo.m_Host));
+		if (m_ConnectionInfo.m_Client != "")
+			m_pAPI->SetClient(f_EncodeStr(m_ConnectionInfo.m_Client));
+
+		bool bTriedTrust = false;
+
+		while (true)
 		{
-			char const * Commands[] = {nullptr};
-			m_bUTF8 = false;
-		
-			CStr CharSet = CStr((m_pAPI->GetCharset()).Value());
-			m_pAPI->SetCharset("");
-			m_pAPI->SetTrans(CharSetApi::NOCONV);
-			if (m_ConnectionInfo.m_User != "")
-				m_pAPI->SetUser(f_EncodeStr(m_ConnectionInfo.m_User));
-			if (m_ConnectionInfo.m_Host != "")
-				m_pAPI->SetHost(f_EncodeStr(m_ConnectionInfo.m_Host));
-			if (m_ConnectionInfo.m_Client != "")
-				m_pAPI->SetClient(f_EncodeStr(m_ConnectionInfo.m_Client));
-
-			m_pAPI->SetArgv( 0, (char* const*)Commands );
-			m_pClient->m_PromtOverride = _Password;
-			fp_Run("login");
-			m_pClient->m_PromtOverride.f_Clear();
-			if (m_pClient->m_bError)
-			{
-				aint iFind = m_pClient->m_LastError.f_Find("Unicode server permits only unicode enabled clients.");
-				if (iFind < 0)
-				{
-					fOnError();
-					return false;
-				}
-				DCheckApi("Login");
-				m_pAPI->SetCharset("utf8");
-				m_pAPI->SetTrans(CharSetApi::UTF_8);
-				m_bUTF8 = true;
-				if (m_ConnectionInfo.m_User != "")
-					m_pAPI->SetUser(f_EncodeStr(m_ConnectionInfo.m_User));
-				if (m_ConnectionInfo.m_Host != "")
-					m_pAPI->SetHost(f_EncodeStr(m_ConnectionInfo.m_Host));
-				if (m_ConnectionInfo.m_Client != "")
-					m_pAPI->SetClient(f_EncodeStr(m_ConnectionInfo.m_Client));
-				m_pClient->m_PromtOverride = _Password;
-				fp_Run("login");
-				m_pClient->m_PromtOverride.f_Clear();
-
-				if (m_pClient->m_Infos.f_GetLen() && m_pClient->m_Infos[0].f_Find("'login' not necessary, no password set for this user.") >= 0)
-				{
-					goto NoLogin;
-				}
-
-				if (m_pClient->m_bError)
-				{
-					fOnError();
-					return false;
-				}
-			}
-		}
-		else
-		{
-	NoLogin:
-			char const * Commands[] = {"-m", nullptr};
-			m_bUTF8 = false;
-			m_pAPI->SetCharset("");
-			m_pAPI->SetTrans(CharSetApi::NOCONV);
-			m_pAPI->SetArgv( 1, (char*const*)Commands );
-			if (m_ConnectionInfo.m_User != "")
-				m_pAPI->SetUser(f_EncodeStr(m_ConnectionInfo.m_User));
-			if (m_ConnectionInfo.m_Host != "")
-				m_pAPI->SetHost(f_EncodeStr(m_ConnectionInfo.m_Host));
-			if (m_ConnectionInfo.m_Client != "")
-				m_pAPI->SetClient(f_EncodeStr(m_ConnectionInfo.m_Client));
-			if (_Password != "")
-				m_pAPI->SetPassword(f_EncodeStr(_Password));
+			DCheckApi("Login");
+			char const * CommandsProtect[] = {"-m", nullptr};
+			m_pAPI->SetArgv( 0, (char* const*)CommandsProtect);
 			fp_Run("protects");
 
 			if (m_pClient->m_bError && m_pClient->m_LastError.f_Find("Unicode server permits only unicode enabled clients.") >= 0)
 			{
-				DCheckApi("Login");
 				m_pAPI->SetCharset("utf8");
 				m_pAPI->SetTrans(CharSetApi::UTF_8);
 				m_bUTF8 = true;
@@ -497,16 +452,76 @@ namespace NMib::NPerforce
 					m_pAPI->SetHost(f_EncodeStr(m_ConnectionInfo.m_Host));
 				if (m_ConnectionInfo.m_Client != "")
 					m_pAPI->SetClient(f_EncodeStr(m_ConnectionInfo.m_Client));
-				if (_Password != "")
-					m_pAPI->SetPassword(f_EncodeStr(_Password));
-				fp_Run("protects");
+				continue;
+			}
+			else if (m_pClient->m_bError && m_pClient->m_LastError.f_StartsWith("Perforce password (P4PASSWD) invalid or unset.") && _Password != "")
+			{
+				DCheckApi("Login");
+				char const * Commands[] = {nullptr};
+ 
+				m_pAPI->SetArgv( 0, (char* const*)Commands );
+				m_pClient->m_PromtOverride = _Password;
+				fp_Run("login");
+				m_pClient->m_PromtOverride.f_Clear();
+				if (m_pClient->m_bError)
+				{
+					if (m_pClient->m_LastError.f_Find("Unicode server permits only unicode enabled clients.") >= 0)
+						continue;
+					fOnError();
+					return false;
+				}
+				continue;
+			}
+			else if (m_pClient->m_bError && m_pClient->m_LastError.f_Find("To allow connection use the 'p4 trust' command.") >= 0)
+			{
+				if (bTriedTrust)
+				{
+					fOnError();
+					return false;
+				}
+				DCheckApi("Trust");
+				char const * Commands[] = {nullptr};
+				m_pAPI->SetArgv( 0, (char* const*)Commands);
+				bTriedTrust = true;
+				m_pClient->m_fOnPrompt = [&] (CStr const &_Message, Error *_pError) inline_never -> CStr 
+					{
+						if (!_pError || _pError->GetGeneric() != EV_COMM)
+							return "no";
+
+						auto pDictonary = _pError->GetDict();
+						if (!pDictonary)
+							return "no";
+					
+						auto pCertHash = pDictonary->GetVar("key");
+						if (!pCertHash)
+							return "no";
+
+						CStr CertHash(pCertHash->Value(), pCertHash->Length());
+
+						if (CertHash != m_ConnectionInfo.m_TrustedCertificateDigest)
+							return "no";
+
+						return "yes";
+					}
+				;
+				fp_Run("trust");
+				m_pClient->m_OnText.f_Clear();
+				m_pClient->m_fOnPrompt.f_Clear();
 
 				if (m_pClient->m_bError)
 				{
 					fOnError();
 					return false;
 				}
+				continue;
 			}
+			else if (m_pClient->m_bError)
+			{
+				fOnError();
+				return false;
+			}
+
+			break;
 		}
 
 		{

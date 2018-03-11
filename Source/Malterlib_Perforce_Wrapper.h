@@ -64,6 +64,7 @@ namespace NMib::NPerforce
 			CStr m_User;
 			CStr m_Client;
 			CStr m_Host;
+			CStr m_TrustedCertificateDigest;
 			zbool m_bDisableTagging;
 		};
 
