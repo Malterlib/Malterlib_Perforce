@@ -4252,7 +4252,7 @@ namespace NMib::NPerforce
 		m_pClient->m_OutputTextRaw.f_Clear();
 		fp_Run("print");
 
-		TCVector<uint8> Temp;
+		CByteVector Temp;
 		Temp.f_Insert((uint8 *)m_pClient->m_OutputTextRaw.f_GetStr(), m_pClient->m_OutputTextRaw.f_GetLen());
 		
 		CStr Result = NFile::CFile::fs_ReadStringFromVector(Temp);

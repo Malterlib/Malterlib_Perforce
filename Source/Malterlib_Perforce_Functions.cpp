@@ -1,4 +1,4 @@
-﻿// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB 
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #include "Malterlib_Perforce_Functions.h"
@@ -538,7 +538,7 @@ void CPerforceFunctions::fs_InitializeStream(CStr const &_Stream, CPerforceFunct
 		fg_AppendFormat(ConfigContents, "P4CLIENT={}{\n}", Client);
 		fg_AppendFormat(ConfigContents, "P4CHARSET={}{\n}", Charset);
 		
-		TCVector<uint8> FileContents;
+		CByteVector FileContents;
 		CFile::fs_WriteStringToVector(FileContents, ConfigContents, false);
 		
 		CFile::fs_CreateDirectory(CFile::fs_GetPath(ConfigFile));
