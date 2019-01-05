@@ -268,7 +268,6 @@ namespace NMib::NPerforce
 
 	CPerforceClient::CPerforceClient(CStr const &_Server, CStr const &_User, CStr const &_Client, CStr const &_Host)
 	{
-		DAllowDebugNewError;
 		m_bUTF8 = false;
 		m_pClient = nullptr;
 		m_pAPI = nullptr;
@@ -311,7 +310,6 @@ namespace NMib::NPerforce
 
 	CPerforceClient::CPerforceClient(CPerforceClient::CConnectionInfo const& _Info)
 	{
-		DAllowDebugNewError;
 		m_bUTF8 = false;
 		m_pClient = nullptr;
 		m_pAPI = nullptr;
@@ -408,7 +406,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Login(CStr const &_Password, CStr const &_WorkingDir)
 	{
-		DAllowDebugNewError;
 		DCheckApi("Login");
 
 		if (!_WorkingDir.f_IsEmpty())
@@ -548,7 +545,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_GetSecurityLevel(CStr &_SecurityLevel)
 	{
-		DAllowDebugNewError;
 		DCheckApi("GetSecurityLevel");
 
 		char const * Commands[] = {"-m", nullptr};
@@ -578,7 +574,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Dropped()
 	{
-		DAllowDebugNewError;
 		if(!m_pAPI)
 			return true;
 		int64 ChangeList;
@@ -590,7 +585,6 @@ namespace NMib::NPerforce
 
 	CPerforceClient::~CPerforceClient()
 	{
-		DAllowDebugNewError;
 		Error P4error;
 		if (m_pAPI)
 		{
@@ -604,7 +598,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_GetStreamDepots(TCVector<CStr> &_Depots)
 	{
-		DAllowDebugNewError;
 		DCheckApi("GetStreamDepots");
 		char const * Commands[] = {""};
 		m_pAPI->SetArgv( 0, (char* const*)Commands );
@@ -638,7 +631,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_FileExistsInDepot(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("FileExistsInDepot({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
 		char const * Commands[] = {(ch8 *)Temp.f_GetStr()};
@@ -676,7 +668,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_FileExistsInDepotNotDeleted(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("FileExistsInDepotNotDeleted({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
 		char const * Commands[] = {(ch8 *)Temp.f_GetStr()};
@@ -714,7 +705,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_FileExistsInChangeList(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("FileExistsInChangeList({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
 		char const * Commands[] = {(ch8 *)Temp.f_GetStr()};
@@ -742,7 +732,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_FileExists(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("FileExists({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
 		char const * Commands[] = {(ch8 *)Temp.f_GetStr()};
@@ -767,13 +756,11 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_CanOpenForEdit(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		return f_FileExistsInDepot(_File);
 	}
 
 	bint CPerforceClient::f_RemoveFromClient(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("RemoveFromClient({})") << _File);
 		CStr File = _File + "@0";
 		CStr Temp = f_EncodeStr(File);
@@ -793,7 +780,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bint _bPretend)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Sync({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
 		if (_bPretend)
@@ -843,7 +829,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress, bool _bForce, TCVector<CStr> const &_MoreFiles)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("{}") << _File);
 		
 		TCVector<CStr> Commands;
@@ -977,7 +962,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Files(CStr const &_Search, TCVector<CStr> &_Existing)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Files({})") << _Search);
 		CStr Temp = f_EncodeStr(_Search);
 		char const * Commands[] = {(ch8 *)Temp.f_GetStr()};
@@ -1021,7 +1005,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Files({})") << _Search);
 		CStr Temp = f_EncodeStr(_Search);
 		char const * Commands[] = {(ch8 *)Temp.f_GetStr()};
@@ -4530,7 +4513,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Info()
 	{
-		DAllowDebugNewError;
 		DCheckApi("Info");
 		char const * Commands[] = {0};
 		m_pAPI->SetArgv( 0, (char* const*)Commands );
@@ -4548,7 +4530,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_GetUserName(CStr &_UserName)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("GetUserName({})") << _UserName);
 		char const * Commands[] = {0};
 		m_pAPI->SetArgv( 0, (char* const*)Commands );
@@ -4568,7 +4549,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_GetClientName(CStr &_ClientName)
 	{
-		DAllowDebugNewError;
 		DCheckApi("GetClientName");
 		char const * Commands[] = {0};
 		m_pAPI->SetArgv( 0, (char* const*)Commands );
@@ -4588,7 +4568,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_GetClientRoot(CStr &_Root)
 	{
-		DAllowDebugNewError;
 		DCheckApi("GetClientRoot");
 		char const * Commands[] = {0};
 		m_pAPI->SetArgv( 0, (char* const*)Commands );
@@ -4608,7 +4587,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_OpenForEdit(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("OpenForEdit({})") << _File);
 		char const * Commands[] = {(ch8 *)_File.f_GetStr()};
 		m_pAPI->SetArgv( 1, (char* const*)Commands );
@@ -4626,7 +4604,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList)
 	{
-		DAllowDebugNewError;
 		DCheckApi("CreateChangelist");
 		
 		CStr ChangeListContents;
@@ -4686,7 +4663,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Submit({}, {})") << _File << _Job);
 
 		if (_Job.f_IsEmpty())
@@ -4750,7 +4726,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("RevertChangelist({}, {})") << _Changelist << _bOnlyIfUnchanged);
 		
 		TCVector<CStr> Arguments;
@@ -4776,7 +4751,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Revert(CStr const &_File, bool _bOnlyIfUnchanged)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Revert({}, {})") << _File << _bOnlyIfUnchanged);
 		
 		TCVector<CStr> Arguments;
@@ -4801,7 +4775,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Add(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Add({})") << _File);
 		char const * Commands[] = {(ch8 *)_File.f_GetStr()};
 		m_pAPI->SetArgv( 1, (char* const*)Commands );
@@ -4819,7 +4792,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_Delete(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		DCheckApi(CStr::CFormat("Delete({})") << _File);
 		TCVector<CStr> Commands;
 		Commands.f_Insert(_File);
@@ -4837,7 +4809,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_OpenForEditOrMakeWritable(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		bint bRet = true;
 		if (NFile::CFile::fs_FileExists(_File))
 		{
@@ -4854,7 +4825,6 @@ namespace NMib::NPerforce
 
 	bint CPerforceClient::f_TryOpenForEdit(CStr const &_File)
 	{
-		DAllowDebugNewError;
 		bint bRet = true;
 		if (NFile::CFile::fs_FileExists(_File))
 		{
