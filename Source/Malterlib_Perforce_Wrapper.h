@@ -1,7 +1,9 @@
-// Copyright © 2015 Hansoft AB 
+// Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 #pragma once
+
+#include <Mib/Container/Registry>
 
 class ClientApi;
 
@@ -19,7 +21,7 @@ namespace NMib::NPerforce
 			EAction_Integrate,
 			EAction_Branch,
 		};
-		
+
 		struct CIntegrationResult
 		{
 			CIntegrationResult()
@@ -53,11 +55,11 @@ namespace NMib::NPerforce
 					return true;
 				else if (m_EndFromRev > _Right.m_EndFromRev)
 					return false;
-				
+
 				return false;
 			}
 		};
-		
+
 		struct CConnectionInfo
 		{
 			CStr m_Server;
@@ -84,7 +86,7 @@ namespace NMib::NPerforce
 			{
 				CStr m_Name;
 			};
-			
+
 			TCVector<CFile> m_Files;
 		};
 
@@ -145,7 +147,7 @@ namespace NMib::NPerforce
 
 			EAction m_Action;
 			zuint64 m_Time;
-			
+
 			CFileRevision()
 				: m_Action(EAction_Unknown)
 			{
@@ -217,7 +219,7 @@ namespace NMib::NPerforce
 				return f_Compare(_Other) != 0;
 			}
 		};
-		
+
 		class CJob
 		{
 		public:
@@ -225,7 +227,7 @@ namespace NMib::NPerforce
 			CStr m_Status;
 			CStr m_User;
 		};
-		
+
 		class CDescription
 		{
 		public:
@@ -242,7 +244,7 @@ namespace NMib::NPerforce
 				{
 				}
 			};
-			
+
 			TCVector<CFile> m_Files;
 		};
 
@@ -252,21 +254,21 @@ namespace NMib::NPerforce
 			CStr m_Access;
 			CStr m_Owner;
 			CStr m_Name;
-			
+
 			CStr m_Type;
 			CStr m_Description;
-			
+
 			TCVector<CStr> m_Options;
 			TCVector<CStr> m_Paths;
 			TCVector<CStr> m_Remapped;
 			TCVector<CStr> m_Ignored;
-			
+
 			CStr m_Parent;
 			CStr m_BaseParent;
-			
+
 			zbool m_bFirmerThanParent;
 		};
-		
+
 		struct CFileStats
 		{
 			CFileStats()
@@ -284,7 +286,7 @@ namespace NMib::NPerforce
 			zuint64 m_HeadModTime;
 			zuint32 m_HaveRev;
 		};
-		
+
 		struct CMapping
 		{
 			CStr m_From;
@@ -300,8 +302,8 @@ namespace NMib::NPerforce
 			CStr m_Description;
 			TCVector<CStr> m_Options;
 			TCVector<CMapping> m_View;
-		};	
-		
+		};
+
 		struct CClient
 		{
 			CStr m_UpdateTime;
@@ -316,14 +318,14 @@ namespace NMib::NPerforce
 			CStr m_Stream;
 			TCVector<CStr> m_Options;
 			TCVector<CMapping> m_View;
-		};	
-		
+		};
+
 		struct CMergeError
 		{
 			CStr m_Path;
 			CStr m_Error;
 		};
-		
+
 	private:
 
 		class CP4Client;
@@ -335,17 +337,17 @@ namespace NMib::NPerforce
 		ClientApi *m_pAPI;
 		bint m_bUTF8;
 		TCUniquePointer<CPerforceClient> m_pNonTaggedClient;
-		
+
 		CStr m_ActiveHost;
 		CStr m_ActiveClient;
 		CStr m_ActiveUser;
 
 		CConnectionInfo m_ConnectionInfo;
-		
+
 		void fp_Run( const char *func);
 		void fp_Run( const char *func, TCVector<CStr> const &_Arguments);
-		
-		
+
+
 		void fp_ReadMergeResult(TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, bool _bInverted, TCVector<CMergeError> &_oErrors);
 		bint fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &_oPatch);
 	public:
@@ -353,27 +355,27 @@ namespace NMib::NPerforce
 		CPerforceClient(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
 		CPerforceClient(CConnectionInfo const& _Info);
 		~CPerforceClient();
-		
+
 		CStr const &f_GetHost() const
 		{
 			return m_ConnectionInfo.m_Host;
 		}
-		
+
 		CStr const &f_GetServer() const
 		{
 			return m_ConnectionInfo.m_Server;
 		}
-		
+
 		CStr const &f_GetUser() const
 		{
 			return m_ConnectionInfo.m_User;
 		}
-		
+
 		CStr const &f_GetClient() const
 		{
 			return m_ConnectionInfo.m_Client;
 		}
-		
+
 		CConnectionInfo const &f_GetConnectionInfo() const
 		{
 			return m_ConnectionInfo;
@@ -407,9 +409,9 @@ namespace NMib::NPerforce
 		bint f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted);
 		bint f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing);
 		bint f_GetJobSpec(CStr &_JobSpec);
-		bint f_GetJobs(CRegistry_CStr &_Jobs, CStr const &_JobView);
+		bint f_GetJobs(CRegistry &_Jobs, CStr const &_JobView);
 		bint f_GetTriggers(CStr &_Triggers);
-		bint f_GetUsers(CRegistry_CStr &_Users);
+		bint f_GetUsers(CRegistry &_Users);
 		bint f_GetDepotPath(CStr const& _ClientPath, CStr &_DepotPath, bool _bReturnImportedStream = true);
 		bint f_GetClientPath(CStr const& _DepotPath, CStr &_ClientPath);
 		bint f_GetWorkspacePath(CStr const& _DepotPath, CStr &_WorkspacePath);
@@ -422,9 +424,9 @@ namespace NMib::NPerforce
 		bint f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User);
 		bint f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
 		bint f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
-		
+
 		bint f_GetChangelists(CStr const &_Path, TCVector<CChangeList> &_Ret, bint _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
-		
+
 		bint f_GetFileRevisions(CStr const &_File, CFileRevisions &_Revisions);
 		bint f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions);
 
@@ -437,7 +439,7 @@ namespace NMib::NPerforce
 		bint f_SetJob(const CStr &_Job);
 		bint f_GetJob(const CStr &_Job, CJob &_Ret);
 		bint f_SetTriggers(const CStr &_Triggers);
-		bint f_JobExists(const CStr &_Job);	
+		bint f_JobExists(const CStr &_Job);
 		bint f_DeleteJob(const CStr &_Job);
 		bint f_Describe(uint32 _Changelist, CDescription &_Description);
 		bint f_DescribeShelved(uint32 _Changelist, CDescription &_Description);
@@ -455,7 +457,7 @@ namespace NMib::NPerforce
 		bint f_TryOpenForEdit(CStr const &_File);
 
 		bint f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList);
-		
+
 		bint f_FindHeadFiles(CStr const& _Pattern, TCVector<CFileRevision> &_lFiles);
 
 		bint f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients);
@@ -465,7 +467,7 @@ namespace NMib::NPerforce
 		bint f_GetClient(CStr const &_ClientName, CStr &_Contents);
 		bint f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor);
 		bint f_GetClient(CStr const &_Client, CPerforceClient::CClient &_oClient);
-		
+
 
 		bint f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
 		bint f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
@@ -478,7 +480,7 @@ namespace NMib::NPerforce
 		bint f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
 		bint f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0);
 		bint f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
-		
+
 		bint f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		bint f_MergeStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		bint f_IntegrateStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
@@ -487,13 +489,13 @@ namespace NMib::NPerforce
 		bint f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		bint f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		bint f_IntegrateStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		
+
 		bint f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		bint f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		bint f_IntegrateStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 
 		bint f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &_oPatch);
-		
+
 		bint f_GetStream(CStr const &_StreamName, CStream &_Stream);
 
 		bint f_DeleteStream(CStr const &_StreamName);
@@ -509,16 +511,16 @@ namespace NMib::NPerforce
 		bint f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams);
 
 		bint f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened);
-		
+
 		bint f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
 		bint f_DeleteWorkspace(CStr const &_Workspace);
-		
+
 		bint f_GetEnvVar(CStr const &_Var, CStr &_Value);
 		bint f_SetEnvVar(CStr const &_Var, CStr const &_Value);
-		
+
 
 		bint f_FileStats(CStr const &_File, CFileStats &_Stats);
-		
+
 		bint f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		bint f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
 		bint f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
@@ -527,13 +529,13 @@ namespace NMib::NPerforce
 		bint f_CreateBranch(CStr const &_Name, CBranchSpec const &_BranchSpec);
 		bint f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &_oBranch);
 
-		
+
 		bint f_DeleteBranch(CStr const &_Name);
-		
+
 		static CStr fs_FixWhiteSpace(CStr const &_In);
 		static CStr fs_FixLineStartingTabs(CStr const &_In);
 		static CStr fs_FixSpecialChars(CStr const &_In);
-		
+
 		static CStr fs_ActionToStr(EAction _Action);
 
 	private:
@@ -570,7 +572,7 @@ namespace NMib::NPerforce
 		bool f_FileExistsInChangeList(CStr const &_File);
 		bool f_FileExists(CStr const &_File);
 		bool f_CanOpenForEdit(CStr const &_File);
-		
+
 		void f_RemoveFromClient(CStr const &_File);
 		void f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bint _bPretend = false);
 		void f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>(), bool _bForce = false, TCVector<CStr> const &_MoreFiles = TCVector<CStr>());
@@ -580,12 +582,12 @@ namespace NMib::NPerforce
 		TCVector<CStr> f_Files(CStr const &_Search, TCVector<CStr> &_Deleted);
 		TCVector<CStr> f_ClientFiles(CStr const &_Search);
 		CStr f_GetJobSpec();
-		CRegistry_CStr f_GetJobs(CStr const &_JobView);
+		CRegistry f_GetJobs(CStr const &_JobView);
 		CStr f_GetTriggers();
-		CRegistry_CStr f_GetUsers();
+		CRegistry f_GetUsers();
 		CStr f_GetDepotPath(CStr const& _ClientPath, bool _bReturnImportedStream = true);
 		CStr f_GetClientPath(CStr const& _DepotPath);
-		
+
 		CStr f_GetWorkspacePath(CStr const& _DepotPath);
 		CStr f_GetTextFileContents(CStr const& _Path);
 		TCVector<CStr> f_GetStreams();
@@ -595,9 +597,9 @@ namespace NMib::NPerforce
 		void f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User);
 		void f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
 		void f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
-		
+
 		TCVector<CPerforceClient::CChangeList> f_GetChangelists(CStr const &_Path, bint _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
-		
+
 		CPerforceClient::CFileRevisions f_GetFileRevisions(CStr const &_File);
 		CPerforceClient::CFileRevisions f_GetFileRevisions(TCVector<CStr> const &_Files);
 
@@ -611,7 +613,7 @@ namespace NMib::NPerforce
 		void f_SetJob(const CStr &_Job);
 		CPerforceClient::CJob f_GetJob(const CStr &_Job);
 		void f_SetTriggers(const CStr &_Triggers);
-		bool f_JobExists(const CStr &_Job);	
+		bool f_JobExists(const CStr &_Job);
 		void f_DeleteJob(const CStr &_Job);
 		CPerforceClient::CDescription f_Describe(uint32 _Changelist);
 		CPerforceClient::CDescription f_DescribeShelved(uint32 _Changelist);
@@ -629,7 +631,7 @@ namespace NMib::NPerforce
 		void f_TryOpenForEdit(CStr const &_File);
 
 		uint32 f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files);
-		
+
 		TCVector<CPerforceClient::CFileRevision> f_FindHeadFiles(CStr const& _Pattern);
 
 		TCVector<CStr> f_GetClients(CStr const &_SearchPattern);
@@ -651,7 +653,7 @@ namespace NMib::NPerforce
 		void f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
 		void f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0);
 		void f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
-		
+
 		TCVector<CPerforceClient::CIntegrationResult> f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend,  TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		TCVector<CPerforceClient::CIntegrationResult> f_MergeStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		TCVector<CPerforceClient::CIntegrationResult> f_IntegrateStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
@@ -660,13 +662,13 @@ namespace NMib::NPerforce
 		TCVector<CPerforceClient::CIntegrationResult> f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		TCVector<CPerforceClient::CIntegrationResult> f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		TCVector<CPerforceClient::CIntegrationResult> f_IntegrateStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		
+
 		TCVector<CPerforceClient::CIntegrationResult> f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		TCVector<CPerforceClient::CIntegrationResult> f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 		TCVector<CPerforceClient::CIntegrationResult> f_IntegrateStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
 
 		CStr f_CreatePatch(CStr const &_Branch, bool _bFullContext);
-		
+
 		CPerforceClient::CStream f_GetStream(CStr const &_StreamName);
 
 		void f_DeleteStream(CStr const &_StreamName);
@@ -682,23 +684,23 @@ namespace NMib::NPerforce
 		TCVector<CStr> f_FindStreams(CStr const &_SearchQuery);
 
 		TCVector<CStr> f_GetOpened(CStr const &_Path, CStr const &_Client);
-		
+
 		void f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
 		void f_DeleteWorkspace(CStr const &_Workspace);
-		
+
 		CStr f_GetEnvVar(CStr const &_Var);
 		void f_SetEnvVar(CStr const &_Var, CStr const &_Value);
-		
+
 
 		CPerforceClient::CFileStats f_FileStats(CStr const &_File);
-		
+
 		void f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		void f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
 		void f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		void f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
 
 		CPerforceClient::CBranchSpec f_GetBranchForStreams(CStr const &_From, CStr const &_To);
-		
+
 		void f_CreateBranch(CStr const &_Name, CPerforceClient::CBranchSpec const &_BranchSpec);
 		void f_DeleteBranch(CStr const &_Name);
 
