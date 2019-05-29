@@ -39,14 +39,14 @@ namespace NMib::NPerforce
 			return !m_bAbortOperation;
 		}
 
-		zbint m_bAbortOperation;
+		bool m_bAbortOperation = false;
 
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
 		TCVector<CStr> m_Infos;
 		TCFunction<void (CStr const &)> m_OnInfo;
 		TCFunction<void (CStr const &)> m_OnText;
-		bint m_bError;
+		bool m_bError;
 		CStr m_LastError;
 		TCFunction<CStr (CStr const &, Error *_pError)> m_fOnPrompt;
 
@@ -404,7 +404,7 @@ namespace NMib::NPerforce
 		m_pAPI->Run(func, m_pClient);
 	}
 
-	bint CPerforceClient::f_Login(CStr const &_Password, CStr const &_WorkingDir)
+	bool CPerforceClient::f_Login(CStr const &_Password, CStr const &_WorkingDir)
 	{
 		DCheckApi("Login");
 
@@ -543,7 +543,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetSecurityLevel(CStr &_SecurityLevel)
+	bool CPerforceClient::f_GetSecurityLevel(CStr &_SecurityLevel)
 	{
 		DCheckApi("GetSecurityLevel");
 
@@ -572,7 +572,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_Dropped()
+	bool CPerforceClient::f_Dropped()
 	{
 		if(!m_pAPI)
 			return true;
@@ -596,7 +596,7 @@ namespace NMib::NPerforce
 			delete m_pClient;
 	}
 
-	bint CPerforceClient::f_GetStreamDepots(TCVector<CStr> &_Depots)
+	bool CPerforceClient::f_GetStreamDepots(TCVector<CStr> &_Depots)
 	{
 		DCheckApi("GetStreamDepots");
 		char const * Commands[] = {""};
@@ -629,7 +629,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_FileExistsInDepot(CStr const &_File)
+	bool CPerforceClient::f_FileExistsInDepot(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("FileExistsInDepot({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
@@ -666,7 +666,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_FileExistsInDepotNotDeleted(CStr const &_File)
+	bool CPerforceClient::f_FileExistsInDepotNotDeleted(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("FileExistsInDepotNotDeleted({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
@@ -703,7 +703,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_FileExistsInChangeList(CStr const &_File)
+	bool CPerforceClient::f_FileExistsInChangeList(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("FileExistsInChangeList({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
@@ -730,7 +730,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_FileExists(CStr const &_File)
+	bool CPerforceClient::f_FileExists(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("FileExists({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
@@ -754,12 +754,12 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_CanOpenForEdit(CStr const &_File)
+	bool CPerforceClient::f_CanOpenForEdit(CStr const &_File)
 	{
 		return f_FileExistsInDepot(_File);
 	}
 
-	bint CPerforceClient::f_RemoveFromClient(CStr const &_File)
+	bool CPerforceClient::f_RemoveFromClient(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("RemoveFromClient({})") << _File);
 		CStr File = _File + "@0";
@@ -778,7 +778,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bint _bPretend)
+	bool CPerforceClient::f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bool _bPretend)
 	{
 		DCheckApi(CStr::CFormat("Sync({})") << _File);
 		CStr Temp = f_EncodeStr(_File);
@@ -827,7 +827,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress, bool _bForce, TCVector<CStr> const &_MoreFiles)
+	bool CPerforceClient::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress, bool _bForce, TCVector<CStr> const &_MoreFiles)
 	{
 		DCheckApi(CStr::CFormat("{}") << _File);
 
@@ -889,7 +889,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetHeadChangelistUnsafe(int64& _Changelist)
+	bool CPerforceClient::f_GetHeadChangelistUnsafe(int64& _Changelist)
 	{
 		DCheckApi("GetHeadChangelistUnsafe");
 
@@ -922,7 +922,7 @@ namespace NMib::NPerforce
 		return false;
 	}
 
-	bint CPerforceClient::f_GetHeadChangelist(int64& _Changelist, CStr const& _Path)
+	bool CPerforceClient::f_GetHeadChangelist(int64& _Changelist, CStr const& _Path)
 	{
 		DCheckApi(CStr::CFormat("GetHeadChangelist({})") << _Path);
 
@@ -960,7 +960,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_Files(CStr const &_Search, TCVector<CStr> &_Existing)
+	bool CPerforceClient::f_Files(CStr const &_Search, TCVector<CStr> &_Existing)
 	{
 		DCheckApi(CStr::CFormat("Files({})") << _Search);
 		CStr Temp = f_EncodeStr(_Search);
@@ -1003,7 +1003,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted)
+	bool CPerforceClient::f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted)
 	{
 		DCheckApi(CStr::CFormat("Files({})") << _Search);
 		CStr Temp = f_EncodeStr(_Search);
@@ -1043,7 +1043,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing)
+	bool CPerforceClient::f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing)
 	{
 		DCheckApi(CStr::CFormat("{}") << _Search);
 		CStr Temp = f_EncodeStr(_Search);
@@ -1081,7 +1081,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User)
+	bool CPerforceClient::f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User)
 	{
 		DCheckApi(CStr::CFormat("SetChangelistOwner({}, {})") << _ChangeList << _User);
 
@@ -1101,7 +1101,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator)
+	bool CPerforceClient::fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator)
 	{
 		DCheckApi(CStr::CFormat("{}({})") << _Operation << _ChangeList);
 
@@ -1208,7 +1208,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce)
+	bool CPerforceClient::f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce)
 	{
 		return fp_MutateChangelist
 			(
@@ -1230,7 +1230,7 @@ namespace NMib::NPerforce
 		;
 	}
 
-	bint CPerforceClient::f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce)
+	bool CPerforceClient::f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce)
 	{
 		return fp_MutateChangelist
 			(
@@ -1251,7 +1251,7 @@ namespace NMib::NPerforce
 		;
 	}
 
-	bint CPerforceClient::f_GetChangelist(uint32 _ChangeList, CChangeList &_Ret)
+	bool CPerforceClient::f_GetChangelist(uint32 _ChangeList, CChangeList &_Ret)
 	{
 		DCheckApi(CStr::CFormat("GetChangelist({})") << _ChangeList);
 
@@ -1329,7 +1329,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetChangelists(CStr const &_Path, TCVector<CChangeList> &_Ret, bint _bIncludeIntegrated, CStr const &_Workspace, CStr const &_Status)
+	bool CPerforceClient::f_GetChangelists(CStr const &_Path, TCVector<CChangeList> &_Ret, bool _bIncludeIntegrated, CStr const &_Workspace, CStr const &_Status)
 	{
 		DCheckApi(CStr::CFormat("GetChangelists({}, {}, {}, {})") << _Path << _bIncludeIntegrated << _Workspace << _Status);
 		TCVector<CStr> Commands;
@@ -1415,7 +1415,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_ChangeExists(const CFix &_Fix)
+	bool CPerforceClient::f_ChangeExists(const CFix &_Fix)
 	{
 		DCheckApi(CStr::CFormat("ChangeExists({})") << _Fix.m_ChangeNumber);
 		CChangeList ChangeList;
@@ -1425,7 +1425,7 @@ namespace NMib::NPerforce
 		return bRet;
 	}
 
-	bint CPerforceClient::f_AddFixes(CStr const &_Job, const TCVector<uint32> &_Fixes, CStr const &_Status)
+	bool CPerforceClient::f_AddFixes(CStr const &_Job, const TCVector<uint32> &_Fixes, CStr const &_Status)
 	{
 		mint nFixes = _Fixes.f_GetLen();
 		for (mint i = 0; i < nFixes; ++i)
@@ -1447,7 +1447,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_RemoveFixes(CStr const &_Job, const TCVector<uint32> &_Fixes)
+	bool CPerforceClient::f_RemoveFixes(CStr const &_Job, const TCVector<uint32> &_Fixes)
 	{
 		mint nFixes = _Fixes.f_GetLen();
 		for (mint i = 0; i < nFixes; ++i)
@@ -1468,7 +1468,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions)
+	bool CPerforceClient::f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions)
 	{
 		DCheckApi(_Files.f_GetLen() == 1 ? (CStr::CFormat("GetFileRevisions({})") << _Files.f_GetFirst()).f_GetStr() : "GetFileRevisions");
 
@@ -1580,14 +1580,14 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetFileRevisions(CStr const &_File, CFileRevisions &_Revisions)
+	bool CPerforceClient::f_GetFileRevisions(CStr const &_File, CFileRevisions &_Revisions)
 	{
 		TCVector<CStr> Files;
 		Files.f_Insert(_File);
 		return f_GetFileRevisions(Files, _Revisions);
 	}
 
-	bint CPerforceClient::f_GetFixes(CStr const &_Job, TCVector<CFix> &_Fixes, uint64 _PerforceGUID)
+	bool CPerforceClient::f_GetFixes(CStr const &_Job, TCVector<CFix> &_Fixes, uint64 _PerforceGUID)
 	{
 		DCheckApi(CStr::CFormat("GetFixes({})") << _Job);
 		CStr Temp = f_EncodeStr(_Job);
@@ -1669,7 +1669,7 @@ namespace NMib::NPerforce
 		const ch8 *pParse = _In;
 		CStr Ret;
 		CStr LastLine;
-		bint bOnlyWhiteSpace = true;
+		bool bOnlyWhiteSpace = true;
 		while (*pParse)
 		{
 			if (*pParse == '\n')
@@ -1761,7 +1761,7 @@ namespace NMib::NPerforce
 		return "\t" + Tmp2.f_Replace("\n", DMibNewLine "\t");
 	}
 
-	bint CPerforceClient::f_GetJobs(CRegistry &_Jobs, CStr const &_JobView)
+	bool CPerforceClient::f_GetJobs(CRegistry &_Jobs, CStr const &_JobView)
 	{
 		DCheckApi(CStr::CFormat("GetJobs({})") << _JobView);
 		CStr Temp = f_EncodeStr(_JobView);
@@ -1850,7 +1850,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetJobSpec(CStr &_JobSpec)
+	bool CPerforceClient::f_GetJobSpec(CStr &_JobSpec)
 	{
 		DCheckApi("GetJobSpec");
 		ch8 const * Commands[] = {"-o"};
@@ -1873,7 +1873,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetStreams(TCVector<CStr> &_Streams)
+	bool CPerforceClient::f_GetStreams(TCVector<CStr> &_Streams)
 	{
 		DCheckApi("GetStreams");
 		char const * Commands[] = {""};
@@ -1902,7 +1902,7 @@ namespace NMib::NPerforce
 
 	}
 
-	bint CPerforceClient::f_GetTriggers(CStr &_Triggers)
+	bool CPerforceClient::f_GetTriggers(CStr &_Triggers)
 	{
 		DCheckApi("GetTriggers");
 		char const * Commands[] = {"-o"};
@@ -1925,7 +1925,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetUsers(CRegistry &_Users)
+	bool CPerforceClient::f_GetUsers(CRegistry &_Users)
 	{
 		DCheckApi("GetUsers");
 		fp_Run("users");
@@ -1990,7 +1990,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_ResolveSafe(CStr const &_File, uint32 _Changelist)
+	bool CPerforceClient::f_ResolveSafe(CStr const &_File, uint32 _Changelist)
 	{
 		DCheckApi(CStr::CFormat("ResolveSafe({})") << _File);
 
@@ -2071,7 +2071,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("CopyStream({}, {}, {})") << _FromStream << _ToStream << _bPretend);
 
@@ -2099,7 +2099,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_MergeStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_MergeStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("MergeStream({}, {}, {})") << _FromStream << _ToStream << _bPretend);
 
@@ -2127,7 +2127,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_IntegrateFiles(CStr const &_FromFiles, CStr const &_ToFiles, bool _bPretend, bool _bEnableBaseless, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors)
+	bool CPerforceClient::f_IntegrateFiles(CStr const &_FromFiles, CStr const &_ToFiles, bool _bPretend, bool _bEnableBaseless, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors)
 	{
 		DCheckApi(CStr::CFormat("IntegrateFiles({}, {}, {})") << _FromFiles << _ToFiles << _bPretend);
 
@@ -2157,7 +2157,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("CopyStreamToParent({}, {})") << _FromStream << _bPretend);
 
@@ -2181,7 +2181,7 @@ namespace NMib::NPerforce
 		}
 		return true;
 	}
-	bint CPerforceClient::f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("MergeStreamToParent({}, {})") << _FromStream << _bPretend);
 
@@ -2205,7 +2205,7 @@ namespace NMib::NPerforce
 		}
 		return true;
 	}
-	bint CPerforceClient::f_IntegrateStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_IntegrateStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("IntegrateStreamToParent({}, {})") << _FromStream << _bPretend);
 
@@ -2232,7 +2232,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("CopyStreamFromParent({}, {})") << _ToStream << _bPretend);
 
@@ -2257,7 +2257,7 @@ namespace NMib::NPerforce
 		}
 		return true;
 	}
-	bint CPerforceClient::f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("MergeStreamFromParent({}, {})") << _ToStream << _bPretend);
 
@@ -2283,7 +2283,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &_oPatch)
+	bool CPerforceClient::fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &_oPatch)
 	{
 		DCheckApi(CStr::CFormat("CreatePatch({})") << _Branch);
 
@@ -2351,7 +2351,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &_oPatch)
+	bool CPerforceClient::f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &_oPatch)
 	{
 		DCheckApi(CStr::CFormat("CreatePatch({})") << _Branch);
 
@@ -2520,7 +2520,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_IntegrateStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_IntegrateStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("IntegrateStreamFromParent({}, {})") << _ToStream << _bPretend);
 
@@ -2548,7 +2548,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_IntegrateStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
+	bool CPerforceClient::f_IntegrateStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec)
 	{
 		DCheckApi(CStr::CFormat("IntegrateStream({}, {}, {})") << _FromStream << _ToStream << _bPretend);
 
@@ -2580,7 +2580,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_ResolveAutomatic(CStr const &_File, uint32 _Changelist)
+	bool CPerforceClient::f_ResolveAutomatic(CStr const &_File, uint32 _Changelist)
 	{
 		DCheckApi(CStr::CFormat("ResolveAutomatic({})") << _File);
 
@@ -2610,7 +2610,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_ResolveMine(CStr const &_File, uint32 _Changelist)
+	bool CPerforceClient::f_ResolveMine(CStr const &_File, uint32 _Changelist)
 	{
 		DCheckApi(CStr::CFormat("ResolveMine({})") << _File);
 
@@ -2641,7 +2641,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_FileStats(CStr const &_File, CFileStats &_Stats)
+	bool CPerforceClient::f_FileStats(CStr const &_File, CFileStats &_Stats)
 	{
 		DCheckApi(CStr::CFormat("FileStats({})") << _File);
 
@@ -2691,7 +2691,7 @@ namespace NMib::NPerforce
 
 	#if defined(DPlatformFamily_Windows)
 
-	bint CPerforceClient::f_GetEnvVar(CStr const &_Var, CStr &_Value)
+	bool CPerforceClient::f_GetEnvVar(CStr const &_Var, CStr &_Value)
 	{
 		DCheckApi(CStr::CFormat("f_GetEnvVar({})") << _Var);
 
@@ -2701,7 +2701,7 @@ namespace NMib::NPerforce
 
 		return true;
 	}
-	bint CPerforceClient::f_SetEnvVar(CStr const &_Var, CStr const &_Value)
+	bool CPerforceClient::f_SetEnvVar(CStr const &_Var, CStr const &_Value)
 	{
 		DCheckApi(CStr::CFormat("f_SetEnvVar({}, {})") << _Var << _Value);
 
@@ -2712,7 +2712,7 @@ namespace NMib::NPerforce
 	}
 	#else
 
-	bint CPerforceClient::f_GetEnvVar(CStr const &_Var, CStr &_Value)
+	bool CPerforceClient::f_GetEnvVar(CStr const &_Var, CStr &_Value)
 	{
 		DCheckApi(CStr::CFormat("f_GetEnvVar({})") << _Var);
 
@@ -2724,7 +2724,7 @@ namespace NMib::NPerforce
 
 		return true;
 	}
-	bint CPerforceClient::f_SetEnvVar(CStr const &_Var, CStr const &_Value)
+	bool CPerforceClient::f_SetEnvVar(CStr const &_Var, CStr const &_Value)
 	{
 		DCheckApi(CStr::CFormat("f_SetEnvVar({}, {})") << _Var << _Value);
 
@@ -2745,7 +2745,7 @@ namespace NMib::NPerforce
 	}
 	#endif
 
-	bint CPerforceClient::f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened)
+	bool CPerforceClient::f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened)
 	{
 		DCheckApi(CStr::CFormat("GetOpened({}, {})") << _Path << _Client);
 
@@ -2779,7 +2779,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams)
+	bool CPerforceClient::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams)
 	{
 		DCheckApi(CStr::CFormat("FindStreams({})") << _SearchQuery);
 
@@ -2807,7 +2807,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream)
+	bool CPerforceClient::f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream)
 	{
 		DCheckApi(CStr::CFormat("SwitchWorkspaceStream({}, {})") << _Workspace << _Stream);
 
@@ -2828,7 +2828,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_DeleteWorkspace(CStr const &_Workspace)
+	bool CPerforceClient::f_DeleteWorkspace(CStr const &_Workspace)
 	{
 		DCheckApi(CStr::CFormat("DeleteWorkspace({})") << _Workspace);
 
@@ -2848,7 +2848,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_PopulateStream(CStr const &_StreamName)
+	bool CPerforceClient::f_PopulateStream(CStr const &_StreamName)
 	{
 		DCheckApi(CStr::CFormat("PopulateStream({})") << _StreamName);
 
@@ -2868,7 +2868,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_SetStream(CStr const &_StreamName, CStream const &_Stream)
+	bool CPerforceClient::f_SetStream(CStr const &_StreamName, CStream const &_Stream)
 	{
 		DCheckApi(CStr::CFormat("SetStream({})") << _StreamName);
 
@@ -2943,7 +2943,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_StreamExists(CStr const &_StreamName)
+	bool CPerforceClient::f_StreamExists(CStr const &_StreamName)
 	{
 		DCheckApi(CStr::CFormat("StreamExists({})") << _StreamName);
 		TCVector<CStr> Arguments;
@@ -2967,7 +2967,7 @@ namespace NMib::NPerforce
 		return false;
 	}
 
-	bint CPerforceClient::f_Obliterate(CStr const &_Path)
+	bool CPerforceClient::f_Obliterate(CStr const &_Path)
 	{
 		DCheckApi(CStr::CFormat("Obliterate({})") << _Path);
 
@@ -2987,7 +2987,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_DeleteStream(CStr const &_StreamName)
+	bool CPerforceClient::f_DeleteStream(CStr const &_StreamName)
 	{
 		DCheckApi(CStr::CFormat("DeleteStream({})") << _StreamName);
 
@@ -3006,7 +3006,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetStream(CStr const &_StreamName, CStream &_Stream)
+	bool CPerforceClient::f_GetStream(CStr const &_StreamName, CStream &_Stream)
 	{
 		DCheckApi(CStr::CFormat("f_GetStream({})") << _StreamName);
 
@@ -3062,7 +3062,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce)
+	bool CPerforceClient::f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce)
 	{
 		DCheckApi(CStr::CFormat("DeleteShelvedFile({}, {}, {})") << _Changelist << _File << _bForce);
 
@@ -3086,7 +3086,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs)
+	bool CPerforceClient::f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs)
 	{
 		DCheckApi(CStr::CFormat("RemoveJobsFromChangelist({})") << _Changelist);
 
@@ -3107,7 +3107,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_DeleteChangelist(uint32 _Changelist, bool _bForce)
+	bool CPerforceClient::f_DeleteChangelist(uint32 _Changelist, bool _bForce)
 	{
 		DCheckApi(CStr::CFormat("DeleteChangelist({}, {})") << _Changelist << _bForce);
 
@@ -3128,7 +3128,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved, uint32 &_FinalChangelist)
+	bool CPerforceClient::f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved, uint32 &_FinalChangelist)
 	{
 		DCheckApi(CStr::CFormat("SubmitChangelist({})") << _Changelist);
 
@@ -3160,7 +3160,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList)
+	bool CPerforceClient::f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList)
 	{
 		DCheckApi(CStr::CFormat("UnshelveWithBranch({}, {})") << _SourceChangelist << _BranchMapping);
 
@@ -3203,7 +3203,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist)
+	bool CPerforceClient::f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist)
 	{
 		DCheckApi(CStr::CFormat("UnshelveInto({}, {})") << _SourceChangelist << _DestinationChangelist);
 
@@ -3240,7 +3240,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList)
+	bool CPerforceClient::f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList)
 	{
 		DCheckApi(CStr::CFormat("MoveToChangelist({})") << _ChangeList);
 
@@ -3260,7 +3260,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files)
+	bool CPerforceClient::f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files)
 	{
 		DCheckApi(CStr::CFormat("ShelveChangelist({}, {}, {})") << _Changelist << _bReplaceFiles << _bForce);
 
@@ -3285,7 +3285,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor)
+	bool CPerforceClient::f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor)
 	{
 		DCheckApi(CStr::CFormat("GetClients({}, {}, {})") << _SearchPattern << _Stream << _User);
 
@@ -3332,7 +3332,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients)
+	bool CPerforceClient::f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients)
 	{
 		DCheckApi(CStr::CFormat("GetClients({})") << _SearchPattern);
 
@@ -3363,7 +3363,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor)
+	bool CPerforceClient::f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor)
 	{
 		TCVector<CStr> Clients;
 		if (!f_GetClients(_ClientName, Clients) || Clients.f_IsEmpty())
@@ -3397,7 +3397,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetClient(CStr const &_ClientName, CStr &_Contents)
+	bool CPerforceClient::f_GetClient(CStr const &_ClientName, CStr &_Contents)
 	{
 		TCVector<CStr> Clients;
 		if (!f_GetClients(_ClientName, Clients) || Clients.f_IsEmpty())
@@ -3432,7 +3432,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions)
+	bool CPerforceClient::f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions)
 	{
 		CStr ClientData;
 		CStr Dummy;
@@ -3550,7 +3550,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &_oBranch)
+	bool CPerforceClient::f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &_oBranch)
 	{
 		DCheckApi(CStr::CFormat("GetBranchForStreams({}, {})") << _From << _To);
 
@@ -3593,7 +3593,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetClient(CStr const &_Client, CPerforceClient::CClient &_oClient)
+	bool CPerforceClient::f_GetClient(CStr const &_Client, CPerforceClient::CClient &_oClient)
 	{
 		TCVector<CStr> Clients;
 		if (!f_GetClients(_Client, Clients) || Clients.f_IsEmpty())
@@ -3666,7 +3666,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_CreateBranch(CStr const &_Name, CBranchSpec const &_BranchSpec)
+	bool CPerforceClient::f_CreateBranch(CStr const &_Name, CBranchSpec const &_BranchSpec)
 	{
 		DCheckApi(CStr::CFormat("CreateBranch({})") << _Name);
 
@@ -3725,7 +3725,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_DeleteBranch(CStr const &_Name)
+	bool CPerforceClient::f_DeleteBranch(CStr const &_Name)
 	{
 		DCheckApi(CStr::CFormat("CreateBranch({})") << _Name);
 
@@ -3743,7 +3743,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template)
+	bool CPerforceClient::f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template)
 	{
 		CStr ClientData;
 		CStr Dummy;
@@ -3847,7 +3847,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions)
+	bool CPerforceClient::f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions)
 	{
 		CStr ClientData;
 		CStr Dummy;
@@ -3964,7 +3964,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template)
+	bool CPerforceClient::f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template)
 	{
 		CStr ClientData;
 		CStr Dummy;
@@ -4071,7 +4071,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_GetWorkspacePath(CStr const& _DepotPath, CStr &_WorkspacePath)
+	bool CPerforceClient::f_GetWorkspacePath(CStr const& _DepotPath, CStr &_WorkspacePath)
 	{
 		DCheckApi(CStr::CFormat("GetWorkspacePath({})") << _DepotPath);
 		char const * Commands[] = {nullptr};
@@ -4119,7 +4119,7 @@ namespace NMib::NPerforce
 		return false;
 	}
 
-	bint CPerforceClient::f_GetClientPath(CStr const& _DepotPath, CStr &_ClientPath)
+	bool CPerforceClient::f_GetClientPath(CStr const& _DepotPath, CStr &_ClientPath)
 	{
 		DCheckApi(CStr::CFormat("GetClientPath({})") << _DepotPath);
 
@@ -4168,7 +4168,7 @@ namespace NMib::NPerforce
 		return false;
 	}
 
-	bint CPerforceClient::f_GetDepotPath(CStr const& _ClientPath, CStr &_DepotPath, bool _bReturnImportedStream)
+	bool CPerforceClient::f_GetDepotPath(CStr const& _ClientPath, CStr &_DepotPath, bool _bReturnImportedStream)
 	{
 		DCheckApi(CStr::CFormat("GetDepotPath({}, {})") << _ClientPath << _bReturnImportedStream);
 
@@ -4224,7 +4224,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_GetTextFileContents(CStr const &_Path, CStr &_Contents)
+	bool CPerforceClient::f_GetTextFileContents(CStr const &_Path, CStr &_Contents)
 	{
 		DCheckApi(CStr::CFormat("GetTextFileContents({})") << _Path);
 
@@ -4251,7 +4251,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bint CPerforceClient::f_JobExists(const CStr &_Job)
+	bool CPerforceClient::f_JobExists(const CStr &_Job)
 	{
 		DCheckApi(CStr::CFormat("JobExists({})") << _Job);
 		CStr Temp = CStr("job=") + f_EncodeStr(_Job);
@@ -4270,7 +4270,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_SetJob(const CStr &_Job)
+	bool CPerforceClient::f_SetJob(const CStr &_Job)
 	{
 		DCheckApi(CStr::CFormat("SetJob({})") << _Job);
 		m_pClient->m_PromtOverride = _Job;
@@ -4289,7 +4289,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetJob(const CStr &_Job, CJob &_Ret)
+	bool CPerforceClient::f_GetJob(const CStr &_Job, CJob &_Ret)
 	{
 		DCheckApi(CStr::CFormat("GetJob({})") << _Job);
 		CStr Temp = CStr::fs_ToStr(_Job);
@@ -4332,7 +4332,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_DeleteJob(const CStr &_Job)
+	bool CPerforceClient::f_DeleteJob(const CStr &_Job)
 	{
 		DCheckApi(CStr::CFormat("DeleteJob({})") << _Job);
 		CStr Temp = f_EncodeStr(_Job);
@@ -4351,7 +4351,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_DescribeShelved(uint32 _Changelist, CDescription &_Ret)
+	bool CPerforceClient::f_DescribeShelved(uint32 _Changelist, CDescription &_Ret)
 	{
 		DCheckApi(CStr::CFormat("DescribeShelved({})") << _Changelist);
 
@@ -4412,7 +4412,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_Describe(uint32 _Changelist, CDescription &_Ret)
+	bool CPerforceClient::f_Describe(uint32 _Changelist, CDescription &_Ret)
 	{
 		DCheckApi(CStr::CFormat("Describe({})") << _Changelist);
 		CStr Temp = CStr::fs_ToStr(_Changelist);
@@ -4473,7 +4473,7 @@ namespace NMib::NPerforce
 
 	}
 
-	bint CPerforceClient::f_SetJobSpec(const CStr &_JobSpec)
+	bool CPerforceClient::f_SetJobSpec(const CStr &_JobSpec)
 	{
 		DCheckApi("SetJobSpec");
 		m_pClient->m_PromtOverride = _JobSpec;
@@ -4492,7 +4492,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_SetTriggers(const CStr &_Triggers)
+	bool CPerforceClient::f_SetTriggers(const CStr &_Triggers)
 	{
 		DCheckApi("SetTriggers");
 		m_pClient->m_PromtOverride = _Triggers;
@@ -4511,7 +4511,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_Info()
+	bool CPerforceClient::f_Info()
 	{
 		DCheckApi("Info");
 		char const * Commands[] = {0};
@@ -4528,7 +4528,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetUserName(CStr &_UserName)
+	bool CPerforceClient::f_GetUserName(CStr &_UserName)
 	{
 		DCheckApi(CStr::CFormat("GetUserName({})") << _UserName);
 		char const * Commands[] = {0};
@@ -4547,7 +4547,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetClientName(CStr &_ClientName)
+	bool CPerforceClient::f_GetClientName(CStr &_ClientName)
 	{
 		DCheckApi("GetClientName");
 		char const * Commands[] = {0};
@@ -4566,7 +4566,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_GetClientRoot(CStr &_Root)
+	bool CPerforceClient::f_GetClientRoot(CStr &_Root)
 	{
 		DCheckApi("GetClientRoot");
 		char const * Commands[] = {0};
@@ -4585,7 +4585,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_OpenForEdit(CStr const &_File)
+	bool CPerforceClient::f_OpenForEdit(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("OpenForEdit({})") << _File);
 		char const * Commands[] = {(ch8 *)_File.f_GetStr()};
@@ -4602,7 +4602,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList)
+	bool CPerforceClient::f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList)
 	{
 		DCheckApi("CreateChangelist");
 
@@ -4661,7 +4661,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job)
+	bool CPerforceClient::f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job)
 	{
 		DCheckApi(CStr::CFormat("Submit({}, {})") << _File << _Job);
 
@@ -4701,7 +4701,7 @@ namespace NMib::NPerforce
 				"\t{}";
 
 			CStr FileDepotPath;
-			bint bExistsInDepot = f_GetDepotPath(_File, FileDepotPath);
+			bool bExistsInDepot = f_GetDepotPath(_File, FileDepotPath);
 			if (!bExistsInDepot)
 				return false;
 
@@ -4724,7 +4724,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged)
+	bool CPerforceClient::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged)
 	{
 		DCheckApi(CStr::CFormat("RevertChangelist({}, {})") << _Changelist << _bOnlyIfUnchanged);
 
@@ -4749,7 +4749,7 @@ namespace NMib::NPerforce
 	}
 
 
-	bint CPerforceClient::f_Revert(CStr const &_File, bool _bOnlyIfUnchanged)
+	bool CPerforceClient::f_Revert(CStr const &_File, bool _bOnlyIfUnchanged)
 	{
 		DCheckApi(CStr::CFormat("Revert({}, {})") << _File << _bOnlyIfUnchanged);
 
@@ -4773,7 +4773,7 @@ namespace NMib::NPerforce
 
 
 
-	bint CPerforceClient::f_Add(CStr const &_File)
+	bool CPerforceClient::f_Add(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("Add({})") << _File);
 		char const * Commands[] = {(ch8 *)_File.f_GetStr()};
@@ -4790,7 +4790,7 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_Delete(CStr const &_File)
+	bool CPerforceClient::f_Delete(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("Delete({})") << _File);
 		TCVector<CStr> Commands;
@@ -4807,9 +4807,9 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bint CPerforceClient::f_OpenForEditOrMakeWritable(CStr const &_File)
+	bool CPerforceClient::f_OpenForEditOrMakeWritable(CStr const &_File)
 	{
-		bint bRet = true;
+		bool bRet = true;
 		if (NFile::CFile::fs_FileExists(_File))
 		{
 			if (f_CanOpenForEdit(_File))
@@ -4823,9 +4823,9 @@ namespace NMib::NPerforce
 		return bRet;
 	}
 
-	bint CPerforceClient::f_TryOpenForEdit(CStr const &_File)
+	bool CPerforceClient::f_TryOpenForEdit(CStr const &_File)
 	{
-		bint bRet = true;
+		bool bRet = true;
 		if (NFile::CFile::fs_FileExists(_File))
 		{
 			if (f_CanOpenForEdit(_File))
@@ -4839,7 +4839,7 @@ namespace NMib::NPerforce
 		return bRet;
 	}
 
-	bint CPerforceClient::f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_lFiles)
+	bool CPerforceClient::f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_lFiles)
 	{
 		DCheckApi(CStr::CFormat("FindHeadFiles({})") << _Pattern);
 		char const * Commands[] = {nullptr};
@@ -5047,7 +5047,7 @@ namespace NMib::NPerforce
 	{
 		fp_Throw(mp_Client.f_RemoveFromClient(_File));
 	}
-	void CPerforceClientThrow::f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bint _bPretend)
+	void CPerforceClientThrow::f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bool _bPretend)
 	{
 		fp_Throw(mp_Client.f_Sync(_File, _Synced, _Removed, _bPretend));
 	}
@@ -5167,7 +5167,7 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_SetChangelistDescription(_ChangeList, _Description, _bForce));
 	}
 
-	TCVector<CPerforceClient::CChangeList> CPerforceClientThrow::f_GetChangelists(CStr const &_Path, bint _bIncludeIntegrated, CStr const &_Workspace, CStr const &_Status)
+	TCVector<CPerforceClient::CChangeList> CPerforceClientThrow::f_GetChangelists(CStr const &_Path, bool _bIncludeIntegrated, CStr const &_Workspace, CStr const &_Status)
 	{
 		TCVector<CPerforceClient::CChangeList> Ret;
 		fp_Throw(mp_Client.f_GetChangelists(_Path, Ret, _bIncludeIntegrated, _Workspace, _Status));

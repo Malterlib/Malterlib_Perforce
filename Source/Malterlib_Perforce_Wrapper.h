@@ -67,7 +67,7 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Host;
 			CStr m_TrustedCertificateDigest;
-			zbool m_bDisableTagging;
+			bool m_bDisableTagging = false;
 		};
 
 		class CChangeList
@@ -75,7 +75,7 @@ namespace NMib::NPerforce
 		public:
 			uint32 m_ChangeID;
 			uint64 m_Date;
-			zbint m_bHasShelvedFiles;
+			bool m_bHasShelvedFiles = false;
 			CStr m_PerforceDate;
 			CStr m_Client;
 			CStr m_User;
@@ -202,19 +202,19 @@ namespace NMib::NPerforce
 					return -1;
 				return 0;
 			}
-			bint operator < (const CFix &_Other) const
+			bool operator < (const CFix &_Other) const
 			{
 				return f_Compare(_Other) < 0;
 			}
-			bint operator > (const CFix &_Other) const
+			bool operator > (const CFix &_Other) const
 			{
 				return f_Compare(_Other) > 0;
 			}
-			bint operator == (const CFix &_Other) const
+			bool operator == (const CFix &_Other) const
 			{
 				return f_Compare(_Other) == 0;
 			}
-			bint operator != (const CFix &_Other) const
+			bool operator != (const CFix &_Other) const
 			{
 				return f_Compare(_Other) != 0;
 			}
@@ -266,7 +266,7 @@ namespace NMib::NPerforce
 			CStr m_Parent;
 			CStr m_BaseParent;
 
-			zbool m_bFirmerThanParent;
+			bool m_bFirmerThanParent = false;
 		};
 
 		struct CFileStats
@@ -277,7 +277,7 @@ namespace NMib::NPerforce
 			}
 			CStr m_DepotFile;
 			CStr m_ClientFile;
-			zbint m_bIsMapped;
+			bool m_bIsMapped = false;
 			EAction m_HeadAction;
 			CStr m_HeadType;
 			CStr m_HeadTime;
@@ -291,7 +291,7 @@ namespace NMib::NPerforce
 		{
 			CStr m_From;
 			CStr m_To;
-			zbool m_bNegative;
+			bool m_bNegative = false;
 		};
 
 		struct CBranchSpec
@@ -335,7 +335,7 @@ namespace NMib::NPerforce
 		CStr m_LastFunction;
 		CP4Client *m_pClient;
 		ClientApi *m_pAPI;
-		bint m_bUTF8;
+		bool m_bUTF8;
 		TCUniquePointer<CPerforceClient> m_pNonTaggedClient;
 
 		CStr m_ActiveHost;
@@ -349,7 +349,7 @@ namespace NMib::NPerforce
 
 
 		void fp_ReadMergeResult(TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, bool _bInverted, TCVector<CMergeError> &_oErrors);
-		bint fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &_oPatch);
+		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &_oPatch);
 	public:
 
 		CPerforceClient(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
@@ -384,153 +384,153 @@ namespace NMib::NPerforce
 
 		CStr f_GetLastError() const;
 		CStr f_GetLastFunction() const;
-		bint f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
-		bint f_GetSecurityLevel(CStr &_SecurityLevel);
-		bint f_Dropped();
+		bool f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
+		bool f_GetSecurityLevel(CStr &_SecurityLevel);
+		bool f_Dropped();
 
-		bint f_IsUTF8() const
+		bool f_IsUTF8() const
 		{
 			return m_bUTF8;
 		}
 		CStr f_EncodeStr(CStr const &_Str);
 		CStr f_DecodeStr(CStr const &_Str);
 
-		bint f_FileExistsInDepot(CStr const &_File);
-		bint f_FileExistsInDepotNotDeleted(CStr const &_File);
-		bint f_FileExistsInChangeList(CStr const &_File);
-		bint f_FileExists(CStr const &_File);
-		bint f_CanOpenForEdit(CStr const &_File);
-		bint f_RemoveFromClient(CStr const &_File);
-		bint f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bint _bPretend = false);
-		bint f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>(), bool _bForce = false, TCVector<CStr> const &_MoreFiles = TCVector<CStr>());
-		bint f_GetHeadChangelist(int64& _Changelist, CStr const& _Path);
-		bint f_GetHeadChangelistUnsafe(int64& _Changelist);
-		bint f_Files(CStr const &_Search, TCVector<CStr> &_Existing);
-		bint f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted);
-		bint f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing);
-		bint f_GetJobSpec(CStr &_JobSpec);
-		bint f_GetJobs(CRegistry &_Jobs, CStr const &_JobView);
-		bint f_GetTriggers(CStr &_Triggers);
-		bint f_GetUsers(CRegistry &_Users);
-		bint f_GetDepotPath(CStr const& _ClientPath, CStr &_DepotPath, bool _bReturnImportedStream = true);
-		bint f_GetClientPath(CStr const& _DepotPath, CStr &_ClientPath);
-		bint f_GetWorkspacePath(CStr const& _DepotPath, CStr &_WorkspacePath);
-		bint f_GetTextFileContents(CStr const& _Path, CStr &_Contents);
-		bint f_GetStreams(TCVector<CStr> &_Streams);
-		bint f_GetStreamDepots(TCVector<CStr> &_Depots);
+		bool f_FileExistsInDepot(CStr const &_File);
+		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
+		bool f_FileExistsInChangeList(CStr const &_File);
+		bool f_FileExists(CStr const &_File);
+		bool f_CanOpenForEdit(CStr const &_File);
+		bool f_RemoveFromClient(CStr const &_File);
+		bool f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bool _bPretend = false);
+		bool f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>(), bool _bForce = false, TCVector<CStr> const &_MoreFiles = TCVector<CStr>());
+		bool f_GetHeadChangelist(int64& _Changelist, CStr const& _Path);
+		bool f_GetHeadChangelistUnsafe(int64& _Changelist);
+		bool f_Files(CStr const &_Search, TCVector<CStr> &_Existing);
+		bool f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted);
+		bool f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing);
+		bool f_GetJobSpec(CStr &_JobSpec);
+		bool f_GetJobs(CRegistry &_Jobs, CStr const &_JobView);
+		bool f_GetTriggers(CStr &_Triggers);
+		bool f_GetUsers(CRegistry &_Users);
+		bool f_GetDepotPath(CStr const& _ClientPath, CStr &_DepotPath, bool _bReturnImportedStream = true);
+		bool f_GetClientPath(CStr const& _DepotPath, CStr &_ClientPath);
+		bool f_GetWorkspacePath(CStr const& _DepotPath, CStr &_WorkspacePath);
+		bool f_GetTextFileContents(CStr const& _Path, CStr &_Contents);
+		bool f_GetStreams(TCVector<CStr> &_Streams);
+		bool f_GetStreamDepots(TCVector<CStr> &_Depots);
 
 
-		bint f_GetChangelist(uint32 _ChangeList, CChangeList &_Ret);
-		bint f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User);
-		bint f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
-		bint f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
+		bool f_GetChangelist(uint32 _ChangeList, CChangeList &_Ret);
+		bool f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User);
+		bool f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
+		bool f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
 
-		bint f_GetChangelists(CStr const &_Path, TCVector<CChangeList> &_Ret, bint _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
+		bool f_GetChangelists(CStr const &_Path, TCVector<CChangeList> &_Ret, bool _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
 
-		bint f_GetFileRevisions(CStr const &_File, CFileRevisions &_Revisions);
-		bint f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions);
+		bool f_GetFileRevisions(CStr const &_File, CFileRevisions &_Revisions);
+		bool f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions);
 
-		bint f_ChangeExists(const CFix &_Fix);
+		bool f_ChangeExists(const CFix &_Fix);
 
-		bint f_GetFixes(CStr const &_Job, TCVector<CFix> &_Fixes, uint64 _PerforceGUID);
-		bint f_AddFixes(CStr const &_Job, const TCVector<uint32> &_Fixes, CStr const &_Status);
-		bint f_RemoveFixes(CStr const &_Job, const TCVector<uint32> &_Fixes);
-		bint f_SetJobSpec(const CStr &_JobSpec);
-		bint f_SetJob(const CStr &_Job);
-		bint f_GetJob(const CStr &_Job, CJob &_Ret);
-		bint f_SetTriggers(const CStr &_Triggers);
-		bint f_JobExists(const CStr &_Job);
-		bint f_DeleteJob(const CStr &_Job);
-		bint f_Describe(uint32 _Changelist, CDescription &_Description);
-		bint f_DescribeShelved(uint32 _Changelist, CDescription &_Description);
-		bint f_Info();
-		bint f_GetUserName(CStr &_UserName);
-		bint f_GetClientName(CStr &_ClientName);
-		bint f_GetClientRoot(CStr &_Root);
-		bint f_OpenForEdit(CStr const &_File);
-		bint f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
-		bint f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
-		bint f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false);
-		bint f_Add(CStr const &_File);
-		bint f_Delete(CStr const &_File);
-		bint f_OpenForEditOrMakeWritable(CStr const &_File);
-		bint f_TryOpenForEdit(CStr const &_File);
+		bool f_GetFixes(CStr const &_Job, TCVector<CFix> &_Fixes, uint64 _PerforceGUID);
+		bool f_AddFixes(CStr const &_Job, const TCVector<uint32> &_Fixes, CStr const &_Status);
+		bool f_RemoveFixes(CStr const &_Job, const TCVector<uint32> &_Fixes);
+		bool f_SetJobSpec(const CStr &_JobSpec);
+		bool f_SetJob(const CStr &_Job);
+		bool f_GetJob(const CStr &_Job, CJob &_Ret);
+		bool f_SetTriggers(const CStr &_Triggers);
+		bool f_JobExists(const CStr &_Job);
+		bool f_DeleteJob(const CStr &_Job);
+		bool f_Describe(uint32 _Changelist, CDescription &_Description);
+		bool f_DescribeShelved(uint32 _Changelist, CDescription &_Description);
+		bool f_Info();
+		bool f_GetUserName(CStr &_UserName);
+		bool f_GetClientName(CStr &_ClientName);
+		bool f_GetClientRoot(CStr &_Root);
+		bool f_OpenForEdit(CStr const &_File);
+		bool f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
+		bool f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
+		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false);
+		bool f_Add(CStr const &_File);
+		bool f_Delete(CStr const &_File);
+		bool f_OpenForEditOrMakeWritable(CStr const &_File);
+		bool f_TryOpenForEdit(CStr const &_File);
 
-		bint f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList);
+		bool f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList);
 
-		bint f_FindHeadFiles(CStr const& _Pattern, TCVector<CFileRevision> &_lFiles);
+		bool f_FindHeadFiles(CStr const& _Pattern, TCVector<CFileRevision> &_lFiles);
 
-		bint f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients);
+		bool f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients);
 
-		bint f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor);
+		bool f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor);
 
-		bint f_GetClient(CStr const &_ClientName, CStr &_Contents);
-		bint f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor);
-		bint f_GetClient(CStr const &_Client, CPerforceClient::CClient &_oClient);
-
-
-		bint f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
-		bint f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
-		bint f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist);
-		bint f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList);
-		bint f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved, uint32 &_FinalChangelist);
-		bint f_DeleteChangelist(uint32 _Changelist, bool _bForce = false);
-		bint f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs);
-		bint f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
-		bint f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
-		bint f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0);
-		bint f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
-
-		bint f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_MergeStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_IntegrateStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_IntegrateFiles(CStr const &_FromFiles, CStr const &_ToFiles, bool _bPretend, bool _bEnableBaseless, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors);
-
-		bint f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_IntegrateStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-
-		bint f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-		bint f_IntegrateStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
-
-		bint f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &_oPatch);
-
-		bint f_GetStream(CStr const &_StreamName, CStream &_Stream);
-
-		bint f_DeleteStream(CStr const &_StreamName);
-
-		bint f_Obliterate(CStr const &_Path);
-
-		bint f_StreamExists(CStr const &_StreamName);
-
-		bint f_SetStream(CStr const &_StreamName, CStream const &_Stream);
-
-		bint f_PopulateStream(CStr const &_StreamName);
-
-		bint f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams);
-
-		bint f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened);
-
-		bint f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
-		bint f_DeleteWorkspace(CStr const &_Workspace);
-
-		bint f_GetEnvVar(CStr const &_Var, CStr &_Value);
-		bint f_SetEnvVar(CStr const &_Var, CStr const &_Value);
+		bool f_GetClient(CStr const &_ClientName, CStr &_Contents);
+		bool f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor);
+		bool f_GetClient(CStr const &_Client, CPerforceClient::CClient &_oClient);
 
 
-		bint f_FileStats(CStr const &_File, CFileStats &_Stats);
+		bool f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
+		bool f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
+		bool f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist);
+		bool f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList);
+		bool f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved, uint32 &_FinalChangelist);
+		bool f_DeleteChangelist(uint32 _Changelist, bool _bForce = false);
+		bool f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs);
+		bool f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
+		bool f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
+		bool f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0);
+		bool f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
 
-		bint f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
-		bint f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
-		bint f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
-		bint f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
+		bool f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_MergeStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_IntegrateStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_IntegrateFiles(CStr const &_FromFiles, CStr const &_ToFiles, bool _bPretend, bool _bEnableBaseless, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors);
 
-		bint f_CreateBranch(CStr const &_Name, CBranchSpec const &_BranchSpec);
-		bint f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &_oBranch);
+		bool f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_IntegrateStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+
+		bool f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+		bool f_IntegrateStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
+
+		bool f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &_oPatch);
+
+		bool f_GetStream(CStr const &_StreamName, CStream &_Stream);
+
+		bool f_DeleteStream(CStr const &_StreamName);
+
+		bool f_Obliterate(CStr const &_Path);
+
+		bool f_StreamExists(CStr const &_StreamName);
+
+		bool f_SetStream(CStr const &_StreamName, CStream const &_Stream);
+
+		bool f_PopulateStream(CStr const &_StreamName);
+
+		bool f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams);
+
+		bool f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened);
+
+		bool f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
+		bool f_DeleteWorkspace(CStr const &_Workspace);
+
+		bool f_GetEnvVar(CStr const &_Var, CStr &_Value);
+		bool f_SetEnvVar(CStr const &_Var, CStr const &_Value);
 
 
-		bint f_DeleteBranch(CStr const &_Name);
+		bool f_FileStats(CStr const &_File, CFileStats &_Stats);
+
+		bool f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
+		bool f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
+		bool f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
+		bool f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
+
+		bool f_CreateBranch(CStr const &_Name, CBranchSpec const &_BranchSpec);
+		bool f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &_oBranch);
+
+
+		bool f_DeleteBranch(CStr const &_Name);
 
 		static CStr fs_FixWhiteSpace(CStr const &_In);
 		static CStr fs_FixLineStartingTabs(CStr const &_In);
@@ -539,7 +539,7 @@ namespace NMib::NPerforce
 		static CStr fs_ActionToStr(EAction _Action);
 
 	private:
-		bint fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
+		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
 
 	};
 
@@ -574,7 +574,7 @@ namespace NMib::NPerforce
 		bool f_CanOpenForEdit(CStr const &_File);
 
 		void f_RemoveFromClient(CStr const &_File);
-		void f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bint _bPretend = false);
+		void f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bool _bPretend = false);
 		void f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>(), bool _bForce = false, TCVector<CStr> const &_MoreFiles = TCVector<CStr>());
 		int64 f_GetHeadChangelist(CStr const& _Path);
 		int64 f_GetHeadChangelistUnsafe();
@@ -598,7 +598,7 @@ namespace NMib::NPerforce
 		void f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
 		void f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
 
-		TCVector<CPerforceClient::CChangeList> f_GetChangelists(CStr const &_Path, bint _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
+		TCVector<CPerforceClient::CChangeList> f_GetChangelists(CStr const &_Path, bool _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
 
 		CPerforceClient::CFileRevisions f_GetFileRevisions(CStr const &_File);
 		CPerforceClient::CFileRevisions f_GetFileRevisions(TCVector<CStr> const &_Files);
