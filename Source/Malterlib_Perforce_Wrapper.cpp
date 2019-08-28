@@ -1,7 +1,6 @@
 // Copyright © 2015 Hansoft AB
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
-#include "PCH.h"
 #include "Malterlib_Perforce_Wrapper.h"
 
 #if defined(DPlatformFamily_Windows)
