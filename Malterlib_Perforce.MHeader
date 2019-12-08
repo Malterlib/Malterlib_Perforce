@@ -11,9 +11,9 @@ Import "../../SDK/p4/p4.MHeader"
 		MalterlibNoShortcuts false
 		AddIncludePaths_p4api true
 	}
-	%Group Perforce
+	%Group "Perforce"
 	{
-		%Group Include
+		%Group "Include"
 		{
 			Compile.Type "C++"
 			{
@@ -22,16 +22,16 @@ Import "../../SDK/p4/p4.MHeader"
 			%File "Include/Mib/Perforce/^*"
 		}
 		%File "Source/^*"
-		%Group Documentation
+		%Group "Documentation"
 		{
 			%File "Documentation/*"
 		}
 	}
-	%Dependency Lib_Malterlib_Network
+	%Dependency "Lib_Malterlib_Network"
 	{
 		Dependency.Indirect true
 	}
-	%Dependency Lib_p4api
+	%Dependency "Lib_p4api"
 	{
 		!DocumentationEnabled true
 		
