@@ -1469,7 +1469,7 @@ namespace NMib::NPerforce
 
 	bool CPerforceClient::f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions)
 	{
-		DCheckApi(_Files.f_GetLen() == 1 ? (CStr::CFormat("GetFileRevisions({})") << _Files.f_GetFirst()).f_GetStr() : "GetFileRevisions");
+		DCheckApi(_Files.f_GetLen() == 1 ? (CStr::CFormat("GetFileRevisions({})") << _Files.f_GetFirst()).f_GetStr() : CStr("GetFileRevisions"));
 
 		TCVector<CStr> Args;
 		Args.f_Insert("-l");
