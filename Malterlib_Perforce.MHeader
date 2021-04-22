@@ -41,21 +41,25 @@ Import "../../SDK/p4/p4.MHeader"
 
 Property
 {
-	MalterlibLibrary_Perforce true
+	&
 	{
-		&
-		{
-			MalterlibLibrary_Perforce ""
-			MalterlibLibrary_All true
-		}
+		TargetIsExecutable true
+		true fg_IsTargetInDependencies("Lib_Malterlib_Perforce")
 	}
-	MalterlibSubLibraries "Perforce;@(MalterlibSubLibraries)"
+
+	MalterlibLinkWithBoringSSL true
+}
+
+Property
+{
+	MalterlibLibrary_Perforce define bool = MalterlibLibrary_All
+	MalterlibSubLibraries =+ "Perforce"
 	{
 		!!MalterlibLibrary_Perforce true
 	}
-	MalterlibLibrarySeparate_Lib_Malterlib_Perforce true
-//	MalterlibSubLibrarySeparate_Lib_Malterlib_Perforce true
-	MalterlibIncludeRoots "@('Include'->MakeAbsolute());@(MalterlibIncludeRoots)"
+	MalterlibLibrarySeparate_Lib_Malterlib_Perforce define bool = true
+//	MalterlibSubLibrarySeparate_Lib_Malterlib_Perforce define bool = true
+	MalterlibIncludeRoots =+ "Include"->MakeAbsolute()
 	{
 		!!MalterlibLibrary_Perforce true
 	}
@@ -65,7 +69,6 @@ Property
 {
 	Property
 	{
-		MalterlibLinkWithOpenSSL true
 	}
 }
 
@@ -73,8 +76,8 @@ Property
 {
 	!!MalterlibEnableInternalTests true
 	
-	MalterlibTests "Malterlib_Perforce;@(MalterlibTests)"
-	MalterlibTestFiles_Malterlib_Perforce "@('Test/*'->MakeAbsolute())"
-	MalterlibTestDependencies_Malterlib_Perforce "Lib_Malterlib_Perforce"
-	MalterlibTestExtraGroups_Malterlib_Perforce "{Test}/{Malterlib_Perforce}"
+	MalterlibTests =+ "Malterlib_Perforce"
+	MalterlibTestFiles_Malterlib_Perforce define [type(CEntity)] = ["Test/*"->MakeAbsolute()]
+	MalterlibTestDependencies_Malterlib_Perforce define [type(CEntity)] = ["Lib_Malterlib_Perforce"]
+	MalterlibTestExtraGroups_Malterlib_Perforce define [string] = ["{Test}/{Malterlib_Perforce}"]
 }
