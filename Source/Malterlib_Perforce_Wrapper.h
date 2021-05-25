@@ -267,6 +267,7 @@ namespace NMib::NPerforce
 			CStr m_BaseParent;
 
 			bool m_bFirmerThanParent = false;
+			bool m_bInheritParentView = true;
 		};
 
 		struct CFileStats
@@ -341,8 +342,11 @@ namespace NMib::NPerforce
 		CStr m_ActiveHost;
 		CStr m_ActiveClient;
 		CStr m_ActiveUser;
+		CStr m_ActiveVersion;
 
 		CConnectionInfo m_ConnectionInfo;
+
+		bool m_bSupportsParentView = false;
 
 		void fp_Run( const char *func);
 		void fp_Run( const char *func, TCVector<CStr> const &_Arguments);

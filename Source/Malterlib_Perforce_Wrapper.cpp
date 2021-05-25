@@ -535,6 +535,18 @@ namespace NMib::NPerforce
 				m_ActiveHost = m_pClient->GetInfo("clientHost");
 				m_ActiveClient = m_pClient->GetInfo("clientName");
 				m_ActiveUser = m_pClient->GetInfo("userName");
+				m_ActiveVersion = m_pClient->GetInfo("serverVersion");
+
+				CStr Program;
+ 				CStr Platform;
+				uint64 VersionYear = 3000;
+				uint32 MinorVersion = 1;
+				uint64 Revision = TCLimitsInt<uint64>::mc_Max;
+				CStr Date;
+
+				(CStr::CParse("{}/{}/{}.{}/{} ({})") >> Program >> Platform >> VersionYear >> MinorVersion >> Revision >> Date).f_Parse(m_ActiveVersion);
+
+				m_bSupportsParentView = Revision >= 2006716;
 			}
 		}
 
@@ -2878,6 +2890,11 @@ namespace NMib::NPerforce
 		StreamSpec += "\n";
 		StreamSpec += CStr::CFormat("Parent:	{}\n") << _Stream.m_Parent;
 		StreamSpec += "\n";
+		if (m_bSupportsParentView)
+		{
+			StreamSpec += CStr::CFormat("ParentView:	{}\n") << (_Stream.m_bInheritParentView ? "inherit" : "noinherit");
+			StreamSpec += "\n";
+		}
 		StreamSpec += CStr::CFormat("Type:	{}\n") << _Stream.m_Type;
 		StreamSpec += "\n";
 		CStr Owner = _Stream.m_Owner;
@@ -3032,6 +3049,8 @@ namespace NMib::NPerforce
 				_Stream.m_Name = Data;
 			else if (Command == "Parent")
 				_Stream.m_Parent = Data;
+			else if (Command == "ParentView")
+				_Stream.m_bInheritParentView = Data == "inherit";
 			else if (Command == "baseParent")
 				_Stream.m_BaseParent = Data;
 			else if (Command == "Type")
