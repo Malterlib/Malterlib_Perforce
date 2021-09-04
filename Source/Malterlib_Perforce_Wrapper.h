@@ -33,31 +33,7 @@ namespace NMib::NPerforce
 			CStr m_To;
 			zuint32 m_StartFromRev;
 			zuint32 m_EndFromRev;
-			bool operator < (CIntegrationResult const &_Right) const
-			{
-				if (m_Action < _Right.m_Action)
-					return true;
-				else if (m_Action > _Right.m_Action)
-					return false;
-				if (m_From < _Right.m_From)
-					return true;
-				else if (m_From > _Right.m_From)
-					return false;
-				if (m_To < _Right.m_To)
-					return true;
-				else if (m_To > _Right.m_To)
-					return false;
-				if (m_StartFromRev < _Right.m_StartFromRev)
-					return true;
-				else if (m_StartFromRev > _Right.m_StartFromRev)
-					return false;
-				if (m_EndFromRev < _Right.m_EndFromRev)
-					return true;
-				else if (m_EndFromRev > _Right.m_EndFromRev)
-					return false;
-
-				return false;
-			}
+			auto operator <=> (CIntegrationResult const &_Right) const = default;
 		};
 
 		struct CConnectionInfo
@@ -170,54 +146,8 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Status;
 			zuint64 m_PerforceGUID;
-			aint f_Compare(const CFix &_Other) const
-			{
-				if (m_Job > _Other.m_Job)
-					return 1;
-				else if (m_Job < _Other.m_Job)
-					return -1;
-				if (m_ChangeNumber > _Other.m_ChangeNumber)
-					return 1;
-				else if (m_ChangeNumber < _Other.m_ChangeNumber)
-					return -1;
-				if (m_Date > _Other.m_Date)
-					return 1;
-				else if (m_Date < _Other.m_Date)
-					return -1;
-				if (m_User > _Other.m_User)
-					return 1;
-				else if (m_User < _Other.m_User)
-					return -1;
-				if (m_Client > _Other.m_Client)
-					return 1;
-				else if (m_Client < _Other.m_Client)
-					return -1;
-				if (m_Status > _Other.m_Status)
-					return 1;
-				else if (m_Status < _Other.m_Status)
-					return -1;
-				if (m_PerforceGUID > _Other.m_PerforceGUID)
-					return 1;
-				else if (m_PerforceGUID < _Other.m_PerforceGUID)
-					return -1;
-				return 0;
-			}
-			bool operator < (const CFix &_Other) const
-			{
-				return f_Compare(_Other) < 0;
-			}
-			bool operator > (const CFix &_Other) const
-			{
-				return f_Compare(_Other) > 0;
-			}
-			bool operator == (const CFix &_Other) const
-			{
-				return f_Compare(_Other) == 0;
-			}
-			bool operator != (const CFix &_Other) const
-			{
-				return f_Compare(_Other) != 0;
-			}
+
+			auto operator <=> (const CFix &_Other) const = default;
 		};
 
 		class CJob
