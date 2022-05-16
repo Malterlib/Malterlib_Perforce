@@ -69,7 +69,7 @@ namespace NMib::NPerforce
 		void Help( const char *const *help ) override;
 		FileSys	*File( FileSysType type ) override;
 		void Finished() override;
-		void Clear();
+		void Clear() override;
 	};
 
 	void CPerforceClient::CP4Client::OutputText( const char *data, int length )

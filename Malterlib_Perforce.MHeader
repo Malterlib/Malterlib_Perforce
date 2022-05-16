@@ -2,7 +2,16 @@
 // Distributed under the MIT license, see license text in LICENSE.Malterlib
 
 Import "../Core/Lib_Malterlib.MTarget"
-Import "../../SDK/p4/p4.MHeader"
+
+%Repository "p4source"
+{
+	Repository
+	{
+		Type "External"
+	}
+}
+
+Import "../../External/p4source/p4.MHeader"
 
 %Group "{Malterlib}/{Lib_Malterlib_Perforce}"
 {
