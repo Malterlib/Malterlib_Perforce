@@ -450,12 +450,22 @@ namespace NMib::NPerforce
 					m_pAPI->SetClient(f_EncodeStr(m_ConnectionInfo.m_Client));
 				continue;
 			}
-			else if (m_pClient->m_bError && m_pClient->m_LastError.f_StartsWith("Perforce password (P4PASSWD) invalid or unset.") && _Password != "")
+			else if
+				(
+					m_pClient->m_bError
+					&&
+					(
+						m_pClient->m_LastError.f_StartsWith("Perforce password (P4PASSWD) invalid or unset.")
+						|| m_pClient->m_LastError.f_StartsWith("Your session has expired, please login again.")
+					)
+					&& _Password != ""
+				)
 			{
 				DCheckApi("Login");
 				char const * Commands[] = {nullptr};
 
 				m_pAPI->SetArgv( 0, (char* const*)Commands );
+				m_pAPI->SetPassword(_Password.f_GetStr());
 				m_pClient->m_PromtOverride = _Password;
 				fp_Run("login");
 				m_pClient->m_PromtOverride.f_Clear();
