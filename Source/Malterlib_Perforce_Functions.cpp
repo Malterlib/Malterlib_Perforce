@@ -234,7 +234,7 @@ CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult
 				DError(fg_Format("No matching destination workspace found for stream '{}'. Have you created a workspace for this stream, or do you need to switch task streams?", _Stream));
 		}
 
-		if (MatchedClients.f_HasMoreThanOneMember())
+		if (MatchedClients.f_HasMoreThanOneElement())
 		{
 			CStr Matching;
 
