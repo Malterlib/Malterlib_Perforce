@@ -31,8 +31,8 @@ namespace NMib::NPerforce
 			EAction m_Action;
 			CStr m_From;
 			CStr m_To;
-			zuint32 m_StartFromRev;
-			zuint32 m_EndFromRev;
+			uint32 m_StartFromRev = 0;
+			uint32 m_EndFromRev = 0;
 			auto operator <=> (CIntegrationResult const &_Right) const = default;
 		};
 
@@ -49,8 +49,8 @@ namespace NMib::NPerforce
 		class CChangeList
 		{
 		public:
-			uint32 m_ChangeID;
-			uint64 m_Date;
+			uint32 m_ChangeID = 0;
+			uint64 m_Date = 0;
 			bool m_bHasShelvedFiles = false;
 			CStr m_PerforceDate;
 			CStr m_Client;
@@ -73,11 +73,11 @@ namespace NMib::NPerforce
 				: m_Action(EAction_Unknown)
 			{
 			}
-			zint32 m_ChangeList;
-			zint32 m_Revision;
+			int32 m_ChangeList = 0;
+			int32 m_Revision = 0;
 
 			EAction m_Action;
-			zuint64 m_Time;
+			uint64 m_Time = 0;
 			CStr m_User;
 			CStr m_Client;
 			CStr m_Comment;
@@ -101,8 +101,8 @@ namespace NMib::NPerforce
 				}
 				EHow m_How;
 				CStr m_File;
-				zint32 m_StartRev;
-				zint32 m_EndRev;
+				int32 m_StartRev = 0;
+				int32 m_EndRev = 0;
 			};
 
 			TCVector<CRevDesc> m_RevDescs;
@@ -140,12 +140,12 @@ namespace NMib::NPerforce
 		{
 		public:
 			CStr m_Job;
-			zuint32 m_ChangeNumber;
-			zuint64 m_Date;
+			uint32 m_ChangeNumber = 0;
+			uint64 m_Date = 0;
 			CStr m_User;
 			CStr m_Client;
 			CStr m_Status;
-			zuint64 m_PerforceGUID;
+			uint64 m_PerforceGUID = 0;
 
 			auto operator <=> (const CFix &_Other) const = default;
 		};
@@ -153,7 +153,7 @@ namespace NMib::NPerforce
 		class CJob
 		{
 		public:
-			zuint64 m_Date;
+			uint64 m_Date = 0;
 			CStr m_Status;
 			CStr m_User;
 		};
@@ -212,10 +212,10 @@ namespace NMib::NPerforce
 			EAction m_HeadAction;
 			CStr m_HeadType;
 			CStr m_HeadTime;
-			zuint32 m_HeadRev;
-			zuint32 m_HeadChange;
-			zuint64 m_HeadModTime;
-			zuint32 m_HaveRev;
+			uint32 m_HeadRev = 0;
+			uint32 m_HeadChange = 0;
+			uint64 m_HeadModTime = 0;
+			uint32 m_HaveRev = 0;
 		};
 
 		struct CMapping
@@ -266,7 +266,7 @@ namespace NMib::NPerforce
 		CStr m_LastFunction;
 		CP4Client *m_pClient;
 		ClientApi *m_pAPI;
-		bool m_bUTF8;
+		bool m_bUTF8 = false;
 		TCUniquePointer<CPerforceClient> m_pNonTaggedClient;
 
 		CStr m_ActiveHost;

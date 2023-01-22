@@ -1274,6 +1274,7 @@ namespace NMib::NPerforce
 
 	bool CPerforceClient::f_GetChangelist(uint32 _ChangeList, CChangeList &_Ret)
 	{
+		_Ret.m_ChangeID = _ChangeList;
 		DCheckApi(CStr::CFormat("GetChangelist({})") << _ChangeList);
 
 		TCVector<CStr> Commands;
@@ -1404,30 +1405,23 @@ namespace NMib::NPerforce
 						pCurrentChange = &_Ret.f_Insert();
 						pCurrentChange->m_ChangeID = Data.f_ToInt(uint32(0));
 					}
-					else if (Command == "shelved")
+					else if (pCurrentChange)
 					{
-						pCurrentChange->m_bHasShelvedFiles = true;
-					}
-					else if (Command == "time" && pCurrentChange)
-					{
-						pCurrentChange->m_Date = Data.f_ToInt(uint64(0));
-						pCurrentChange->m_PerforceDate = Data;
-					}
-					else if (Command == "user" && pCurrentChange)
-					{
-						pCurrentChange->m_User = Data;
-					}
-					else if (Command == "client" && pCurrentChange)
-					{
-						pCurrentChange->m_Client = Data;
-					}
-					else if (Command == "status" && pCurrentChange)
-					{
-						pCurrentChange->m_Status = Data;
-					}
-					else if (Command == "desc")
-					{
-						pCurrentChange->m_Description = Data;
+						if (Command == "shelved")
+							pCurrentChange->m_bHasShelvedFiles = true;
+						else if (Command == "time" && pCurrentChange)
+						{
+							pCurrentChange->m_Date = Data.f_ToInt(uint64(0));
+							pCurrentChange->m_PerforceDate = Data;
+						}
+						else if (Command == "user" && pCurrentChange)
+							pCurrentChange->m_User = Data;
+						else if (Command == "client" && pCurrentChange)
+							pCurrentChange->m_Client = Data;
+						else if (Command == "status" && pCurrentChange)
+							pCurrentChange->m_Status = Data;
+						else if (Command == "desc")
+							pCurrentChange->m_Description = Data;
 					}
 	#endif
 				}
@@ -5341,7 +5335,7 @@ namespace NMib::NPerforce
 
 	uint32 CPerforceClientThrow::f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files)
 	{
-		uint32 Ret;
+		uint32 Ret = 0;
 		fp_Throw(mp_Client.f_CreateChangelist(_Comment, _Jobs, _Files, Ret));
 		return Ret;
 	}
@@ -5406,7 +5400,7 @@ namespace NMib::NPerforce
 	}
 	uint32 CPerforceClientThrow::f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved)
 	{
-		uint32 Ret;
+		uint32 Ret = 0;
 		fp_Throw(mp_Client.f_SubmitChangelist(_Changelist, _bSubmitShelved, Ret));
 		return Ret;
 	}
