@@ -1146,65 +1146,60 @@ namespace NMib::NPerforce
 		else
 		{
 			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			aint iFix = 0;
 
 			for (mint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
+					continue;
+
+				CStr Command;
+				CStr Data;
+
+				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
+//				DConOut("    {}={}" DNewLine, Command << Data);
+
+//				DDTrace("{} = {}\n", Command << Data);
+				if (_fMutator(ChangeListContents, Command, Data))
+					continue;
+
+				if (Command == "User")
 				{
-					++iFix;
+					ChangeListContents += CStr::CFormat("User:	{}{\n}") << Data;
+					ChangeListContents += CStr::CFormat("{\n}");
 				}
-				else
+				else if (Command == "Client")
 				{
-					CStr Command;
-					CStr Data;
-
-					(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
-	//				DConOut("    {}={}" DNewLine, Command << Data);
-
-	//				DDTrace("{} = {}\n", Command << Data);
-					if (_fMutator(ChangeListContents, Command, Data))
-						continue;
-
-					if (Command == "User")
-					{
-						ChangeListContents += CStr::CFormat("User:	{}{\n}") << Data;
-						ChangeListContents += CStr::CFormat("{\n}");
-					}
-					else if (Command == "Client")
-					{
-						ChangeListContents += CStr::CFormat("Client:	{}{\n}") << Data;
-						ChangeListContents += CStr::CFormat("{\n}");
-					}
-					else if (Command == "Status")
-					{
-						ChangeListContents += CStr::CFormat("Status:	{}{\n}") << Data;
-						ChangeListContents += CStr::CFormat("{\n}");
-					}
-					else if (Command == "Type")
-					{
-						ChangeListContents += CStr::CFormat("Type:	{}{\n}") << Data;
-						ChangeListContents += CStr::CFormat("{\n}");
-					}
-					else if (Command == "Description")
-					{
-						ChangeListContents += CStr::CFormat("Description:{\n}");
-						ChangeListContents += fs_FixLineStartingTabs(Data);
-						ChangeListContents += CStr::CFormat("{\n}");
-					}
-					else if (Command.f_StartsWith("Jobs"))
-					{
-						if (Command == "Jobs0")
-							ChangeListContents += CStr::CFormat("Jobs:{\n}");
-						ChangeListContents += CStr::CFormat("\t{}{\n}") << Data;
-					}
-					else if (Command.f_StartsWith("Files"))
-					{
-						if (Command == "Files0")
-							ChangeListContents += CStr::CFormat("Files:{\n}");
-						ChangeListContents += CStr::CFormat("\t{}{\n}") << Data;
-					}
+					ChangeListContents += CStr::CFormat("Client:	{}{\n}") << Data;
+					ChangeListContents += CStr::CFormat("{\n}");
+				}
+				else if (Command == "Status")
+				{
+					ChangeListContents += CStr::CFormat("Status:	{}{\n}") << Data;
+					ChangeListContents += CStr::CFormat("{\n}");
+				}
+				else if (Command == "Type")
+				{
+					ChangeListContents += CStr::CFormat("Type:	{}{\n}") << Data;
+					ChangeListContents += CStr::CFormat("{\n}");
+				}
+				else if (Command == "Description")
+				{
+					ChangeListContents += CStr::CFormat("Description:{\n}");
+					ChangeListContents += fs_FixLineStartingTabs(Data);
+					ChangeListContents += CStr::CFormat("{\n}");
+				}
+				else if (Command.f_StartsWith("Jobs"))
+				{
+					if (Command == "Jobs0")
+						ChangeListContents += CStr::CFormat("Jobs:{\n}");
+					ChangeListContents += CStr::CFormat("\t{}{\n}") << Data;
+				}
+				else if (Command.f_StartsWith("Files"))
+				{
+					if (Command == "Files0")
+						ChangeListContents += CStr::CFormat("Files:{\n}");
+					ChangeListContents += CStr::CFormat("\t{}{\n}") << Data;
 				}
 			}
 		}
@@ -1293,58 +1288,47 @@ namespace NMib::NPerforce
 		else
 		{
 			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			aint iFix = 0;
 			CChangeList::CFile *pLastFile = nullptr;
 
 			for (mint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
+					continue;
+				CStr Command;
+				CStr Data;
+
+				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
+				
+				if (Command == "Date")
 				{
-					++iFix;
+					_Ret.m_Date = Data.f_ToInt(uint64(0));
+					_Ret.m_PerforceDate = Data;
 				}
-				else
+				else if (Command == "User")
 				{
-					CStr Command;
-					CStr Data;
-
-					(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
-	//				DConOut("    {}={}" DNewLine, Command << Data);
-
-	//				DDTrace("{} = {}\n", Command << Data);
-	#if 1
-					if (Command == "Date")
-					{
-						_Ret.m_Date = Data.f_ToInt(uint64(0));
-						_Ret.m_PerforceDate = Data;
-					}
-					else if (Command == "User")
-					{
-						_Ret.m_User = Data;
-					}
-					else if (Command == "Client")
-					{
-						_Ret.m_Client = Data;
-					}
-					else if (Command == "Status")
-					{
-						_Ret.m_Status = Data;
-					}
-					else if (Command == "Description")
-					{
-						_Ret.m_Description = Data;
-					}
-					else if (Command.f_StartsWith("Jobs"))
-					{
-						_Ret.m_Jobs.f_Insert(Data);
-					}
-					else if (Command.f_StartsWith("Files"))
-					{
-						pLastFile = &_Ret.m_Files.f_Insert();
-						pLastFile->m_Name = Data;
-					}
-
-	#endif
+					_Ret.m_User = Data;
+				}
+				else if (Command == "Client")
+				{
+					_Ret.m_Client = Data;
+				}
+				else if (Command == "Status")
+				{
+					_Ret.m_Status = Data;
+				}
+				else if (Command == "Description")
+				{
+					_Ret.m_Description = Data;
+				}
+				else if (Command.f_StartsWith("Jobs"))
+				{
+					_Ret.m_Jobs.f_Insert(Data);
+				}
+				else if (Command.f_StartsWith("Files"))
+				{
+					pLastFile = &_Ret.m_Files.f_Insert();
+					pLastFile->m_Name = Data;
 				}
 			}
 			return true;
@@ -1383,48 +1367,40 @@ namespace NMib::NPerforce
 		else
 		{
 			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			aint iFix = 0;
 			CChangeList *pCurrentChange = nullptr;
 			for (mint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
+					continue;
+				CStr Command;
+				CStr Data;
+				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
+
+				if (Command == "change")
 				{
-					++iFix;
+					pCurrentChange = &_Ret.f_Insert();
+					pCurrentChange->m_ChangeID = Data.f_ToInt(uint32(0));
 				}
-				else
+
+				if (!pCurrentChange)
+					continue;
+
+				else if (Command == "shelved")
+					pCurrentChange->m_bHasShelvedFiles = true;
+				else if (Command == "time" && pCurrentChange)
 				{
-					CStr Command;
-					CStr Data;
-					(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
-					//DConOut("    {}={}" DNewLine, Command << Data);
-	//				DConOut("{} = {}" , Command << Data);
-	#if 1
-					if (Command == "change")
-					{
-						pCurrentChange = &_Ret.f_Insert();
-						pCurrentChange->m_ChangeID = Data.f_ToInt(uint32(0));
-					}
-					else if (pCurrentChange)
-					{
-						if (Command == "shelved")
-							pCurrentChange->m_bHasShelvedFiles = true;
-						else if (Command == "time" && pCurrentChange)
-						{
-							pCurrentChange->m_Date = Data.f_ToInt(uint64(0));
-							pCurrentChange->m_PerforceDate = Data;
-						}
-						else if (Command == "user" && pCurrentChange)
-							pCurrentChange->m_User = Data;
-						else if (Command == "client" && pCurrentChange)
-							pCurrentChange->m_Client = Data;
-						else if (Command == "status" && pCurrentChange)
-							pCurrentChange->m_Status = Data;
-						else if (Command == "desc")
-							pCurrentChange->m_Description = Data;
-					}
-	#endif
+					pCurrentChange->m_Date = Data.f_ToInt(uint64(0));
+					pCurrentChange->m_PerforceDate = Data;
 				}
+				else if (Command == "user" && pCurrentChange)
+					pCurrentChange->m_User = Data;
+				else if (Command == "client" && pCurrentChange)
+					pCurrentChange->m_Client = Data;
+				else if (Command == "status" && pCurrentChange)
+					pCurrentChange->m_Status = Data;
+				else if (Command == "desc")
+					pCurrentChange->m_Description = Data;
 			}
 			return true;
 		}
