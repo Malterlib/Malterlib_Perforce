@@ -548,7 +548,7 @@ namespace NMib::NPerforce
 				m_ActiveVersion = m_pClient->GetInfo("serverVersion");
 
 				CStr Program;
- 				CStr Platform;
+				CStr Platform;
 				uint64 VersionYear = 3000;
 				uint32 MinorVersion = 1;
 				uint64 Revision = TCLimitsInt<uint64>::mc_Max;
