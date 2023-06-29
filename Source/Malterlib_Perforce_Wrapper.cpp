@@ -2798,6 +2798,37 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	bool CPerforceClient::f_FindStreamsByViewMatch(TCVector<CStr> const &_Views, TCVector<CStr> &o_Streams)
+	{
+		DCheckApi(CStr::CFormat("FindStreamsByViewMatch({vs})") << _Views);
+
+		TCVector<CStr> Arguments;
+
+		for (auto &View : _Views)
+		{
+			Arguments.f_Insert("--viewmatch");
+			Arguments.f_Insert(View);
+		}
+
+		fp_Run("streams", Arguments);
+
+		for (CStr const &CurInfo : m_pClient->m_Infos)
+		{
+			CStr Command;
+			CStr Data;
+			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(CurInfo);
+			if (Command == "Stream")
+				o_Streams.f_Insert(Data);
+		}
+
+		if (m_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+		return true;
+	}
+
 	bool CPerforceClient::f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream)
 	{
 		DCheckApi(CStr::CFormat("SwitchWorkspaceStream({}, {})") << _Workspace << _Stream);
@@ -5515,6 +5546,13 @@ namespace NMib::NPerforce
 	{
 		TCVector<CStr> Ret;
 		fp_Throw(mp_Client.f_FindStreams(_SearchQuery, Ret));
+		return Ret;
+	}
+
+	TCVector<CStr> CPerforceClientThrow::f_FindStreamsByViewMatch(TCVector<CStr> const &_Views)
+	{
+		TCVector<CStr> Ret;
+		fp_Throw(mp_Client.f_FindStreamsByViewMatch(_Views, Ret));
 		return Ret;
 	}
 
