@@ -442,7 +442,7 @@ namespace NMib::NPerforce
 
 		bool f_PopulateStream(CStr const &_StreamName);
 
-		bool f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams);
+		bool f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams, TCVector<CStr> const &_StreamSpecs = {});
 		bool f_FindStreamsByViewMatch(TCVector<CStr> const &_Views, TCVector<CStr> &o_Streams);
 
 		bool f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened);
@@ -616,7 +616,7 @@ namespace NMib::NPerforce
 
 		void f_PopulateStream(CStr const &_StreamName);
 
-		TCVector<CStr> f_FindStreams(CStr const &_SearchQuery);
+		TCVector<CStr> f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> const &_StreamSpecs = {});
 		TCVector<CStr> f_FindStreamsByViewMatch(TCVector<CStr> const &_Views);
 
 		TCVector<CStr> f_GetOpened(CStr const &_Path, CStr const &_Client);

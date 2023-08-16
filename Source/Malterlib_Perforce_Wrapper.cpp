@@ -2770,14 +2770,18 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams)
+	bool CPerforceClient::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams, TCVector<CStr> const &_StreamSpecs)
 	{
 		DCheckApi(CStr::CFormat("FindStreams({})") << _SearchQuery);
 
 		TCVector<CStr> Arguments;
 
-		Arguments.f_Insert("-F");
-		Arguments.f_Insert(_SearchQuery);
+		if (_SearchQuery)
+		{
+			Arguments.f_Insert("-F");
+			Arguments.f_Insert(_SearchQuery);
+		}
+		Arguments.f_Insert(_StreamSpecs);
 
 		fp_Run("streams", Arguments);
 
@@ -5542,10 +5546,10 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_PopulateStream(_StreamName));
 	}
 
-	TCVector<CStr> CPerforceClientThrow::f_FindStreams(CStr const &_SearchQuery)
+	TCVector<CStr> CPerforceClientThrow::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> const &_StreamSpecs)
 	{
 		TCVector<CStr> Ret;
-		fp_Throw(mp_Client.f_FindStreams(_SearchQuery, Ret));
+		fp_Throw(mp_Client.f_FindStreams(_SearchQuery, Ret, _StreamSpecs));
 		return Ret;
 	}
 
