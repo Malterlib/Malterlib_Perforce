@@ -46,12 +46,7 @@ Import "../../External/p4source/p4.MHeader"
 		
 		Dependency.Indirect true
 	}
-	%Dependency "Lib_BoringSSL_decrepit"
-	{
-		!DocumentationEnabled true
-
-		Dependency.Indirect true
-	}
+	Target.ExtraGroups =+ "{Malterlib}/{Lib_Malterlib_Cryptography}/{DependOnBoringSSL}"
 }
 
 Property
