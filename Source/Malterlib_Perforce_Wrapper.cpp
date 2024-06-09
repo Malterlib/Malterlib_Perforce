@@ -270,8 +270,8 @@ namespace NMib::NPerforce
 		m_bUTF8 = false;
 		m_pClient = nullptr;
 		m_pAPI = nullptr;
-		m_pClient = DNew CP4Client(this);
-		m_pAPI = DNew ClientApi;
+		m_pClient = fg_ConstructObject<CP4Client>(NMemory::CDefaultAllocator(), this);
+		m_pAPI = fg_ConstructObject<ClientApi>(NMemory::CDefaultAllocator());
 		Error P4error;
 
 		if (m_pAPI)
@@ -312,8 +312,8 @@ namespace NMib::NPerforce
 		m_bUTF8 = false;
 		m_pClient = nullptr;
 		m_pAPI = nullptr;
-		m_pClient = DNew CP4Client(this);
-		m_pAPI = DNew ClientApi;
+		m_pClient = fg_ConstructObject<CP4Client>(NMemory::CDefaultAllocator(), this);
+		m_pAPI = fg_ConstructObject<ClientApi>(NMemory::CDefaultAllocator());
 		Error P4error;
 
 		if (m_pAPI)
@@ -611,10 +611,10 @@ namespace NMib::NPerforce
 		{
 			m_pAPI->Dropped();
 			m_pAPI->Final( &P4error );
-			delete m_pAPI;
+			fg_DeleteObject(NMemory::CDefaultAllocator(), m_pAPI);
 		}
 		if (m_pClient)
-			delete m_pClient;
+			fg_DeleteObject(NMemory::CDefaultAllocator(), m_pClient);
 	}
 
 	bool CPerforceClient::f_GetStreamDepots(TCVector<CStr> &_Depots)
