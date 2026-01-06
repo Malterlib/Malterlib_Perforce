@@ -1299,7 +1299,7 @@ namespace NMib::NPerforce
 				CStr Data;
 
 				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
-				
+
 				if (Command == "Date")
 				{
 					_Ret.m_Date = Data.f_ToInt(uint64(0));
