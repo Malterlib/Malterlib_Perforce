@@ -1157,9 +1157,9 @@ namespace NMib::NPerforce
 				CStr Data;
 
 				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
-//				DConOut("    {}={}" DNewLine, Command << Data);
+//				DConOut("    {}={}" DNewLine, Command, Data);
 
-//				DDTrace("{} = {}\n", Command << Data);
+//				DDTrace("{} = {}\n", Command, Data);
 				if (_fMutator(ChangeListContents, Command, Data))
 					continue;
 
@@ -4688,7 +4688,7 @@ namespace NMib::NPerforce
 				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(CurInfo);
 				if (Command == "Change")
 					_ChangeList = Data.f_ToInt(uint32(0));
-				//DConOut("{}={}", Command << Data);
+				//DConOut("{}={}", Command, Data);
 			}
 			return true;
 		}

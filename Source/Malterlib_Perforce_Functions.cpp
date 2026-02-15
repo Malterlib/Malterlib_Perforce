@@ -679,7 +679,7 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 	if (CurrentStream == StreamName)
 	{
 		if (!_bQuiet)
-			DConOut("Workspace: {} is already has the correct stream '{}' set{\n}", Client << StreamName);
+			DConOut("Workspace: {} is already has the correct stream '{}' set{\n}", Client, StreamName);
 		CSwitchResult Result;
 		Result.m_Workspace = Client;
 		return Result;
@@ -691,10 +691,10 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 
 	//DConOut("\tFrom\t{}{\n}", CurrentStream);
 	if (!_bQuiet)
-		DConOut("\tFrom\t//{}/{}{\n}", CPerforceFunctions::fs_GetDepot(CurrentStream) << CurrentStreamInfo.m_Name);
+		DConOut("\tFrom\t//{}/{}{\n}", CPerforceFunctions::fs_GetDepot(CurrentStream), CurrentStreamInfo.m_Name);
 	//DConOut("\tTo\t\t{}{\n}", StreamName);
 	if (!_bQuiet)
-		DConOut("\tTo\t\t//{}/{}{\n}", CPerforceFunctions::fs_GetDepot(StreamName) << Stream.m_Name);
+		DConOut("\tTo\t\t//{}/{}{\n}", CPerforceFunctions::fs_GetDepot(StreamName), Stream.m_Name);
 
 	pClient->f_SwitchWorkspaceStream(Client, StreamName);
 
@@ -728,7 +728,7 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 					if (Now > NextUpdate)
 					{
 						if (_TotalBytes > 0)
-							DConOut("{sj12} bytes synced ({fe1} %){\n}", _SyncedBytes << (fp64(_SyncedBytes) / fp64(_TotalBytes)) * 100.0);
+							DConOut("{sj12} bytes synced ({fe1} %){\n}", _SyncedBytes, (fp64(_SyncedBytes) / fp64(_TotalBytes)) * 100.0);
 						else
 							DConOut("{sj12} bytes synced{\n}", _SyncedBytes);
 
@@ -869,7 +869,7 @@ CPerforce_TemporaryStreamSwitcher::~CPerforce_TemporaryStreamSwitcher()
 		}
 		catch (NException::CException const &_Exception)
 		{
-			DConOut("Failed to switch back original stream ({}): {}", Stream << _Exception.f_GetErrorStr());
+			DConOut("Failed to switch back original stream ({}): {}", Stream, _Exception.f_GetErrorStr());
 		}
 	}
 }
