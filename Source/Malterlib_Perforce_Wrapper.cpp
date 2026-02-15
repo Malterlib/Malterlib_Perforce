@@ -4939,9 +4939,10 @@ namespace NMib::NPerforce
 	CStr CPerforceClient::f_EncodeStr(CStr const &_Str)
 	{
 		if (m_bUTF8)
-			return fg_ForceStrUTF8(_Str);
+			return _Str;
+
 		CAnsiStr Temp;
-		NMib::NSys::NStr::fg_SystemEncodeAnsiStr(_Str, Temp, '?');;
+		NMib::NStr::NPlatform::fg_SystemEncodeAnsiStr(_Str, Temp, '?');;
 
 		CStr Out;
 		Out.f_AddStr(Temp.f_GetStr(), Temp.f_GetLen());
@@ -4959,7 +4960,7 @@ namespace NMib::NPerforce
 			CStr Out;
 			try
 			{
-				NMib::NSys::NStr::fg_SystemDecodeAnsiStr(Temp, Out);;
+				NMib::NStr::NPlatform::fg_SystemDecodeAnsiStr(Temp, Out);;
 			}
 			catch (CException const &)
 			{
