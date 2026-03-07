@@ -711,9 +711,9 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 		pClient = fg_Construct(ConnectionInfo);
 		pClient->f_Login(CStr());
 
-		CClock Timer;
-		Timer.f_Start();
-		fp64 NextUpdate = Timer.f_GetTime() + 0.5;
+		CStopwatch Stopwatch;
+		Stopwatch.f_Start();
+		fp64 NextUpdate = Stopwatch.f_GetTime() + 0.5;
 
 		CBlockingStdInReader StdInReader;
 
@@ -723,7 +723,7 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 				"//..."
 				, [&](int64 _TotalBytes, int64 _SyncedBytes) -> bool
 				{
-					fp64 Now = Timer.f_GetTime();
+					fp64 Now = Stopwatch.f_GetTime();
 
 					if (Now > NextUpdate)
 					{
