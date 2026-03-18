@@ -33,7 +33,7 @@ namespace NMib::NPerforce
 			CStr m_To;
 			uint32 m_StartFromRev = 0;
 			uint32 m_EndFromRev = 0;
-			auto operator <=> (CIntegrationResult const &_Right) const = default;
+			auto operator <=> (CIntegrationResult const &_Right) const noexcept = default;
 		};
 
 		struct CConnectionInfo
@@ -147,7 +147,7 @@ namespace NMib::NPerforce
 			CStr m_Status;
 			uint64 m_PerforceGUID = 0;
 
-			auto operator <=> (const CFix &_Other) const = default;
+			auto operator <=> (const CFix &_Other) const noexcept = default;
 		};
 
 		class CJob
