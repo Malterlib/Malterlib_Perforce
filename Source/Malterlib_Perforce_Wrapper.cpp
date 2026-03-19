@@ -127,9 +127,9 @@ namespace NMib::NPerforce
 
 	CStr CPerforceClient::CP4Client::GetInfo(CStr const &_Name)
 	{
-		mint nInfos = m_Infos.f_GetLen();
+		umint nInfos = m_Infos.f_GetLen();
 		CStr ToFind = _Name + " ";
-		for (mint i = 0; i < nInfos; ++i)
+		for (umint i = 0; i < nInfos; ++i)
 		{
 			if (m_Infos[i].f_Find(ToFind) == 0)
 			{
@@ -580,8 +580,8 @@ namespace NMib::NPerforce
 		else
 		{
 
-			mint nInfos = m_pClient->m_Infos.f_GetLen();
-			for (mint i = 0; i < nInfos; ++i)
+			umint nInfos = m_pClient->m_Infos.f_GetLen();
+			for (umint i = 0; i < nInfos; ++i)
 			{
 				aint nParse = 0;
 				(CStr::CParse("permMax {}") >> _SecurityLevel).f_Parse(m_pClient->m_Infos[0], nParse);
@@ -631,7 +631,7 @@ namespace NMib::NPerforce
 		else
 		{
 			CStr Name;
-			for (mint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
+			for (umint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (!Info.f_IsEmpty())
@@ -672,7 +672,7 @@ namespace NMib::NPerforce
 		else
 		{
 			int bFound = false;
-			for (mint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
+			for (umint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
 			{
 				if (m_pClient->m_Infos[i].f_CmpNoCase("headAction ", 11) == 0)
 				{
@@ -709,7 +709,7 @@ namespace NMib::NPerforce
 		else
 		{
 			int bFound = false;
-			for (mint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
+			for (umint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
 			{
 				if (m_pClient->m_Infos[i].f_CmpNoCase("headAction ", 11) == 0)
 				{
@@ -739,7 +739,7 @@ namespace NMib::NPerforce
 		else
 		{
 			int bFound = false;
-			for (mint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
+			for (umint i = 0; i < m_pClient->m_Infos.f_GetLen(); ++i)
 			{
 				if (NStr::fg_StrCmpNoCase(m_pClient->m_Infos[i].f_GetStr(), "change ", 7) == 0)
 				{
@@ -816,11 +816,11 @@ namespace NMib::NPerforce
 			fp_Run("sync");
 		}
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CStr ToFindClient = "clientFile ";
 			CStr ToFindAction = "action ";
 			CStr LastFile;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				CStr Info = m_pClient->m_Infos[i];
 				aint iFind = Info.f_Find(ToFindClient);
@@ -925,8 +925,8 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
-		for (mint i = 0; i < nInfo; ++i)
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
+		for (umint i = 0; i < nInfo; ++i)
 		{
 			const CStr &Info = m_pClient->m_Infos[i];
 			CStr Command;
@@ -962,8 +962,8 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
-		for (mint i = 0; i < nInfo; ++i)
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
+		for (umint i = 0; i < nInfo; ++i)
 		{
 			const CStr &Info = m_pClient->m_Infos[i];
 			CStr Command;
@@ -995,9 +995,9 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CStr LastFile, Action;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				CStr const&CurLine = m_pClient->m_Infos[i];
 
@@ -1038,9 +1038,9 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CStr LastFile, Action;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				CStr const&CurLine = m_pClient->m_Infos[i];
 
@@ -1078,11 +1078,11 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CStr ToFindClient = "clientFile ";
 			CStr ToFindAction = "headAction ";
 			CStr LastFile;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				CStr Info = m_pClient->m_Infos[i];
 				aint iFind = Info.f_Find(ToFindClient);
@@ -1145,9 +1145,9 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
@@ -1287,10 +1287,10 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CChangeList::CFile *pLastFile = nullptr;
 
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
@@ -1366,9 +1366,9 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CChangeList *pCurrentChange = nullptr;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
@@ -1418,8 +1418,8 @@ namespace NMib::NPerforce
 
 	bool CPerforceClient::f_AddFixes(CStr const &_Job, const TCVector<uint32> &_Fixes, CStr const &_Status)
 	{
-		mint nFixes = _Fixes.f_GetLen();
-		for (mint i = 0; i < nFixes; ++i)
+		umint nFixes = _Fixes.f_GetLen();
+		for (umint i = 0; i < nFixes; ++i)
 		{
 			CStr Status = f_EncodeStr(_Status);
 			CStr Temp0 = CStr::fs_ToStr(_Fixes[i]);
@@ -1440,8 +1440,8 @@ namespace NMib::NPerforce
 
 	bool CPerforceClient::f_RemoveFixes(CStr const &_Job, const TCVector<uint32> &_Fixes)
 	{
-		mint nFixes = _Fixes.f_GetLen();
-		for (mint i = 0; i < nFixes; ++i)
+		umint nFixes = _Fixes.f_GetLen();
+		for (umint i = 0; i < nFixes; ++i)
 		{
 			CStr Temp0 = CStr::fs_ToStr(_Fixes[i]);
 			CStr Temp1 = f_EncodeStr(_Job);
@@ -1475,11 +1475,11 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 	//		aint iFix = 0;
 			CFile *pCurrentFile = nullptr;
 			CFileRev *pCurrentRev = nullptr;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 	//			DDTrace("{}\n", Info);
@@ -1597,9 +1597,9 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			aint iFix = 0;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
@@ -1769,10 +1769,10 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CRegistry *pCurrentJob = nullptr;
 			CRegistry CurrentTemp;
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 	//			DDTrace("{}\n", Info);
@@ -1811,7 +1811,7 @@ namespace NMib::NPerforce
 					}*/
 	/*				Data = Data.f_Replace("\r\n", "\n");
 					Data = Data.f_Replace("\n", "\r\n");
-					mint CurrentLen = 0;
+					umint CurrentLen = 0;
 					while (CurrentLen != Data.f_GetLen())
 					{
 						CurrentLen = Data.f_GetLen();
@@ -1854,8 +1854,8 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			for (mint i = 0; i < nInfo; ++i)
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				_JobSpec += m_pClient->m_Infos[i] + "\n";
 			}
@@ -1906,8 +1906,8 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			for (mint i = 0; i < nInfo; ++i)
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				_Triggers += m_pClient->m_Infos[i] + "\n";
 			}
@@ -1927,11 +1927,11 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
 			CRegistry *pCurrentUser = nullptr;
 			CRegistry CurrentTemp;
 
-			for (mint i = 0; i < nInfo; ++i)
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (Info.f_IsEmpty())
@@ -2444,7 +2444,7 @@ namespace NMib::NPerforce
 					f_GetTextFileContents(Change.m_From, Contents);
 				}
 
-				mint nLines = 0;
+				umint nLines = 0;
 				ch8 const *pContents = Contents;
 				while (*pContents)
 				{
@@ -2478,7 +2478,7 @@ namespace NMib::NPerforce
 					CStr Contents;
 					if (f_GetTextFileContents(Change.m_To, Contents))
 					{
-						mint nLines = 0;
+						umint nLines = 0;
 						ch8 const *pContents = Contents;
 						while (*pContents)
 						{
@@ -4127,9 +4127,9 @@ namespace NMib::NPerforce
 			}
 		}
 
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
 		CStr CurInfo;
-		for (mint iI = 0; iI < nInfo; iI++)
+		for (umint iI = 0; iI < nInfo; iI++)
 		{
 			CurInfo = m_pClient->m_Infos[iI];
 
@@ -4176,9 +4176,9 @@ namespace NMib::NPerforce
 			}
 		}
 
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
 		CStr CurInfo;
-		for (mint iI = 0; iI < nInfo; iI++)
+		for (umint iI = 0; iI < nInfo; iI++)
 		{
 			CurInfo = m_pClient->m_Infos[iI];
 
@@ -4225,10 +4225,10 @@ namespace NMib::NPerforce
 			}
 		}
 
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
 		CStr CurInfo;
 		bool bRet = false;
-		for (mint iI = 0; iI < nInfo; iI++)
+		for (umint iI = 0; iI < nInfo; iI++)
 		{
 			CurInfo = m_pClient->m_Infos[iI];
 
@@ -4337,8 +4337,8 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			for (mint i = 0; i < nInfo; ++i)
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (!Info.f_IsEmpty())
@@ -4402,8 +4402,8 @@ namespace NMib::NPerforce
 		else
 		{
 			CDescription::CFile *pLastFile = nullptr;
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			for (mint i = 0; i < nInfo; ++i)
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (!Info.f_IsEmpty())
@@ -4462,8 +4462,8 @@ namespace NMib::NPerforce
 		{
 			CDescription::CFile *pLastFile = nullptr;
 
-			mint nInfo = m_pClient->m_Infos.f_GetLen();
-			for (mint i = 0; i < nInfo; ++i)
+			umint nInfo = m_pClient->m_Infos.f_GetLen();
+			for (umint i = 0; i < nInfo; ++i)
 			{
 				const CStr &Info = m_pClient->m_Infos[i];
 				if (!Info.f_IsEmpty())
@@ -4885,10 +4885,10 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
 		CStr CurInfo;
 		CFileRevision* pCurRev = nullptr;
-		for (mint iI = 0; iI < nInfo; iI++)
+		for (umint iI = 0; iI < nInfo; iI++)
 		{
 			CurInfo = m_pClient->m_Infos[iI];
 
@@ -4926,8 +4926,8 @@ namespace NMib::NPerforce
 
 		/*
 		DTraceRaw("f_FindHeadFiles:\n");
-		mint nInfo = m_pClient->m_Infos.f_GetLen();
-		for (mint iI = 0; iI < nInfo; ++iI)
+		umint nInfo = m_pClient->m_Infos.f_GetLen();
+		for (umint iI = 0; iI < nInfo; ++iI)
 		{
 			DTrace("{}\n", m_pClient->m_Infos[iI].f_GetStr());
 		}
