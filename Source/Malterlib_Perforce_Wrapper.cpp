@@ -5651,5 +5651,15 @@ namespace NMib::NPerforce
 		}
 		return false;
 	}
+
+	bool CPerforceClient::fs_HasP4Config(CStr const &_Path)
+	{
+		Enviro env;
+		auto pValue = env.Get("P4CONFIG");
+		if (!pValue || !*pValue)
+			return false;
+
+		return NFile::CFile::fs_FileExists(NFile::CFile::fs_GetExpandedPath(CStr(pValue), _Path));
+	}
 }
 

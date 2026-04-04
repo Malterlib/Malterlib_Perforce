@@ -473,6 +473,8 @@ namespace NMib::NPerforce
 
 		static CStr fs_ActionToStr(EAction _Action);
 
+		static bool fs_HasP4Config(CStr const &_Path);
+
 	private:
 		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
 
