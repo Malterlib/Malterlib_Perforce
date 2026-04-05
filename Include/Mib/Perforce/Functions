@@ -1,1 +1,4 @@
-﻿#include "../../../Source/Malterlib_Perforce_Functions.h"
+// Copyright © Unbroken AB
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+#include "../../../Source/Malterlib_Perforce_Functions.h"
