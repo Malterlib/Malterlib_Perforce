@@ -3280,7 +3280,9 @@ namespace NMib::NPerforce
 		TCVector<CStr> Arguments;
 
 		Arguments.f_Insert("-c");
-		Arguments.f_Insert(CStr::fs_ToStr(_ChangeList));
+		// `p4 reopen -c 0` is rejected by the server; the default changelist
+		// must be spelled "default" on the command line.
+		Arguments.f_Insert(_ChangeList == 0 ? CStr("default") : CStr::fs_ToStr(_ChangeList));
 		Arguments.f_Insert(_Files);
 
 		fp_Run("reopen", Arguments);
