@@ -593,6 +593,113 @@ namespace NMib::NPerforce
 	}
 
 
+	bool CPerforceClient::f_GetLoginTicket(CStr const &_Password, bool _bAllHosts, CStr &_oTicket)
+	{
+		DCheckApi("GetLoginTicket");
+
+		TCVector<CStr> Arguments;
+		if (_bAllHosts)
+			Arguments.f_Insert("-a");
+		Arguments.f_Insert("-p");
+
+		if (!_Password.f_IsEmpty())
+		{
+			m_pAPI->SetPassword(_Password.f_GetStr());
+			m_pClient->m_PromtOverride = _Password;
+		}
+
+		fp_Run("login", Arguments);
+		m_pClient->m_PromtOverride.f_Clear();
+		if (m_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		// `login -p` prints the ticket as an info line of its own; status messages ("User x logged in.") contain
+		// spaces, so the ticket is the last space-free line.
+		_oTicket.f_Clear();
+		for (CStr const &Info : m_pClient->m_Infos)
+		{
+			CStr Line = Info;
+			Line = Line.f_Trim();
+
+			if (!Line.f_IsEmpty() && Line.f_Find(" ") < 0)
+				_oTicket = Line;
+		}
+
+		if (_oTicket.f_IsEmpty())
+		{
+			m_LastError = "No ticket in login output.";
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	bool CPerforceClient::f_SetUserPassword(CStr const &_User, CStr const &_Password)
+	{
+		DCheckApi(CStr::CFormat("SetUserPassword({})") << _User);
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-P");
+		Arguments.f_Insert(_Password);
+		if (!_User.f_IsEmpty())
+			Arguments.f_Insert(_User);
+
+		fp_Run("passwd", Arguments);
+
+		if (m_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	bool CPerforceClient::f_CreateDepot(CStr const &_Name, CStr const &_Type)
+	{
+		DCheckApi(CStr::CFormat("CreateDepot({})") << _Name);
+
+		CStr DepotSpec;
+		DepotSpec += CStr::CFormat("Depot:	{}\n") << _Name;
+		DepotSpec += "\n";
+		CStr Owner = m_ConnectionInfo.m_User;
+		if (!Owner.f_IsEmpty())
+		{
+			DepotSpec += CStr::CFormat("Owner:	{}\n") << Owner;
+			DepotSpec += "\n";
+		}
+		DepotSpec += "Description:\n";
+		DepotSpec += CStr::CFormat("	Created by {}.\n") << (Owner.f_IsEmpty() ? CStr("Malterlib") : Owner);
+		DepotSpec += "\n";
+		DepotSpec += CStr::CFormat("Type:	{}\n") << _Type;
+		DepotSpec += "\n";
+		if (_Type == "stream")
+		{
+			DepotSpec += CStr::CFormat("StreamDepth:	//{}/1\n") << _Name;
+			DepotSpec += "\n";
+		}
+		DepotSpec += CStr::CFormat("Map:	{}/...\n") << _Name;
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-i");
+
+		m_pClient->m_PromtOverride = DepotSpec;
+
+		fp_Run("depot", Arguments);
+
+		if (m_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_Dropped()
 	{
 		if(!m_pAPI)
@@ -5030,6 +5137,20 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_Login(CStr const &_Password, CStr const &_WorkingDir)
 	{
 		fp_Throw(mp_Client.f_Login(_Password, _WorkingDir));
+	}
+	CStr CPerforceClientThrow::f_GetLoginTicket(CStr const &_Password, bool _bAllHosts)
+	{
+		CStr Ret;
+		fp_Throw(mp_Client.f_GetLoginTicket(_Password, _bAllHosts, Ret));
+		return Ret;
+	}
+	void CPerforceClientThrow::f_CreateDepot(CStr const &_Name, CStr const &_Type)
+	{
+		fp_Throw(mp_Client.f_CreateDepot(_Name, _Type));
+	}
+	void CPerforceClientThrow::f_SetUserPassword(CStr const &_User, CStr const &_Password)
+	{
+		fp_Throw(mp_Client.f_SetUserPassword(_User, _Password));
 	}
 	CStr CPerforceClientThrow::f_GetSecurityLevel()
 	{

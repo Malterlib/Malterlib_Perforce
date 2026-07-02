@@ -320,6 +320,15 @@ namespace NMib::NPerforce
 		CStr f_GetLastFunction() const;
 		bool f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
 		bool f_GetSecurityLevel(CStr &_SecurityLevel);
+		// Mints a login ticket (`p4 login -p`), prompting with _Password when the server requires one. An all-hosts
+		// ticket (`-a`) is valid from any client address, for handing a short-lived credential to another host.
+		bool f_GetLoginTicket(CStr const &_Password, bool _bAllHosts, CStr &_oTicket);
+		// Creates (or updates) a depot spec. _Type is a depot type such as "stream" or "local"; stream depots get a
+		// default stream depth of one.
+		bool f_CreateDepot(CStr const &_Name, CStr const &_Type);
+		// Sets a user's password without prompting (`p4 passwd -P`); setting another user's password requires super
+		// access. An empty _User sets the connection's own user.
+		bool f_SetUserPassword(CStr const &_User, CStr const &_Password);
 		bool f_Dropped();
 
 		bool f_IsUTF8() const
@@ -503,6 +512,9 @@ namespace NMib::NPerforce
 		bool f_IsUTF8();
 		void f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
 		CStr f_GetSecurityLevel();
+		CStr f_GetLoginTicket(CStr const &_Password, bool _bAllHosts);
+		void f_CreateDepot(CStr const &_Name, CStr const &_Type);
+		void f_SetUserPassword(CStr const &_User, CStr const &_Password);
 
 		bool f_FileExistsInDepot(CStr const &_File);
 		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
