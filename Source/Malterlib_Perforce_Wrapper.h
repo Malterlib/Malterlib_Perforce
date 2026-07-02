@@ -330,6 +330,13 @@ namespace NMib::NPerforce
 		// user's password requires super access. An empty _User sets the connection's own user. Changing the connection's
 		// own password when one is set needs the old password, so it fails.
 		bool f_SetUserPassword(CStr const &_User, CStr const &_Password);
+		// Writes a client spec directly (`p4 client -i`), creating or updating the client. Unlike
+		// f_CreateClient/f_CreateStreamClient this needs no template client to copy from; fields left empty fall
+		// back to the server's defaults (the owner defaults to the connection's user).
+		bool f_SetClient(CStr const &_ClientName, CClient const &_Client);
+		// Writes the protections table (`p4 protect -i`); each line is one protections entry such as
+		// "super user someone * //...". Requires super access (on a server with an empty table, everyone has it).
+		bool f_SetProtections(TCVector<CStr> const &_Lines);
 		bool f_Dropped();
 
 		bool f_IsUTF8() const
@@ -518,6 +525,8 @@ namespace NMib::NPerforce
 		CStr f_GetLoginTicket(CStr const &_Password, bool _bAllHosts);
 		void f_CreateDepot(CStr const &_Name, CStr const &_Type);
 		void f_SetUserPassword(CStr const &_User, CStr const &_Password);
+		void f_SetClient(CStr const &_ClientName, CPerforceClient::CClient const &_Client);
+		void f_SetProtections(TCVector<CStr> const &_Lines);
 
 		bool f_FileExistsInDepot(CStr const &_File);
 		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
