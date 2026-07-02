@@ -638,6 +638,116 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	bool CPerforceClient::f_SetClient(CStr const &_ClientName, CClient const &_Client)
+	{
+		DCheckApi(CStr::CFormat("SetClient({})") << _ClientName);
+
+		CStr Spec;
+		Spec += CStr::CFormat("Client:	{}\n") << _ClientName;
+		Spec += "\n";
+		CStr Owner = _Client.m_Owner;
+		if (Owner.f_IsEmpty())
+			Owner = m_ConnectionInfo.m_User;
+		if (!Owner.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Owner:	{}\n") << Owner;
+			Spec += "\n";
+		}
+		if (!_Client.m_Host.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Host:	{}\n") << _Client.m_Host;
+			Spec += "\n";
+		}
+		if (!_Client.m_Description.f_IsEmpty())
+		{
+			Spec += "Description:\n";
+			CStr Description = _Client.m_Description;
+			while (!Description.f_IsEmpty())
+			{
+				CStr Line = fg_GetStrLineSep(Description);
+				Spec += CStr::CFormat("	{}\n") << Line;
+			}
+			Spec += "\n";
+		}
+		if (!_Client.m_Root.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Root:	{}\n") << _Client.m_Root;
+			Spec += "\n";
+		}
+		if (!_Client.m_AltRoot0.f_IsEmpty())
+		{
+			Spec += "AltRoots:\n";
+			Spec += CStr::CFormat("	{}\n") << _Client.m_AltRoot0;
+			if (!_Client.m_AltRoot1.f_IsEmpty())
+				Spec += CStr::CFormat("	{}\n") << _Client.m_AltRoot1;
+			Spec += "\n";
+		}
+		if (!_Client.m_Options.f_IsEmpty())
+		{
+			Spec += "Options:";
+			for (auto &Option : _Client.m_Options)
+				Spec += CStr::CFormat(" {}") << Option;
+			Spec += "\n";
+			Spec += "\n";
+		}
+		if (!_Client.m_LineEndings.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("LineEnd:	{}\n") << _Client.m_LineEndings;
+			Spec += "\n";
+		}
+		if (!_Client.m_Stream.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Stream:	{}\n") << _Client.m_Stream;
+			Spec += "\n";
+		}
+		if (!_Client.m_View.f_IsEmpty())
+		{
+			Spec += "View:\n";
+			for (auto &Mapping : _Client.m_View)
+				Spec += CStr::CFormat("	{}{} {}\n") << (Mapping.m_bNegative ? "-" : "") << Mapping.m_From << Mapping.m_To;
+			Spec += "\n";
+		}
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-i");
+
+		m_pClient->m_PromtOverride = Spec;
+
+		fp_Run("client", Arguments);
+
+		if (m_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	bool CPerforceClient::f_SetProtections(TCVector<CStr> const &_Lines)
+	{
+		DCheckApi("SetProtections");
+
+		CStr Spec = "Protections:\n";
+		for (auto &Line : _Lines)
+			Spec += CStr::CFormat("	{}\n") << Line;
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-i");
+
+		m_pClient->m_PromtOverride = Spec;
+
+		fp_Run("protect", Arguments);
+
+		if (m_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_SetUserPassword(CStr const &_User, CStr const &_Password)
 	{
 		DCheckApi(CStr::CFormat("SetUserPassword({})") << _User);
@@ -4666,6 +4776,23 @@ namespace NMib::NPerforce
 		}
 		else
 		{
+			// Feature detection from the server version, like f_Login does — so a session that never logs in (an
+			// open server) still knows what the server supports.
+			m_ActiveVersion = m_pClient->GetInfo("serverVersion");
+			if (!m_ActiveVersion.f_IsEmpty())
+			{
+				CStr Program;
+				CStr Platform;
+				uint64 VersionYear = 3000;
+				uint32 MinorVersion = 1;
+				uint64 Revision = TCLimitsInt<uint64>::mc_Max;
+				CStr Date;
+
+				(CStr::CParse("{}/{}/{}.{}/{} ({})") >> Program >> Platform >> VersionYear >> MinorVersion >> Revision >> Date).f_Parse(m_ActiveVersion);
+
+				m_bSupportsParentView = Revision >= 2006716;
+			}
+
 			return true;
 		}
 	}
@@ -5151,6 +5278,14 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_SetUserPassword(CStr const &_User, CStr const &_Password)
 	{
 		fp_Throw(mp_Client.f_SetUserPassword(_User, _Password));
+	}
+	void CPerforceClientThrow::f_SetClient(CStr const &_ClientName, CPerforceClient::CClient const &_Client)
+	{
+		fp_Throw(mp_Client.f_SetClient(_ClientName, _Client));
+	}
+	void CPerforceClientThrow::f_SetProtections(TCVector<CStr> const &_Lines)
+	{
+		fp_Throw(mp_Client.f_SetProtections(_Lines));
 	}
 	CStr CPerforceClientThrow::f_GetSecurityLevel()
 	{
