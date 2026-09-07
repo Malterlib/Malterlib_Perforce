@@ -2571,7 +2571,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_ResolveAutomatic(CStr const &_File, uint32 _Changelist)
+	bool CPerforceClient::f_ResolveAutomatic(CStr const &_File, uint32 _Changelist, bool _bRequireResolved)
 	{
 		DCheckApi(CStr::CFormat("ResolveAutomatic({})") << _File);
 
@@ -2592,12 +2592,36 @@ namespace NMib::NPerforce
 
 		if (m_pClient->m_bError)
 		{
-			if (f_GetLastError() != "No file(s) to resolve.")
+			if (f_GetLastError() != "No file(s) to resolve." && f_GetLastError() != _File + " - no file(s) to resolve.")
 			{
 				fOnError();
 				return false;
 			}
 		}
+		if (_bRequireResolved)
+		{
+			// Automatic resolve can succeed while leaving conflicts unresolved.
+			DCheckApi(CStr::CFormat("ResolveAutomatic({})") << _File);
+			Arguments[0] = "-n";
+			fp_Run("resolve", Arguments);
+			if (m_pClient->m_bError)
+			{
+				if (f_GetLastError() == "No file(s) to resolve." || f_GetLastError() == _File + " - no file(s) to resolve.")
+					return true;
+
+				fOnError();
+
+				return false;
+			}
+			if (!m_pClient->m_Infos.f_IsEmpty())
+			{
+				m_LastError = "Unresolved conflicts remain after automatic resolve";
+				fOnError();
+
+				return false;
+			}
+		}
+
 		return true;
 	}
 
@@ -2764,6 +2788,9 @@ namespace NMib::NPerforce
 
 		if (m_pClient->m_bError)
 		{
+			if (f_GetLastError() == "File(s) not opened on this client." || f_GetLastError() == _Path + " - file(s) not opened on this client.")
+				return true;
+
 			fOnError();
 			return false;
 		}
@@ -3236,7 +3263,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist)
+	bool CPerforceClient::f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, CStr const &_FileSpec)
 	{
 		DCheckApi(CStr::CFormat("UnshelveInto({}, {})") << _SourceChangelist << _DestinationChangelist);
 
@@ -3244,8 +3271,17 @@ namespace NMib::NPerforce
 		Arguments.f_Insert("-s");
 		Arguments.f_Insert(CStr::fs_ToStr(_SourceChangelist));
 
-		Arguments.f_Insert("-c");
-		Arguments.f_Insert(CStr::fs_ToStr(_DestinationChangelist));
+		if (_DestinationChangelist)
+		{
+			Arguments.f_Insert("-c");
+			Arguments.f_Insert(CStr::fs_ToStr(_DestinationChangelist));
+		}
+
+		if (!_FileSpec.f_IsEmpty())
+		{
+			Arguments.f_Insert("-Af");
+			Arguments.f_Insert(_FileSpec);
+		}
 
 		fp_Run("unshelve", Arguments);
 
@@ -4759,15 +4795,17 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bool CPerforceClient::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged)
+	bool CPerforceClient::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged, bool _bDeleteAddedFiles)
 	{
 		DCheckApi(CStr::CFormat("RevertChangelist({}, {})") << _Changelist << _bOnlyIfUnchanged);
 
 		TCVector<CStr> Arguments;
 		if (_bOnlyIfUnchanged)
 			Arguments.f_Insert("-a");
+		if (_bDeleteAddedFiles)
+			Arguments.f_Insert("-w");
 		Arguments.f_Insert("-c");
-		Arguments.f_Insert(CStr::fs_ToStr(_Changelist));
+		Arguments.f_Insert(_Changelist == 0 ? CStr("default") : CStr::fs_ToStr(_Changelist));
 		if (!_bOnlyIfUnchanged)
 			Arguments.f_Insert("//...");
 
@@ -5323,9 +5361,9 @@ namespace NMib::NPerforce
 	{
 		fp_Throw(mp_Client.f_Revert(_File, _bOnlyIfUnchanged));
 	}
-	void CPerforceClientThrow::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged)
+	void CPerforceClientThrow::f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged, bool _bDeleteAddedFiles)
 	{
-		fp_Throw(mp_Client.f_RevertChangelist(_Changelist, _bOnlyIfUnchanged));
+		fp_Throw(mp_Client.f_RevertChangelist(_Changelist, _bOnlyIfUnchanged, _bDeleteAddedFiles));
 	}
 
 	void CPerforceClientThrow::f_Add(CStr const &_File)
@@ -5408,9 +5446,9 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_MoveToChangelist(_Files, _ChangeList));
 	}
 
-	void CPerforceClientThrow::f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist)
+	void CPerforceClientThrow::f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, CStr const &_FileSpec)
 	{
-		fp_Throw(mp_Client.f_UnshelveInto(_SourceChangelist, _DestinationChangelist));
+		fp_Throw(mp_Client.f_UnshelveInto(_SourceChangelist, _DestinationChangelist, _FileSpec));
 	}
 	uint32 CPerforceClientThrow::f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved)
 	{
@@ -5434,9 +5472,9 @@ namespace NMib::NPerforce
 	{
 		fp_Throw(mp_Client.f_ResolveSafe(_File, _ChangeList));
 	}
-	void CPerforceClientThrow::f_ResolveAutomatic(CStr const &_File, uint32 _ChangeList)
+	void CPerforceClientThrow::f_ResolveAutomatic(CStr const &_File, uint32 _ChangeList, bool _bRequireResolved)
 	{
-		fp_Throw(mp_Client.f_ResolveAutomatic(_File, _ChangeList));
+		fp_Throw(mp_Client.f_ResolveAutomatic(_File, _ChangeList, _bRequireResolved));
 	}
 	void CPerforceClientThrow::f_ResolveMine(CStr const &_File, uint32 _ChangeList)
 	{

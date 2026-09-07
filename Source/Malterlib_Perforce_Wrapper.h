@@ -384,7 +384,8 @@ namespace NMib::NPerforce
 		bool f_OpenForEdit(CStr const &_File);
 		bool f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
 		bool f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
-		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false);
+		// Changelist 0 selects the current client's default changelist.
+		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
 		bool f_Add(CStr const &_File);
 		bool f_Delete(CStr const &_File);
 		bool f_OpenForEditOrMakeWritable(CStr const &_File);
@@ -405,14 +406,15 @@ namespace NMib::NPerforce
 
 		bool f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
 		bool f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
-		bool f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist);
+		// Destination 0 selects the current client's default changelist.
+		bool f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, CStr const &_FileSpec = CStr());
 		bool f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList);
 		bool f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved, uint32 &_FinalChangelist);
 		bool f_DeleteChangelist(uint32 _Changelist, bool _bForce = false);
 		bool f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs);
 		bool f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
 		bool f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
-		bool f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0);
+		bool f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
 		bool f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
 
 		bool f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend, TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, TCVector<CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
@@ -561,7 +563,7 @@ namespace NMib::NPerforce
 		void f_OpenForEdit(CStr const &_File);
 		void f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
 		void f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
-		void f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false);
+		void f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
 		void f_Add(CStr const &_File);
 		void f_Delete(CStr const &_File);
 		void f_OpenForEditOrMakeWritable(CStr const &_File);
@@ -581,14 +583,14 @@ namespace NMib::NPerforce
 
 		void f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
 		void f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
-		void f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist);
+		void f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, CStr const &_FileSpec = CStr());
 		void f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList);
 		uint32 f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved);
 		void f_DeleteChangelist(uint32 _Changelist, bool _bForce = false);
 		void f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs);
 		void f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
 		void f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
-		void f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0);
+		void f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
 		void f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
 
 		TCVector<CPerforceClient::CIntegrationResult> f_CopyStream(CStr const &_FromStream, CStr const &_ToStream, bool _bPretend,  TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec = CStr());
