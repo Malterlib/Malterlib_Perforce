@@ -43,7 +43,7 @@ Import "../../External/p4source/p4.MHeader"
 	%Dependency "Lib_p4api"
 	{
 		!DocumentationEnabled true
-		
+
 		Dependency.Indirect true
 	}
 	Target.ExtraGroups =+ "{Malterlib}/{Lib_Malterlib_Cryptography}/{DependOnBoringSSL}"
@@ -75,7 +75,7 @@ Property
 Property
 {
 	!!MalterlibEnableInternalTests true
-	
+
 	MalterlibTests =+ "Malterlib_Perforce"
 	MalterlibTestFiles_Malterlib_Perforce: [type(CEntity)] = ["Test/*"->MakeAbsolute()]
 	MalterlibTestDependencies_Malterlib_Perforce: [type(CEntity)] = ["Lib_Malterlib_Perforce"]

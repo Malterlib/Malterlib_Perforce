@@ -19,8 +19,7 @@ namespace
 		{
 			DMibTestSuite("WorkspaceRoot")
 			{
-				auto fCheckRoot =
-					[&]
+				auto fCheckRoot = [&]
 					(
 						CStr const &_TestPath
 						, CStr const &_CurrentRoot
@@ -42,16 +41,8 @@ namespace
 				;
 
 				// The current workspace was switched to a stream with a different name, so nothing can be stripped and initializing fails instead of guessing a root
-				auto fCheckNotStripped =
-					[&]
-					(
-						CStr const &_TestPath
-						, CStr const &_CurrentRoot
-						, TCVector<CStr> const &_CurrentStreamPaths
-						, CStr const &_TargetStreamPath
-						, CStr const &_ExpectedStreamPaths
-					)
-					-> void
+				auto fCheckNotStripped = [&]
+					(CStr const &_TestPath, CStr const &_CurrentRoot, TCVector<CStr> const &_CurrentStreamPaths, CStr const &_TargetStreamPath, CStr const &_ExpectedStreamPaths) -> void
 					{
 						DMibTestPath(_TestPath);
 

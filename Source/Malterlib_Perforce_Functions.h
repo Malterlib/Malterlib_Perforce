@@ -33,8 +33,8 @@ namespace NMib::NPerforce
 
 	private:
 		void fpr_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed);
-	public:
 
+	public:
 		struct CSwitchResult
 		{
 			CStr m_Workspace;
@@ -73,14 +73,12 @@ namespace NMib::NPerforce
 		static CStrippedRoot fs_StripRoot(CStr const &_Root, TCVector<CStr> const &_StreamPaths, bool _bRemapped);
 		static CStr fs_GetFullRoot(CStr const &_Client, CStrippedRoot const &_StrippedRoot, CStr const &_StreamPath);
 
-
 		CStr f_GetClientForStream(CStr const &_Stream, CSwitchResult &_oOldStream, bool _bQuiet = false);
 		static CRegistryPreserveAll fs_GetRegistry(CPerforceClient::CStream const &_Stream);
 		static void fs_InitializeStream(CStr const &_Stream, CPerforceFunctions &_Functions);
 		static CSwitchResult fs_SwitchStream(CPerforceFunctions &_Functions, CStr const &_StreamName, bool _bDoSync, bool _bQuiet = false);
 		TCSet<CStr> f_GetDisabledCreate(CPerforceClient::CStream const &_Stream);
 		CStr f_GetPatchPrefix(CPerforceClient::CStream const &_Stream);
-
 
 		COwnedStreams f_GetStreamOwned(CStr const &_Stream, bool _bReversed);
 	};
@@ -99,5 +97,5 @@ namespace NMib::NPerforce
 }
 
 #ifndef DMibPNoShortCuts
-	using namespace NMib::NPerforce;
+using namespace NMib::NPerforce;
 #endif
