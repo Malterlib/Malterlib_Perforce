@@ -130,9 +130,7 @@ CStr CPerforceFunctions::f_GetStrippedRoot()
 			ExtraStreamNames.f_Insert("/" + CurrentDepot + "/" + ParentStream.m_Name);
 		}
 		else
-		{
 			ExtraStreamNames.f_Insert("/" + CurrentDepot + "/" + StreamInfo.m_Name);
-		}
 
 		auto pOldNames = Registry.f_GetChildNoPath("OldNames");
 		if (pOldNames)
@@ -302,7 +300,6 @@ void CPerforceFunctions::fs_InitializeStream(CStr const &_Stream, CPerforceFunct
 	else
 		ParentStream = StreamName;
 
-
 	CStr CurrentRoot;
 	if (Stream.m_Remapped.f_IsEmpty())
 		CurrentRoot = Functions.f_GetFullRoot(StreamName);
@@ -359,9 +356,7 @@ void CPerforceFunctions::fs_InitializeStream(CStr const &_Stream, CPerforceFunct
 
 	CStr Clients;
 	for (auto &Client : MatchedClients)
-	{
 		fg_AddStrSep(Clients, Client, ", ");
-	}
 
 	if (MatchedClients.f_GetLen() > 1)
 		DError(fg_Format("Found more than one client that matches your host and stream(s): {}", Clients));
@@ -375,7 +370,6 @@ void CPerforceFunctions::fs_InitializeStream(CStr const &_Stream, CPerforceFunct
 		CStr CleanStreamName = Stream.m_Name.f_Replace(" (", ".").f_Replace("(", "").f_Replace(")", "").f_Replace(" ", "_").f_Replace("/", ".");
 
 		ClientName = fg_Format("{}_{}_{}_{}", P4User, ShortHost, Depot, CleanStreamName);
-
 	}
 	TCVector<CStr> Options = SourceClientInfo.m_Options;
 
@@ -447,9 +441,7 @@ void CPerforceFunctions::fs_InitializeStream(CStr const &_Stream, CPerforceFunct
 					Params.m_Environment["P4CHARSET"] = "";
 				Params.m_WorkingDirectory = RootPath;
 				if (!CProcessLaunch::fs_LaunchBlock(ReconcileScript, CStr(), StdOut, StdErr, ExitCode, Params))
-				{
 					ExitCode = 5;
-				}
 
 				DConOutRaw(StdOut);
 				DConErrOutRaw(StdErr);
@@ -617,16 +609,12 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 					if (_Key == "Host")
 					{
 						if (_Value == CurrentHost)
-						{
 							MatchedClientsHost[_Client];
-						}
 					}
 					else if (_Key == "Stream")
 					{
 						if (ConsideredStreams.f_FindEqual(_Value))
-						{
 							MatchedClientsStream[_Client];
-						}
 					}
 				}
 			)
@@ -642,9 +630,7 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 
 		CStr Clients;
 		for (auto &Client : MatchedClients)
-		{
 			fg_AddStrSep(Clients, Client, ", ");
-		}
 
 		if (MatchedClients.f_GetLen() > 1)
 			DError(fg_Format("Found more than one client that matches your host and stream(s): {}", Clients));
@@ -700,7 +686,6 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 
 	if (_bDoSync)
 	{
-
 		TCUniquePointer<CPerforceClientThrow> pClient;
 
 		CPerforceClient::CConnectionInfo ConnectionInfo;
@@ -756,8 +741,7 @@ TCSet<CStr> CPerforceFunctions::f_GetDisabledCreate(CPerforceClient::CStream con
 {
 	TCSet<CStr> Ret;
 
-	auto fl_AddRegistry
-		= [&](CRegistryPreserveAll const &_Registry, CStr const &_Property)
+	auto fl_AddRegistry = [&](CRegistryPreserveAll const &_Registry, CStr const &_Property)
 		{
 			auto pDisableCreate = _Registry.f_GetChildNoPath(_Property);
 			if (pDisableCreate)
@@ -852,7 +836,6 @@ CStr CPerforceFunctions::f_GetPatchPrefix(CPerforceClient::CStream const &_Strea
 
 	return CStr();
 }
-
 
 CPerforce_TemporaryStreamSwitcher::CPerforce_TemporaryStreamSwitcher(CPerforceFunctions &_Functions)
 	: mp_Functions(_Functions)
