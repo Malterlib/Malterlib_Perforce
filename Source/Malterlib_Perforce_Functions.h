@@ -41,6 +41,13 @@ namespace NMib::NPerforce
 			CStr m_OldStream;
 		};
 
+		struct CStrippedRoot
+		{
+			CStr m_Root;
+			TCVector<CStr> m_StreamPaths;
+			bool m_bStripped = false;
+		};
+
 		TCUniquePointer<CPerforceClientThrow> &m_pClient;
 		TCMap<CStr, CPerforceClient::CStream> m_StreamCache;
 
@@ -54,11 +61,17 @@ namespace NMib::NPerforce
 		static CStr fs_GetCommonPath(CStr const &_First, CStr const &_Second, CStr &_oFirstSuffix, CStr &_oSecondSuffix);
 
 		CStr f_GetCurrentStream() const;
-		CStr f_GetStrippedRoot();
+		CStrippedRoot f_GetStrippedRoot();
 		static CStr fs_GetDepot(CStr const &_Stream);
 		static CStr fs_GetStream(CStr const &_Stream);
 
-		CStr f_GetFullRoot(CStr const &_Stream, CStr const &_StrippedRoot = CStr());
+		CStr f_GetFullRoot(CStr const &_Stream);
+		CStr f_GetFullRoot(CStr const &_Stream, CStrippedRoot const &_StrippedRoot);
+
+		static bool fs_UsesParentStreamPath(CPerforceClient::CStream const &_Stream);
+		static TCVector<CStr> fs_GetStreamPaths(CStr const &_Depot, CPerforceClient::CStream const &_Stream);
+		static CStrippedRoot fs_StripRoot(CStr const &_Root, TCVector<CStr> const &_StreamPaths, bool _bRemapped);
+		static CStr fs_GetFullRoot(CStr const &_Client, CStrippedRoot const &_StrippedRoot, CStr const &_StreamPath);
 
 
 		CStr f_GetClientForStream(CStr const &_Stream, CSwitchResult &_oOldStream, bool _bQuiet = false);

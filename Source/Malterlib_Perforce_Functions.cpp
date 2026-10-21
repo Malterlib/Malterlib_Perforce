@@ -6,6 +6,19 @@
 #include <Mib/Process/StdIn>
 #include <Mib/Process/ProcessLaunch>
 
+namespace
+{
+	// Workspace roots are usually on case insensitive file systems and on Windows can use either path separator. Replacing separators keeps the length, so the index is valid for _Root
+	aint fg_FindStreamPathInRoot(CStr const &_Root, CStr const &_StreamPath)
+	{
+#ifdef DPlatformFamily_Windows
+		return _Root.f_Replace("\\", "/").f_FindReverseNoCase(_StreamPath);
+#else
+		return _Root.f_FindReverseNoCase(_StreamPath);
+#endif
+	}
+}
+
 CPerforceFunctions::CPerforceFunctions(TCUniquePointer<CPerforceClientThrow> &_pClient)
 	: m_pClient(_pClient)
 {
@@ -89,7 +102,7 @@ CStr CPerforceFunctions::f_GetCurrentStream() const
 	return CurrentStream;
 }
 
-CStr CPerforceFunctions::f_GetStrippedRoot()
+CPerforceFunctions::CStrippedRoot CPerforceFunctions::f_GetStrippedRoot()
 {
 	CStr CurrentHost;
 	CStr CurrentRoot;
@@ -116,42 +129,70 @@ CStr CPerforceFunctions::f_GetStrippedRoot()
 	if (CurrentStream.f_IsEmpty())
 		DError(fg_Format("Failed to find stream in old workspace: {}", m_pClient->f_GetClient()));
 
-	CPerforceClient::CStream StreamInfo;
-	StreamInfo = m_pClient->f_GetStream(CurrentStream);
+	CPerforceClient::CStream StreamInfo = m_pClient->f_GetStream(CurrentStream);
+	if (fs_UsesParentStreamPath(StreamInfo))
+		StreamInfo = m_pClient->f_GetStream(StreamInfo.m_Parent);
 
+	return fs_StripRoot(CurrentRoot, fs_GetStreamPaths(fs_GetDepot(CurrentStream), StreamInfo), !StreamInfo.m_Remapped.f_IsEmpty());
+}
+
+bool CPerforceFunctions::fs_UsesParentStreamPath(CPerforceClient::CStream const &_Stream)
+{
+	return _Stream.m_Type == "task" || !fs_GetRegistry(_Stream).f_GetValue("UniqueName", "").f_IsEmpty();
+}
+
+TCVector<CStr> CPerforceFunctions::fs_GetStreamPaths(CStr const &_Depot, CPerforceClient::CStream const &_Stream)
+{
+	TCVector<CStr> StreamPaths;
+	StreamPaths.f_Insert("/" + _Depot + "/" + _Stream.m_Name);
+
+	CRegistryPreserveAll Registry = fs_GetRegistry(_Stream);
+	auto pOldNames = Registry.f_GetChildNoPath("OldNames");
+	if (pOldNames)
 	{
-		CStr CurrentDepot = fs_GetDepot(CurrentStream);
-		TCVector<CStr> ExtraStreamNames;
-		CRegistryPreserveAll Registry = CPerforceFunctions::fs_GetRegistry(StreamInfo);
-		if (StreamInfo.m_Type == "task" || !Registry.f_GetValue("UniqueName", "").f_IsEmpty())
-		{
-			CPerforceClient::CStream ParentStream = m_pClient->f_GetStream(StreamInfo.m_Parent);
-			Registry = CPerforceFunctions::fs_GetRegistry(ParentStream);
-			ExtraStreamNames.f_Insert("/" + CurrentDepot + "/" + ParentStream.m_Name);
-		}
-		else
-		{
-			ExtraStreamNames.f_Insert("/" + CurrentDepot + "/" + StreamInfo.m_Name);
-		}
-
-		auto pOldNames = Registry.f_GetChildNoPath("OldNames");
-		if (pOldNames)
-		{
-			for (auto iName = pOldNames->f_GetChildIterator("Name"); iName && iName->f_GetName() == "Name"; ++iName)
-				ExtraStreamNames.f_Insert("/" + CurrentDepot + "/" + iName->f_GetThisValue());
-		}
-
-		for (auto iExtra = ExtraStreamNames.f_GetIterator(); iExtra; ++iExtra)
-		{
-			aint iFind = CurrentRoot.f_FindReverse(*iExtra);
-			if (iFind >= 0)
-			{
-				CurrentRoot = CurrentRoot.f_Left(iFind);
-				break;
-			}
-		}
+		for (auto iName = pOldNames->f_GetChildIterator("Name"); iName && iName->f_GetName() == "Name"; ++iName)
+			StreamPaths.f_Insert("/" + _Depot + "/" + iName->f_GetThisValue());
 	}
-	return CurrentRoot;
+
+	return StreamPaths;
+}
+
+CPerforceFunctions::CStrippedRoot CPerforceFunctions::fs_StripRoot(CStr const &_Root, TCVector<CStr> const &_StreamPaths, bool _bRemapped)
+{
+	for (auto &StreamPath : _StreamPaths)
+	{
+		aint iFind = fg_FindStreamPathInRoot(_Root, StreamPath);
+		if (iFind >= 0)
+			return {_Root.f_Left(iFind), _StreamPaths, true};
+	}
+
+	// Workspaces for remapped streams are created at the base, without the stream path
+	return {_Root, _StreamPaths, _bRemapped};
+}
+
+CStr CPerforceFunctions::fs_GetFullRoot(CStr const &_Client, CStrippedRoot const &_StrippedRoot, CStr const &_StreamPath)
+{
+	// Without a base the new root can only be guessed, which either nests the workspace or makes it share a directory with the current one
+	if (!_StrippedRoot.m_bStripped)
+	{
+		CStr StreamPaths;
+		for (auto &StreamPath : _StrippedRoot.m_StreamPaths)
+			fg_AddStrSep(StreamPaths, StreamPath, ", ");
+
+		DError
+			(
+				fg_Format
+				(
+					"The root '{}' of workspace '{}' does not contain its stream path ({}). Fix the root or switch the workspace back to its stream before initializing a stream from it"
+					, _StrippedRoot.m_Root
+					, _Client
+					, StreamPaths
+				)
+			)
+		;
+	}
+
+	return _StrippedRoot.m_Root + _StreamPath;
 }
 
 CStr CPerforceFunctions::fs_GetDepot(CStr const &_Stream)
@@ -180,26 +221,18 @@ CStr CPerforceFunctions::fs_GetStream(CStr const &_Stream)
 	return fg_Format("//{}/{}", Depot, Stream);
 }
 
-CStr CPerforceFunctions::f_GetFullRoot(CStr const &_Stream, CStr const &_StrippedRoot)
+CStr CPerforceFunctions::f_GetFullRoot(CStr const &_Stream)
 {
-	CStr Root = _StrippedRoot;
-	if (Root.f_IsEmpty())
-		Root = f_GetStrippedRoot();
+	return f_GetFullRoot(_Stream, f_GetStrippedRoot());
+}
 
+CStr CPerforceFunctions::f_GetFullRoot(CStr const &_Stream, CStrippedRoot const &_StrippedRoot)
+{
 	CPerforceClient::CStream StreamInfo = m_pClient->f_GetStream(_Stream);
+	if (fs_UsesParentStreamPath(StreamInfo))
+		StreamInfo = m_pClient->f_GetStream(StreamInfo.m_Parent);
 
-	CStr CurrentDepot = fs_GetDepot(_Stream);
-	CStr ExtraStreamName;
-
-	CRegistryPreserveAll Registry = CPerforceFunctions::fs_GetRegistry(StreamInfo);
-	if (StreamInfo.m_Type == "task" || !Registry.f_GetValue("UniqueName", "").f_IsEmpty())
-	{
-		CPerforceClient::CStream Stream = m_pClient->f_GetStream(StreamInfo.m_Parent);
-		ExtraStreamName = "/" + CurrentDepot + "/" + Stream.m_Name;
-	}
-	else
-		ExtraStreamName = "/" + CurrentDepot + "/" + StreamInfo.m_Name;
-	return Root + ExtraStreamName;
+	return fs_GetFullRoot(m_pClient->f_GetClient(), _StrippedRoot, "/" + fs_GetDepot(_Stream) + "/" + StreamInfo.m_Name);
 }
 
 CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult &_oOldStream, bool _bQuiet)
@@ -307,7 +340,7 @@ void CPerforceFunctions::fs_InitializeStream(CStr const &_Stream, CPerforceFunct
 	if (Stream.m_Remapped.f_IsEmpty())
 		CurrentRoot = Functions.f_GetFullRoot(StreamName);
 	else
-		CurrentRoot = Functions.f_GetStrippedRoot();
+		CurrentRoot = Functions.f_GetStrippedRoot().m_Root;
 
 	TCSet<CStr> ConsideredStreams;
 
