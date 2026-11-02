@@ -1983,7 +1983,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2021,7 +2021,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2097,7 +2097,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2131,7 +2131,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2165,7 +2165,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2201,7 +2201,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2236,7 +2236,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2504,7 +2504,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -2542,7 +2542,7 @@ namespace NMib::NPerforce
 			, TCVector<CIntegrationResult> &_oIntegrated
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> bool
 	{
@@ -5475,7 +5475,7 @@ namespace NMib::NPerforce
 			, bool _bPretend
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CPerforceClient::CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
@@ -5491,7 +5491,7 @@ namespace NMib::NPerforce
 			, bool _bPretend
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CPerforceClient::CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
@@ -5507,7 +5507,7 @@ namespace NMib::NPerforce
 			, bool _bPretend
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CPerforceClient::CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
@@ -5532,7 +5532,14 @@ namespace NMib::NPerforce
 		return Ret;
 	}
 
-	auto CPerforceClientThrow::f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec)
+	auto CPerforceClientThrow::f_CopyStreamToParent
+		(
+			CStr const &_FromStream
+			, bool _bPretend
+			, TCVector<CStr> &_oMustSync
+			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, CStr const &_ToFileSpec
+		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
@@ -5540,7 +5547,14 @@ namespace NMib::NPerforce
 		return Ret;
 	}
 
-	auto CPerforceClientThrow::f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec)
+	auto CPerforceClientThrow::f_MergeStreamToParent
+		(
+			CStr const &_FromStream
+			, bool _bPretend
+			, TCVector<CStr> &_oMustSync
+			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, CStr const &_ToFileSpec
+		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
@@ -5554,7 +5568,7 @@ namespace NMib::NPerforce
 			, bool _bPretend
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CPerforceClient::CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
@@ -5563,7 +5577,14 @@ namespace NMib::NPerforce
 		return Ret;
 	}
 
-	auto CPerforceClientThrow::f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec)
+	auto CPerforceClientThrow::f_CopyStreamFromParent
+		(
+			CStr const &_ToStream
+			, bool _bPretend
+			, TCVector<CStr> &_oMustSync
+			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, CStr const &_ToFileSpec
+		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
@@ -5571,7 +5592,14 @@ namespace NMib::NPerforce
 		return Ret;
 	}
 
-	auto CPerforceClientThrow::f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &_oMustSync, TCVector<CPerforceClient::CMergeError> &_oErrors, CStr _ToFileSpec)
+	auto CPerforceClientThrow::f_MergeStreamFromParent
+		(
+			CStr const &_ToStream
+			, bool _bPretend
+			, TCVector<CStr> &_oMustSync
+			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, CStr const &_ToFileSpec
+		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
@@ -5585,7 +5613,7 @@ namespace NMib::NPerforce
 			, bool _bPretend
 			, TCVector<CStr> &_oMustSync
 			, TCVector<CPerforceClient::CMergeError> &_oErrors
-			, CStr _ToFileSpec
+			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
