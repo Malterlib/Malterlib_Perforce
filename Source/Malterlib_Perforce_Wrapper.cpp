@@ -348,9 +348,9 @@ namespace NMib::NPerforce
 		return "";
 	}
 
-#define	DCheckApi(_Function) \
+#define	DCheckApi(d_Function) \
 	m_LastError.f_Clear();\
-	auto fOnError = [&]{m_LastFunction = _Function ;};\
+	auto fOnError = [&]{m_LastFunction = d_Function ;};\
 	if (!m_InitError.f_IsEmpty())\
 	{\
 		m_LastError = m_InitError;\
