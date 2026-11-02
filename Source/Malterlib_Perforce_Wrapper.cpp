@@ -138,7 +138,6 @@ namespace NMib::NPerforce
 
 	void CPerforceClient::CP4Client::OutputInfo(char level, char const *data)
 	{
-		(void)level;
 		CStr Data = m_pClient->f_DecodeStr(data);
 		if (m_OnInfo)
 			m_OnInfo(CStr(Data));
