@@ -5,7 +5,7 @@
 
 #include <Mib/Container/Registry>
 
-class ClientApi;
+class ClientApi; // NOLINT(malterlib-type-naming): the name in the Perforce API
 
 namespace NMib::NPerforce
 {
