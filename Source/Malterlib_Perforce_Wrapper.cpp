@@ -41,39 +41,39 @@ namespace NMib::NPerforce
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
 		TCVector<CStr> m_Infos;
-		TCFunction<void (CStr const &)> m_OnInfo;
-		TCFunction<void (CStr const &)> m_OnText;
+		TCFunction<void (CStr const &_Info)> m_OnInfo;
+		TCFunction<void (CStr const &_Text)> m_OnText;
 		bool m_bError;
 		CStr m_LastError;
-		TCFunction<CStr (CStr const &, Error *_pError)> m_fOnPrompt;
+		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 
-		void OutputText(char const *data, int length) override;
-		void InputData(StrBuf *strbuf, Error *e) override;
-		void HandleError(Error *err) override;
-		void Message(Error *err) override;
-		void OutputError(char const *errBuf) override;
+		void OutputText(char const *_pData, int _Length) override;
+		void InputData(StrBuf *o_pBuffer, Error *_pError) override;
+		void HandleError(Error *_pError) override;
+		void Message(Error *_pError) override;
+		void OutputError(char const *_pErrorText) override;
 		CStr f_GetInfo(CStr const &_Name);
-		void OutputInfo(char level, char const *data) override;
-		void OutputBinary(char const *data, int length) override;
-		void OutputStat(StrDict *varList) override;
+		void OutputInfo(char _Level, char const *_pData) override;
+		void OutputBinary(char const *_pData, int _Length) override;
+		void OutputStat(StrDict *_pVariables) override;
 		CStr m_PromtOverride;
-		void Prompt(StrPtr const &msg, StrBuf &rsp, int noEcho, Error *e) override;
-		void SetOutputCharset(int) override;
-		void ErrorPause(char *errBuf, Error *e) override;
-		void Edit(FileSys *f1, Error *e) override;
-		void Diff(FileSys *f1, FileSys *f2, int doPage, char *diffFlags, Error *e) override;
-		void Merge(FileSys *base, FileSys *leg1, FileSys *leg2, FileSys *result, Error *e) override;
-		int Resolve(ClientMerge *m, Error *e) override;
-		void Help(char const * const *help) override;
-		FileSys *File(FileSysType type) override;
+		void Prompt(StrPtr const &_Message, StrBuf &o_Response, int _NoEcho, Error *_pError) override;
+		void SetOutputCharset(int _Charset) override;
+		void ErrorPause(char *_pErrorText, Error *_pError) override;
+		void Edit(FileSys *_pFile, Error *_pError) override;
+		void Diff(FileSys *_pFile1, FileSys *_pFile2, int _DoPage, char *_pDiffFlags, Error *_pError) override;
+		void Merge(FileSys *_pBase, FileSys *_pLeg1, FileSys *_pLeg2, FileSys *_pResult, Error *_pError) override;
+		int Resolve(ClientMerge *_pMerge, Error *_pError) override;
+		void Help(char const * const *_pHelp) override;
+		FileSys *File(FileSysType _Type) override;
 		void Finished() override;
 		void Clear() override;
 	};
 
-	void CPerforceClient::CP4Client::OutputText(char const *data, int length)
+	void CPerforceClient::CP4Client::OutputText(char const *_pData, int _Length)
 	{
 		CStr Temp;
-		Temp.f_AddStr(data, length);
+		Temp.f_AddStr(_pData, _Length);
 		if (m_OnText)
 		{
 			m_OnText(Temp);
@@ -83,44 +83,44 @@ namespace NMib::NPerforce
 		m_OutputTextRaw += Temp;
 		Temp = m_pClient->f_DecodeStr(Temp);
 		m_OutputText += Temp;
-		// return ClientUser::OutputText( data );
+		// return ClientUser::OutputText( _pData );
 	}
 
-	void CPerforceClient::CP4Client::InputData(StrBuf *strbuf, Error *e)
+	void CPerforceClient::CP4Client::InputData(StrBuf *o_pBuffer, Error *_pError)
 	{
 		if (m_PromtOverride != "")
 		{
 			CStr Temp = m_pClient->f_EncodeStr(m_PromtOverride);
-			strbuf->Set(Temp, Temp.f_GetLen());
+			o_pBuffer->Set(Temp, Temp.f_GetLen());
 			m_PromtOverride = "";
 		}
 		else
-			return ClientUser::InputData(strbuf, e);
+			return ClientUser::InputData(o_pBuffer, _pError);
 		// DConOut("P4: InputData" DNewLine, 0);
 	}
 
-	void CPerforceClient::CP4Client::HandleError(Error *err)
+	void CPerforceClient::CP4Client::HandleError(Error *_pError)
 	{
-		// DDTrace("P4: HandleError: {}\r\n", err->GetGeneric());
-		return ClientUser::HandleError(err);
+		// DDTrace("P4: HandleError: {}\r\n", _pError->GetGeneric());
+		return ClientUser::HandleError(_pError);
 	}
 
-	void CPerforceClient::CP4Client::Message(Error *err)
+	void CPerforceClient::CP4Client::Message(Error *_pError)
 	{
-		if (err->GetSeverity() > E_INFO)
+		if (_pError->GetSeverity() > E_INFO)
 		{
-			// DConOut("P4: Message(error) = {}" DNewLine, err->GetSeverity());
-			// err->Dump("P4Error");
+			// DConOut("P4: Message(error) = {}" DNewLine, _pError->GetSeverity());
+			// _pError->Dump("P4Error");
 		}
-		return ClientUser::Message(err);
+		return ClientUser::Message(_pError);
 	}
 
-	void CPerforceClient::CP4Client::OutputError(char const *errBuf)
+	void CPerforceClient::CP4Client::OutputError(char const *_pErrorText)
 	{
 		m_bError = true;
-		m_LastError += m_pClient->f_DecodeStr(errBuf) + "\r\n";
-		// 		DConOut("P4: OutputError: {}" DNewLine, errBuf);
-		// return ClientUser::OutputError( errBuf );
+		m_LastError += m_pClient->f_DecodeStr(_pErrorText) + "\r\n";
+		// 		DConOut("P4: OutputError: {}" DNewLine, _pErrorText);
+		// return ClientUser::OutputError( _pErrorText );
 	}
 
 	CStr CPerforceClient::CP4Client::f_GetInfo(CStr const &_Name)
@@ -135,29 +135,29 @@ namespace NMib::NPerforce
 		return "";
 	}
 
-	void CPerforceClient::CP4Client::OutputInfo(char level, char const *data)
+	void CPerforceClient::CP4Client::OutputInfo(char _Level, char const *_pData)
 	{
-		CStr Data = m_pClient->f_DecodeStr(data);
+		CStr Data = m_pClient->f_DecodeStr(_pData);
 		if (m_OnInfo)
 			m_OnInfo(CStr(Data));
 		else
 			m_Infos.f_Insert(CStr(Data));
 
-		if (strstr(data, "fixes associated with it and can't be deleted"))
+		if (strstr(_pData, "fixes associated with it and can't be deleted"))
 		{
 			m_bError = true;
 			m_LastError += Data + "\r\n";
 		}
 
-		// DConOut("P4: OutputInfo: {}" DNewLine, data);
-		if (strstr(data, "can't edit exclusive file already opened"))
+		// DConOut("P4: OutputInfo: {}" DNewLine, _pData);
+		if (strstr(_pData, "can't edit exclusive file already opened"))
 			m_bError = true;
 	}
 
-	void CPerforceClient::CP4Client::OutputBinary(char const *data, int length)
+	void CPerforceClient::CP4Client::OutputBinary(char const *_pData, int _Length)
 	{
 		CStr Temp;
-		Temp.f_AddStr(data, length);
+		Temp.f_AddStr(_pData, _Length);
 		if (m_OnText)
 		{
 			m_OnText(Temp);
@@ -168,38 +168,38 @@ namespace NMib::NPerforce
 		Temp = m_pClient->f_DecodeStr(Temp);
 		m_OutputText += Temp;
 		// 		DConOut("P4: OutputBinary" DNewLine, 0);
-		// return ClientUser::OutputBinary( data, length );
+		// return ClientUser::OutputBinary( _pData, _Length );
 	}
 
-	void CPerforceClient::CP4Client::OutputStat(StrDict *varList)
+	void CPerforceClient::CP4Client::OutputStat(StrDict *_pVariables)
 	{
 		// DConOut("P4: OutputStat" DNewLine, 0);
-		return ClientUser::OutputStat(varList);
+		return ClientUser::OutputStat(_pVariables);
 	}
 
-	void CPerforceClient::CP4Client::Prompt(StrPtr const &msg, StrBuf &rsp, int noEcho, Error *e)
+	void CPerforceClient::CP4Client::Prompt(StrPtr const &_Message, StrBuf &o_Response, int _NoEcho, Error *_pError)
 	{
 		// DConOut("P4: Prompt" DNewLine, 0);
 		if (m_fOnPrompt)
 		{
-			CStr PromptResult = m_fOnPrompt(CStr(msg.Value(), msg.Length()), e);
+			CStr PromptResult = m_fOnPrompt(CStr(_Message.Value(), _Message.Length()), _pError);
 			CStr Temp = m_pClient->f_EncodeStr(PromptResult);
-			rsp.Set(Temp, Temp.f_GetLen());
+			o_Response.Set(Temp, Temp.f_GetLen());
 		}
 		else if (m_PromtOverride != "")
 		{
 			CStr Temp = m_pClient->f_EncodeStr(m_PromtOverride);
-			rsp.Set(Temp, Temp.f_GetLen());
+			o_Response.Set(Temp, Temp.f_GetLen());
 			m_PromtOverride = "";
 		}
 		else
-			return ClientUser::Prompt(msg, rsp, noEcho, e);
+			return ClientUser::Prompt(_Message, o_Response, _NoEcho, _pError);
 	}
 
-	void CPerforceClient::CP4Client::ErrorPause(char *errBuf, Error *e)
+	void CPerforceClient::CP4Client::ErrorPause(char *_pErrorText, Error *_pError)
 	{
 		// DConOut("P4: ErrorPause" DNewLine, 0);
-		return ClientUser::ErrorPause(errBuf, e);
+		return ClientUser::ErrorPause(_pErrorText, _pError);
 	}
 
 	void CPerforceClient::CP4Client::SetOutputCharset(int _Charset)
@@ -208,40 +208,40 @@ namespace NMib::NPerforce
 		return ClientUser::SetOutputCharset(_Charset);
 	}
 
-	void CPerforceClient::CP4Client::Edit(FileSys *f1, Error *e)
+	void CPerforceClient::CP4Client::Edit(FileSys *_pFile, Error *_pError)
 	{
 		// DConOut("P4: Edit" DNewLine, 0);
-		return ClientUser::Edit(f1, e);
+		return ClientUser::Edit(_pFile, _pError);
 	}
 
-	void CPerforceClient::CP4Client::Diff(FileSys *f1, FileSys *f2, int doPage, char *diffFlags, Error *e)
+	void CPerforceClient::CP4Client::Diff(FileSys *_pFile1, FileSys *_pFile2, int _DoPage, char *_pDiffFlags, Error *_pError)
 	{
 		// DConOut("P4: Diff" DNewLine, 0);
-		return ClientUser::Diff(f1, f2, doPage, diffFlags, e);
+		return ClientUser::Diff(_pFile1, _pFile2, _DoPage, _pDiffFlags, _pError);
 	}
 
-	void CPerforceClient::CP4Client::Merge(FileSys *base, FileSys *leg1, FileSys *leg2, FileSys *result, Error *e)
+	void CPerforceClient::CP4Client::Merge(FileSys *_pBase, FileSys *_pLeg1, FileSys *_pLeg2, FileSys *_pResult, Error *_pError)
 	{
 		// DConOut("P4: Merge" DNewLine, 0);
-		return ClientUser::Merge(base, leg1, leg2, result, e);
+		return ClientUser::Merge(_pBase, _pLeg1, _pLeg2, _pResult, _pError);
 	}
 
-	int CPerforceClient::CP4Client::Resolve(ClientMerge *m, Error *e)
+	int CPerforceClient::CP4Client::Resolve(ClientMerge *_pMerge, Error *_pError)
 	{
 		// DConOut("P4: Resolve" DNewLine, 0);
-		return ClientUser::Resolve(m, e);
+		return ClientUser::Resolve(_pMerge, _pError);
 	}
 
-	void CPerforceClient::CP4Client::Help(char const * const *help)
+	void CPerforceClient::CP4Client::Help(char const * const *_pHelp)
 	{
 		// DConOut("P4: Help" DNewLine, 0);
-		return ClientUser::Help(help);
+		return ClientUser::Help(_pHelp);
 	}
 
-	FileSys *CPerforceClient::CP4Client::File(FileSysType type)
+	FileSys *CPerforceClient::CP4Client::File(FileSysType _Type)
 	{
 		// DConOut("P4: File" DNewLine, 0);
-		return ClientUser::File(type);
+		return ClientUser::File(_Type);
 	}
 
 	void CPerforceClient::CP4Client::Finished()
@@ -390,10 +390,10 @@ namespace NMib::NPerforce
 		m_pAPI->Run(_pFunc, m_pClient);
 	}
 
-	void CPerforceClient::fp_Run(char const *func)
+	void CPerforceClient::fp_Run(char const *_pFunc)
 	{
 		m_pAPI->SetVar("enableStreams");
-		m_pAPI->Run(func, m_pClient);
+		m_pAPI->Run(_pFunc, m_pClient);
 	}
 
 	bool CPerforceClient::f_Login(CStr const &_Password, CStr const &_WorkingDir)
@@ -1920,7 +1920,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	void CPerforceClient::fp_ReadMergeResult(TCVector<CIntegrationResult> &_oIntegrated, TCVector<CStr> &_oMustSync, bool _bInverted, TCVector<CMergeError> &_oErrors)
+	void CPerforceClient::fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors)
 	{
 		CIntegrationResult *pLast = nullptr;
 
@@ -1930,7 +1930,7 @@ namespace NMib::NPerforce
 			if (iFind >= 0)
 			{
 				CStr ToSync = CurInfo.f_Left(iFind);
-				_oMustSync.f_Insert(ToSync);
+				o_MustSync.f_Insert(ToSync);
 				continue;
 			}
 
@@ -1940,7 +1940,7 @@ namespace NMib::NPerforce
 
 			if (Command == "depotFile")
 			{
-				pLast = &_oIntegrated.f_Insert();
+				pLast = &o_Integrated.f_Insert();
 				pLast->m_To = Data;
 			}
 			if (pLast)
@@ -1965,7 +1965,7 @@ namespace NMib::NPerforce
 			}
 			else
 			{
-				auto &Error = _oErrors.f_Insert();
+				auto &Error = o_Errors.f_Insert();
 				Error.m_Path = Command;
 				Error.m_Error = Data;
 				if (Error.m_Error.f_StartsWith("- "))
@@ -1979,9 +1979,9 @@ namespace NMib::NPerforce
 			CStr const &_FromStream
 			, CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2002,7 +2002,7 @@ namespace NMib::NPerforce
 
 		fp_Run("copy", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, true, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, true, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2017,9 +2017,9 @@ namespace NMib::NPerforce
 			CStr const &_FromStream
 			, CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2040,7 +2040,7 @@ namespace NMib::NPerforce
 
 		fp_Run("merge", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, true, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, true, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2056,9 +2056,9 @@ namespace NMib::NPerforce
 			, CStr const &_ToFiles
 			, bool _bPretend
 			, bool _bEnableBaseless
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 		)
 		-> bool
 	{
@@ -2079,7 +2079,7 @@ namespace NMib::NPerforce
 
 		fp_Run("integrate", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, false, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, false, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2093,9 +2093,9 @@ namespace NMib::NPerforce
 		(
 			CStr const &_FromStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2113,7 +2113,7 @@ namespace NMib::NPerforce
 
 		fp_Run("copy", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, false, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, false, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2127,9 +2127,9 @@ namespace NMib::NPerforce
 		(
 			CStr const &_FromStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2147,7 +2147,7 @@ namespace NMib::NPerforce
 
 		fp_Run("merge", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, false, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, false, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2161,9 +2161,9 @@ namespace NMib::NPerforce
 		(
 			CStr const &_FromStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2183,7 +2183,7 @@ namespace NMib::NPerforce
 
 		fp_Run("integrate", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, false, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, false, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2197,9 +2197,9 @@ namespace NMib::NPerforce
 		(
 			CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2218,7 +2218,7 @@ namespace NMib::NPerforce
 
 		fp_Run("copy", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, true, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, true, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2232,9 +2232,9 @@ namespace NMib::NPerforce
 		(
 			CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2253,7 +2253,7 @@ namespace NMib::NPerforce
 
 		fp_Run("merge", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, true, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, true, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2263,7 +2263,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &_oPatch)
+	bool CPerforceClient::fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch)
 	{
 		DCheckApi(CStr::CFormat("CreatePatch({})") << _Branch);
 
@@ -2285,7 +2285,7 @@ namespace NMib::NPerforce
 
 		m_pClient->m_OnText = [&](CStr const &_Info)
 			{
-				_oPatch += _Info;
+				o_Patch += _Info;
 			}
 		;
 
@@ -2309,12 +2309,12 @@ namespace NMib::NPerforce
 				else
 					ToStripped = To;
 
-				_oPatch += CStr::CFormat("Index: {}\n") << ToStripped;
-				_oPatch += "===================================================================\n";
-				_oPatch += From;
-				_oPatch += "\n";
-				_oPatch += To;
-				_oPatch += "\n";
+				o_Patch += CStr::CFormat("Index: {}\n") << ToStripped;
+				o_Patch += "===================================================================\n";
+				o_Patch += From;
+				o_Patch += "\n";
+				o_Patch += To;
+				o_Patch += "\n";
 			}
 		;
 
@@ -2329,7 +2329,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &_oPatch)
+	bool CPerforceClient::f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &o_Patch)
 	{
 		DCheckApi(CStr::CFormat("CreatePatch({})") << _Branch);
 
@@ -2341,7 +2341,7 @@ namespace NMib::NPerforce
 			m_pNonTaggedClient->f_Login(CStr());
 		}
 
-		if (!m_pNonTaggedClient->fp_CreatePatchNonTagged(_Branch, _bFullContext, _oPatch))
+		if (!m_pNonTaggedClient->fp_CreatePatchNonTagged(_Branch, _bFullContext, o_Patch))
 		{
 			CStr Error = m_pNonTaggedClient->f_GetLastError();
 			if (Error != "No source file(s) in branch view." && Error != "No file(s) to diff.")
@@ -2438,11 +2438,11 @@ namespace NMib::NPerforce
 					++nLines;
 				}
 
-				_oPatch += CStr::CFormat("Index: {}\n") << Change.m_From;
-				_oPatch += "===================================================================\n";
-				_oPatch += CStr::CFormat("--- {}\n") << Change.m_From;
-				_oPatch += "+++ /dev/null\n";
-				_oPatch += CStr::CFormat("@@ -1,{} +0,0 @@\n") << nLines;
+				o_Patch += CStr::CFormat("Index: {}\n") << Change.m_From;
+				o_Patch += "===================================================================\n";
+				o_Patch += CStr::CFormat("--- {}\n") << Change.m_From;
+				o_Patch += "+++ /dev/null\n";
+				o_Patch += CStr::CFormat("@@ -1,{} +0,0 @@\n") << nLines;
 				pContents = Contents;
 				while (*pContents)
 				{
@@ -2450,8 +2450,8 @@ namespace NMib::NPerforce
 					fg_ParseToEndOfLine(pContents);
 					fg_ParseEndOfLine(pContents);
 					++nLines;
-					_oPatch += "-";
-					_oPatch.f_AddStr(pStart, pContents - pStart);
+					o_Patch += "-";
+					o_Patch.f_AddStr(pStart, pContents - pStart);
 				}
 			}
 			else if (Change.m_Status == "right only")
@@ -2472,11 +2472,11 @@ namespace NMib::NPerforce
 							++nLines;
 						}
 
-						_oPatch += CStr::CFormat("Index: {}\n") << Change.m_To;
-						_oPatch += "===================================================================\n";
-						_oPatch += "--- /dev/null\n";
-						_oPatch += CStr::CFormat("+++ {}\n") << Change.m_To;
-						_oPatch += CStr::CFormat("@@ -0,0 +1,{} @@\n") << nLines;
+						o_Patch += CStr::CFormat("Index: {}\n") << Change.m_To;
+						o_Patch += "===================================================================\n";
+						o_Patch += "--- /dev/null\n";
+						o_Patch += CStr::CFormat("+++ {}\n") << Change.m_To;
+						o_Patch += CStr::CFormat("@@ -0,0 +1,{} @@\n") << nLines;
 						pContents = Contents;
 						while (*pContents)
 						{
@@ -2484,8 +2484,8 @@ namespace NMib::NPerforce
 							fg_ParseToEndOfLine(pContents);
 							fg_ParseEndOfLine(pContents);
 							++nLines;
-							_oPatch += "+";
-							_oPatch.f_AddStr(pStart, pContents - pStart);
+							o_Patch += "+";
+							o_Patch.f_AddStr(pStart, pContents - pStart);
 						}
 					}
 				}
@@ -2500,9 +2500,9 @@ namespace NMib::NPerforce
 		(
 			CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2523,7 +2523,7 @@ namespace NMib::NPerforce
 
 		fp_Run("integrate", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, true, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, true, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2538,9 +2538,9 @@ namespace NMib::NPerforce
 			CStr const &_FromStream
 			, CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CIntegrationResult> &_oIntegrated
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CMergeError> &_oErrors
+			, TCVector<CIntegrationResult> &o_Integrated
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> bool
@@ -2565,7 +2565,7 @@ namespace NMib::NPerforce
 
 		fp_Run("integrate", Arguments);
 
-		fp_ReadMergeResult(_oIntegrated, _oMustSync, true, _oErrors);
+		fp_ReadMergeResult(o_Integrated, o_MustSync, true, o_Errors);
 
 		if (m_pClient->m_bError)
 		{
@@ -2765,7 +2765,7 @@ namespace NMib::NPerforce
 	}
 #endif
 
-	bool CPerforceClient::f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &_oOpened)
+	bool CPerforceClient::f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &o_Opened)
 	{
 		DCheckApi(CStr::CFormat("GetOpened({}, {})") << _Path << _Client);
 
@@ -2788,7 +2788,7 @@ namespace NMib::NPerforce
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(CurInfo);
 
 			if (Command == "depotFile")
-				_oOpened.f_Insert(Data);
+				o_Opened.f_Insert(Data);
 		}
 
 		if (m_pClient->m_bError)
@@ -2802,7 +2802,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &_oStreams, TCVector<CStr> const &_StreamSpecs)
+	bool CPerforceClient::f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &o_Streams, TCVector<CStr> const &_StreamSpecs)
 	{
 		DCheckApi(CStr::CFormat("FindStreams({})") << _SearchQuery);
 
@@ -2823,7 +2823,7 @@ namespace NMib::NPerforce
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(CurInfo);
 			if (Command == "Stream")
-				_oStreams.f_Insert(Data);
+				o_Streams.f_Insert(Data);
 		}
 
 		if (m_pClient->m_bError)
@@ -3628,7 +3628,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &_oBranch)
+	bool CPerforceClient::f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &o_Branch)
 	{
 		DCheckApi(CStr::CFormat("GetBranchForStreams({}, {})") << _From << _To);
 
@@ -3657,7 +3657,7 @@ namespace NMib::NPerforce
 
 			if (Command.f_StartsWith("View"))
 			{
-				auto &Mapping = _oBranch.m_View.f_Insert();
+				auto &Mapping = o_Branch.m_View.f_Insert();
 				Mapping.m_From = fg_GetStrSepEscaped(Data, " ");
 				Mapping.m_To = fg_GetStrSepEscaped(Data, " ");
 				if (Mapping.m_From.f_StartsWith("-"))
@@ -3671,7 +3671,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_GetClient(CStr const &_Client, CPerforceClient::CClient &_oClient)
+	bool CPerforceClient::f_GetClient(CStr const &_Client, CPerforceClient::CClient &o_Client)
 	{
 		TCVector<CStr> Clients;
 		if (!f_GetClients(_Client, Clients) || Clients.f_IsEmpty())
@@ -3703,33 +3703,33 @@ namespace NMib::NPerforce
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
 
 			if (Command == "Update")
-				_oClient.m_UpdateTime = Data;
+				o_Client.m_UpdateTime = Data;
 			else if (Command == "Access")
-				_oClient.m_AccessTime = Data;
+				o_Client.m_AccessTime = Data;
 			else if (Command == "Owner")
-				_oClient.m_Owner = Data;
+				o_Client.m_Owner = Data;
 			else if (Command == "Host")
-				_oClient.m_Host = Data;
+				o_Client.m_Host = Data;
 			else if (Command == "Description")
-				_oClient.m_Description = Data;
+				o_Client.m_Description = Data;
 			else if (Command == "Root")
-				_oClient.m_Root = Data;
+				o_Client.m_Root = Data;
 			else if (Command == "AltRoot0")
-				_oClient.m_AltRoot0 = Data;
+				o_Client.m_AltRoot0 = Data;
 			else if (Command == "AltRoot1")
-				_oClient.m_AltRoot1 = Data;
+				o_Client.m_AltRoot1 = Data;
 			else if (Command == "Options")
 			{
 				while (!Data.f_IsEmpty())
-					_oClient.m_Options.f_Insert(fg_GetStrSep(Data, " "));
+					o_Client.m_Options.f_Insert(fg_GetStrSep(Data, " "));
 			}
 			else if (Command == "LineEnd")
-				_oClient.m_LineEndings = Data;
+				o_Client.m_LineEndings = Data;
 			else if (Command == "Stream")
-				_oClient.m_Stream = Data;
+				o_Client.m_Stream = Data;
 			else if (Command.f_StartsWith("View"))
 			{
-				auto &Mapping = _oClient.m_View.f_Insert();
+				auto &Mapping = o_Client.m_View.f_Insert();
 				Mapping.m_From = fg_GetStrSepEscaped(Data, " ");
 				Mapping.m_To = fg_GetStrSepEscaped(Data, " ");
 				if (Mapping.m_From.f_StartsWith("-"))
@@ -4852,7 +4852,7 @@ namespace NMib::NPerforce
 		return bRet;
 	}
 
-	bool CPerforceClient::f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_lFiles)
+	bool CPerforceClient::f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_Files)
 	{
 		DCheckApi(CStr::CFormat("FindHeadFiles({})") << _Pattern);
 		char const *Commands[] = {nullptr};
@@ -4878,7 +4878,7 @@ namespace NMib::NPerforce
 
 			if (Command == "depotFile")
 			{
-				pCurRev = &_lFiles.f_Insert();
+				pCurRev = &_Files.f_Insert();
 				pCurRev->m_File = Data;
 			}
 			else if (pCurRev)
@@ -5472,14 +5472,14 @@ namespace NMib::NPerforce
 			CStr const &_FromStream
 			, CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_CopyStream(_FromStream, _ToStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_CopyStream(_FromStream, _ToStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5488,14 +5488,14 @@ namespace NMib::NPerforce
 			CStr const &_FromStream
 			, CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_MergeStream(_FromStream, _ToStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_MergeStream(_FromStream, _ToStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5504,14 +5504,14 @@ namespace NMib::NPerforce
 			CStr const &_FromStream
 			, CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_IntegrateStream(_FromStream, _ToStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_IntegrateStream(_FromStream, _ToStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5521,13 +5521,13 @@ namespace NMib::NPerforce
 			, CStr const &_ToFiles
 			, bool _bPretend
 			, bool _bEnableBaseless
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_IntegrateFiles(_FromFiles, _ToFiles, _bPretend, _bEnableBaseless, Ret, _oMustSync, _oErrors));
+		fp_Throw(mp_Client.f_IntegrateFiles(_FromFiles, _ToFiles, _bPretend, _bEnableBaseless, Ret, o_MustSync, o_Errors));
 		return Ret;
 	}
 
@@ -5535,14 +5535,14 @@ namespace NMib::NPerforce
 		(
 			CStr const &_FromStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_CopyStreamToParent(_FromStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_CopyStreamToParent(_FromStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5550,14 +5550,14 @@ namespace NMib::NPerforce
 		(
 			CStr const &_FromStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_MergeStreamToParent(_FromStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_MergeStreamToParent(_FromStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5565,14 +5565,14 @@ namespace NMib::NPerforce
 		(
 			CStr const &_FromStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_IntegrateStreamToParent(_FromStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_IntegrateStreamToParent(_FromStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5580,14 +5580,14 @@ namespace NMib::NPerforce
 		(
 			CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_CopyStreamFromParent(_ToStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_CopyStreamFromParent(_ToStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5595,14 +5595,14 @@ namespace NMib::NPerforce
 		(
 			CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_MergeStreamFromParent(_ToStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_MergeStreamFromParent(_ToStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 
@@ -5610,14 +5610,14 @@ namespace NMib::NPerforce
 		(
 			CStr const &_ToStream
 			, bool _bPretend
-			, TCVector<CStr> &_oMustSync
-			, TCVector<CPerforceClient::CMergeError> &_oErrors
+			, TCVector<CStr> &o_MustSync
+			, TCVector<CPerforceClient::CMergeError> &o_Errors
 			, CStr const &_ToFileSpec
 		)
 		-> TCVector<CPerforceClient::CIntegrationResult>
 	{
 		TCVector<CPerforceClient::CIntegrationResult> Ret;
-		fp_Throw(mp_Client.f_IntegrateStreamFromParent(_ToStream, _bPretend, Ret, _oMustSync, _oErrors, _ToFileSpec));
+		fp_Throw(mp_Client.f_IntegrateStreamFromParent(_ToStream, _bPretend, Ret, o_MustSync, o_Errors, _ToFileSpec));
 		return Ret;
 	}
 

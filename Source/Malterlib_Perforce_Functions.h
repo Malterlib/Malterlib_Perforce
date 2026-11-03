@@ -32,7 +32,7 @@ namespace NMib::NPerforce
 		};
 
 	private:
-		void fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed);
+		void fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &o_Owned, bool _bReversed);
 
 	public:
 		struct CSwitchResult
@@ -58,7 +58,7 @@ namespace NMib::NPerforce
 
 		CStr f_GetStreamRootParent(CStr const &_Stream);
 
-		static CStr fs_GetCommonPath(CStr const &_First, CStr const &_Second, CStr &_oFirstSuffix, CStr &_oSecondSuffix);
+		static CStr fs_GetCommonPath(CStr const &_First, CStr const &_Second, CStr &o_FirstSuffix, CStr &o_SecondSuffix);
 
 		CStr f_GetCurrentStream() const;
 		CStrippedRoot f_GetStrippedRoot();
@@ -73,7 +73,7 @@ namespace NMib::NPerforce
 		static CStrippedRoot fs_StripRoot(CStr const &_Root, TCVector<CStr> const &_StreamPaths, bool _bRemapped);
 		static CStr fs_GetFullRoot(CStr const &_Client, CStrippedRoot const &_StrippedRoot, CStr const &_StreamPath);
 
-		CStr f_GetClientForStream(CStr const &_Stream, CSwitchResult &_oOldStream, bool _bQuiet = false);
+		CStr f_GetClientForStream(CStr const &_Stream, CSwitchResult &o_OldStream, bool _bQuiet = false);
 		static CRegistryPreserveAll fs_GetRegistry(CPerforceClient::CStream const &_Stream);
 		static void fs_InitializeStream(CStr const &_Stream, CPerforceFunctions &_Functions);
 		static CSwitchResult fs_SwitchStream(CPerforceFunctions &_Functions, CStr const &_StreamName, bool _bDoSync, bool _bQuiet = false);

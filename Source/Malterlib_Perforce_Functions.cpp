@@ -64,7 +64,7 @@ CPerforceClientThrow &CPerforceFunctions::f_GetClient()
 	return *m_pClient;
 }
 
-CStr CPerforceFunctions::fs_GetCommonPath(CStr const &_First, CStr const &_Second, CStr &_oFirstSuffix, CStr &_oSecondSuffix)
+CStr CPerforceFunctions::fs_GetCommonPath(CStr const &_First, CStr const &_Second, CStr &o_FirstSuffix, CStr &o_SecondSuffix)
 {
 	ch8 const *pParse0 = _First;
 	ch8 const *pParse1 = _Second;
@@ -79,8 +79,8 @@ CStr CPerforceFunctions::fs_GetCommonPath(CStr const &_First, CStr const &_Secon
 		++pParse1;
 	}
 
-	_oFirstSuffix = _First.f_Extract(pParse0 - pParse0Start);
-	_oSecondSuffix = _Second.f_Extract(pParse0 - pParse0Start);
+	o_FirstSuffix = _First.f_Extract(pParse0 - pParse0Start);
+	o_SecondSuffix = _Second.f_Extract(pParse0 - pParse0Start);
 	return _First.f_Left(pParse0 - pParse0Start);
 }
 
@@ -235,7 +235,7 @@ CStr CPerforceFunctions::f_GetFullRoot(CStr const &_Stream, CStrippedRoot const 
 	return fs_GetFullRoot(m_pClient->f_GetClient(), _StrippedRoot, "/" + fs_GetDepot(_Stream) + "/" + StreamInfo.m_Name);
 }
 
-CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult &_oOldStream, bool _bQuiet)
+CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult &o_OldStream, bool _bQuiet)
 {
 	for (int i = 0; i < 2; ++i)
 	{
@@ -260,7 +260,7 @@ CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult
 		{
 			if (i == 0)
 			{
-				_oOldStream = CPerforceFunctions::fs_SwitchStream(*this, _Stream, false, _bQuiet);
+				o_OldStream = CPerforceFunctions::fs_SwitchStream(*this, _Stream, false, _bQuiet);
 				continue;
 			}
 			else
@@ -805,7 +805,7 @@ TCSet<CStr> CPerforceFunctions::f_GetDisabledCreate(CPerforceClient::CStream con
 	return Ret;
 }
 
-void CPerforceFunctions::fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed)
+void CPerforceFunctions::fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &o_Owned, bool _bReversed)
 {
 	CPerforceClient::CStream Stream = f_GetStreamCached(_Stream);
 
@@ -833,8 +833,8 @@ void CPerforceFunctions::fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &_
 				From = To;
 
 			CStr RecurseValue = iOwned->f_GetThisValue();
-			fp_GetStreamOwned(RecurseValue, _oOwned, _bReversed);
-			_oOwned.f_AddStream(From, To);
+			fp_GetStreamOwned(RecurseValue, o_Owned, _bReversed);
+			o_Owned.f_AddStream(From, To);
 		}
 	}
 }
