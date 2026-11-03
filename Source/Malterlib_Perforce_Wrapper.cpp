@@ -332,6 +332,66 @@ namespace NMib::NPerforce
 		}
 	}
 
+	CPerforceClient::CIntegrationResult::CIntegrationResult()
+		: m_Action(EAction_Unknown)
+	{
+	}
+
+	CPerforceClient::CFileRev::CFileRev()
+		: m_Action(EAction_Unknown)
+	{
+	}
+
+	CPerforceClient::CFileRev::CRevDesc::CRevDesc()
+		: m_How(EHow_Unknown)
+	{
+	}
+
+	CPerforceClient::CFileRevision::CFileRevision()
+		: m_Action(EAction_Unknown)
+	{
+	}
+
+	CPerforceClient::CDescription::CFile::CFile()
+		: m_Action(EAction_Unknown)
+	{
+	}
+
+	CPerforceClient::CFileStats::CFileStats()
+		: m_HeadAction(EAction_Unknown)
+	{
+	}
+
+	CStr const &CPerforceClient::f_GetHost() const
+	{
+		return mp_ConnectionInfo.m_Host;
+	}
+
+	CStr const &CPerforceClient::f_GetServer() const
+	{
+		return mp_ConnectionInfo.m_Server;
+	}
+
+	CStr const &CPerforceClient::f_GetUser() const
+	{
+		return mp_ConnectionInfo.m_User;
+	}
+
+	CStr const &CPerforceClient::f_GetClient() const
+	{
+		return mp_ConnectionInfo.m_Client;
+	}
+
+	CPerforceClient::CConnectionInfo const &CPerforceClient::f_GetConnectionInfo() const
+	{
+		return mp_ConnectionInfo;
+	}
+
+	bool CPerforceClient::f_IsUTF8() const
+	{
+		return mp_bUTF8;
+	}
+
 	CStr CPerforceClient::f_GetLastFunction() const
 	{
 		return mp_LastFunction;
@@ -4965,6 +5025,11 @@ namespace NMib::NPerforce
 			// 	NSys::fg_Thread_Sleep(1.0);
 			DError(fg_Format("Perforce function '{}' failed with: {}", mp_Client.f_GetLastFunction(), mp_Client.f_GetLastError()));
 		}
+	}
+
+	CPerforceClient &CPerforceClientThrow::f_NoThrow()
+	{
+		return mp_Client;
 	}
 
 	CStr const &CPerforceClientThrow::f_GetHost() const

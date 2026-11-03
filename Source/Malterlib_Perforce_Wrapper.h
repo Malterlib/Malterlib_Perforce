@@ -23,10 +23,7 @@ namespace NMib::NPerforce
 
 		struct CIntegrationResult
 		{
-			CIntegrationResult()
-				: m_Action(EAction_Unknown)
-			{
-			}
+			CIntegrationResult();
 
 			EAction m_Action;
 			CStr m_From;
@@ -67,10 +64,7 @@ namespace NMib::NPerforce
 
 		struct CFileRev
 		{
-			CFileRev()
-				: m_Action(EAction_Unknown)
-			{
-			}
+			CFileRev();
 
 			int32 m_ChangeList = 0;
 			int32 m_Revision = 0;
@@ -94,10 +88,7 @@ namespace NMib::NPerforce
 					, EHow_MergeInto
 				};
 
-				CRevDesc()
-					: m_How(EHow_Unknown)
-				{
-				}
+				CRevDesc();
 
 				EHow m_How;
 				CStr m_File;
@@ -123,10 +114,7 @@ namespace NMib::NPerforce
 			EAction m_Action;
 			zuint64 m_Time;
 
-			CFileRevision()
-				: m_Action(EAction_Unknown)
-			{
-			}
+			CFileRevision();
 		};
 
 		struct CFileRevisions
@@ -164,10 +152,7 @@ namespace NMib::NPerforce
 			{
 				CStr m_Name;
 				EAction m_Action;
-				CFile()
-					: m_Action(EAction_Unknown)
-				{
-				}
+				CFile();
 			};
 
 			TCVector<CFile> m_Files;
@@ -197,10 +182,7 @@ namespace NMib::NPerforce
 
 		struct CFileStats
 		{
-			CFileStats()
-				: m_HeadAction(EAction_Unknown)
-			{
-			}
+			CFileStats();
 
 			CStr m_DepotFile;
 			CStr m_ClientFile;
@@ -284,30 +266,11 @@ namespace NMib::NPerforce
 		CPerforceClient(CConnectionInfo const &_Info);
 		~CPerforceClient();
 
-		CStr const &f_GetHost() const
-		{
-			return mp_ConnectionInfo.m_Host;
-		}
-
-		CStr const &f_GetServer() const
-		{
-			return mp_ConnectionInfo.m_Server;
-		}
-
-		CStr const &f_GetUser() const
-		{
-			return mp_ConnectionInfo.m_User;
-		}
-
-		CStr const &f_GetClient() const
-		{
-			return mp_ConnectionInfo.m_Client;
-		}
-
-		CConnectionInfo const &f_GetConnectionInfo() const
-		{
-			return mp_ConnectionInfo;
-		}
+		CStr const &f_GetHost() const;
+		CStr const &f_GetServer() const;
+		CStr const &f_GetUser() const;
+		CStr const &f_GetClient() const;
+		CConnectionInfo const &f_GetConnectionInfo() const;
 
 		CStr f_GetLastError() const;
 		CStr f_GetLastFunction() const;
@@ -315,11 +278,7 @@ namespace NMib::NPerforce
 		bool f_GetSecurityLevel(CStr &_SecurityLevel);
 		bool f_Dropped();
 
-		bool f_IsUTF8() const
-		{
-			return mp_bUTF8;
-		}
-
+		bool f_IsUTF8() const;
 		CStr f_EncodeStr(CStr const &_Str);
 		CStr f_DecodeStr(CStr const &_Str);
 
@@ -591,10 +550,7 @@ namespace NMib::NPerforce
 		CPerforceClientThrow(CPerforceClient::CConnectionInfo const &_Info);
 
 		void f_ThrowLastError() const;
-		CPerforceClient &f_NoThrow()
-		{
-			return mp_Client;
-		}
+		CPerforceClient &f_NoThrow();
 
 		CStr const &f_GetHost() const;
 		CStr const &f_GetServer() const;

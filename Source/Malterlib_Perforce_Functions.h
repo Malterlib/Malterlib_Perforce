@@ -11,24 +11,8 @@ namespace NMib::NPerforce
 		{
 			TCLinkedList<TCTuple<CStr, CStr>> m_Streams;
 			TCMap<CStr, CStr> m_StreamMap;
-			void f_AddStream(CStr const &_FromStream, CStr const &_ToStream)
-			{
-				auto Created = m_StreamMap(_FromStream);
-				if (Created.f_WasCreated())
-				{
-					m_Streams.f_InsertFirst(fg_Tuple(_FromStream, _ToStream));
-					*Created = _ToStream;
-				}
-				else if (*Created != _ToStream)
-					DError(fg_Format("Stream ownership error for '{}'. '{}' != '{}'", _FromStream, *Created, _ToStream));
-			}
-
-			COwnedStreams operator += (COwnedStreams const &_Other)
-			{
-				for (auto iStream = _Other.m_Streams.f_GetIterator(); iStream; ++iStream)
-					f_AddStream(fg_Get<0>(*iStream), fg_Get<1>(*iStream));
-				return *this;
-			}
+			void f_AddStream(CStr const &_FromStream, CStr const &_ToStream);
+			COwnedStreams operator += (COwnedStreams const &_Other);
 		};
 
 	private:
