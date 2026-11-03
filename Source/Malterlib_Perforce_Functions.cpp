@@ -237,7 +237,7 @@ CStr CPerforceFunctions::f_GetFullRoot(CStr const &_Stream, CStrippedRoot const 
 
 CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult &o_OldStream, bool _bQuiet)
 {
-	for (int i = 0; i < 2; ++i)
+	for (int iAttempt = 0; iAttempt < 2; ++iAttempt)
 	{
 		CStr CurrentHost = m_pClient->f_GetHost();
 		CStr CurrentUser = m_pClient->f_GetUser();
@@ -258,7 +258,7 @@ CStr CPerforceFunctions::f_GetClientForStream(CStr const &_Stream, CSwitchResult
 
 		if (MatchedClients.f_IsEmpty())
 		{
-			if (i == 0)
+			if (iAttempt == 0)
 			{
 				o_OldStream = CPerforceFunctions::fs_SwitchStream(*this, _Stream, false, _bQuiet);
 				continue;
@@ -630,7 +630,7 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 	ConsideredStreams[ParentStream];
 
 	CStr Client;
-	for (int i = 0; i < 2; ++i)
+	for (int iAttempt = 0; iAttempt < 2; ++iAttempt)
 	{
 		TCSet<CStr> MatchedClientsHost;
 		TCSet<CStr> MatchedClientsStream;
@@ -672,7 +672,7 @@ CPerforceFunctions::CSwitchResult CPerforceFunctions::fs_SwitchStream(CPerforceF
 
 		if (MatchedClients.f_IsEmpty())
 		{
-			if (i == 0)
+			if (iAttempt == 0)
 			{
 				CPerforceFunctions Functions(pClient);
 				fs_InitializeStream(_StreamName, Functions);
@@ -776,7 +776,7 @@ TCSet<CStr> CPerforceFunctions::f_GetDisabledCreate(CPerforceClient::CStream con
 {
 	TCSet<CStr> Ret;
 
-	auto fl_AddRegistry = [&](CRegistryPreserveAll const &_Registry, CStr const &_Property)
+	auto fAddRegistry = [&](CRegistryPreserveAll const &_Registry, CStr const &_Property)
 		{
 			auto pDisableCreate = _Registry.f_GetChildNoPath(_Property);
 			if (pDisableCreate)
@@ -788,8 +788,8 @@ TCSet<CStr> CPerforceFunctions::f_GetDisabledCreate(CPerforceClient::CStream con
 	;
 
 	CRegistryPreserveAll Registry = CPerforceFunctions::fs_GetRegistry(_Stream);
-	fl_AddRegistry(Registry, "DisableCreate");
-	fl_AddRegistry(Registry, "DisableCreateInherit");
+	fAddRegistry(Registry, "DisableCreate");
+	fAddRegistry(Registry, "DisableCreateInherit");
 
 	CStr Parent = _Stream.m_Parent;
 
@@ -798,7 +798,7 @@ TCSet<CStr> CPerforceFunctions::f_GetDisabledCreate(CPerforceClient::CStream con
 		CPerforceClient::CStream Stream = f_GetStreamCached(Parent);
 
 		CRegistryPreserveAll ParentRegistry = fs_GetRegistry(Stream);
-		fl_AddRegistry(ParentRegistry, "DisableCreateInherit");
+		fAddRegistry(ParentRegistry, "DisableCreateInherit");
 		Parent = Stream.m_Parent;
 	}
 

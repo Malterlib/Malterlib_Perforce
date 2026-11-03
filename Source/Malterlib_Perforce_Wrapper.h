@@ -256,22 +256,22 @@ namespace NMib::NPerforce
 	private:
 		struct CP4Client;
 
-		CStr m_InitError;
-		CStr m_LastError;
-		CStr m_LastFunction;
-		CP4Client *m_pClient;
-		ClientApi *m_pAPI;
-		bool m_bUTF8 = false;
-		TCUniquePointer<CPerforceClient> m_pNonTaggedClient;
+		CStr mp_InitError;
+		CStr mp_LastError;
+		CStr mp_LastFunction;
+		CP4Client *mp_pClient;
+		ClientApi *mp_pAPI;
+		bool mp_bUTF8 = false;
+		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
 
-		CStr m_ActiveHost;
-		CStr m_ActiveClient;
-		CStr m_ActiveUser;
-		CStr m_ActiveVersion;
+		CStr mp_ActiveHost;
+		CStr mp_ActiveClient;
+		CStr mp_ActiveUser;
+		CStr mp_ActiveVersion;
 
-		CConnectionInfo m_ConnectionInfo;
+		CConnectionInfo mp_ConnectionInfo;
 
-		bool m_bSupportsParentView = false;
+		bool mp_bSupportsParentView = false;
 
 		void fp_Run(char const *_pFunc);
 		void fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments);
@@ -286,27 +286,27 @@ namespace NMib::NPerforce
 
 		CStr const &f_GetHost() const
 		{
-			return m_ConnectionInfo.m_Host;
+			return mp_ConnectionInfo.m_Host;
 		}
 
 		CStr const &f_GetServer() const
 		{
-			return m_ConnectionInfo.m_Server;
+			return mp_ConnectionInfo.m_Server;
 		}
 
 		CStr const &f_GetUser() const
 		{
-			return m_ConnectionInfo.m_User;
+			return mp_ConnectionInfo.m_User;
 		}
 
 		CStr const &f_GetClient() const
 		{
-			return m_ConnectionInfo.m_Client;
+			return mp_ConnectionInfo.m_Client;
 		}
 
 		CConnectionInfo const &f_GetConnectionInfo() const
 		{
-			return m_ConnectionInfo;
+			return mp_ConnectionInfo;
 		}
 
 		CStr f_GetLastError() const;
@@ -317,7 +317,7 @@ namespace NMib::NPerforce
 
 		bool f_IsUTF8() const
 		{
-			return m_bUTF8;
+			return mp_bUTF8;
 		}
 
 		CStr f_EncodeStr(CStr const &_Str);
