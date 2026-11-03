@@ -333,7 +333,7 @@ namespace NMib::NPerforce
 		auto f_Sync
 			(
 				CStr const &_File
-				, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
+				, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
 				, bool _bForce = false
 				, TCVector<CStr> const &_MoreFiles = TCVector<CStr>()
 			)
@@ -398,10 +398,12 @@ namespace NMib::NPerforce
 
 		bool f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients);
 
-		bool f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor);
+		auto f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_fProcessor)
+			-> bool
+		;
 
 		bool f_GetClient(CStr const &_ClientName, CStr &_Contents);
-		bool f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor);
+		bool f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_fProcessor);
 		bool f_GetClient(CStr const &_Client, CPerforceClient::CClient &o_Client);
 
 		bool f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
@@ -615,7 +617,7 @@ namespace NMib::NPerforce
 		void f_Sync
 			(
 				CStr const &_File
-				, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
+				, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
 				, bool _bForce = false
 				, TCVector<CStr> const &_MoreFiles = TCVector<CStr>()
 			)
@@ -679,10 +681,17 @@ namespace NMib::NPerforce
 
 		TCVector<CStr> f_GetClients(CStr const &_SearchPattern);
 
-		void f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor);
+		void f_GetClients
+			(
+				CStr const &_SearchPattern
+				, CStr const &_Stream
+				, CStr const &_User
+				, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_fProcessor
+			)
+		;
 
 		CStr f_GetClient(CStr const &_ClientName);
-		void f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor);
+		void f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_fProcessor);
 		CPerforceClient::CClient f_GetClientScruct(CStr const &_Client);
 
 		void f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);

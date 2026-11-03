@@ -41,8 +41,8 @@ namespace NMib::NPerforce
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
 		TCVector<CStr> m_Infos;
-		TCFunction<void (CStr const &_Info)> m_OnInfo;
-		TCFunction<void (CStr const &_Text)> m_OnText;
+		TCFunction<void (CStr const &_Info)> m_fOnInfo;
+		TCFunction<void (CStr const &_Text)> m_fOnText;
 		bool m_bError;
 		CStr m_LastError;
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
@@ -74,9 +74,9 @@ namespace NMib::NPerforce
 	{
 		CStr Temp;
 		Temp.f_AddStr(_pData, _Length);
-		if (m_OnText)
+		if (m_fOnText)
 		{
-			m_OnText(Temp);
+			m_fOnText(Temp);
 			return;
 		}
 
@@ -138,8 +138,8 @@ namespace NMib::NPerforce
 	void CPerforceClient::CP4Client::OutputInfo(char _Level, char const *_pData)
 	{
 		CStr Data = m_pClient->f_DecodeStr(_pData);
-		if (m_OnInfo)
-			m_OnInfo(CStr(Data));
+		if (m_fOnInfo)
+			m_fOnInfo(CStr(Data));
 		else
 			m_Infos.f_Insert(CStr(Data));
 
@@ -158,9 +158,9 @@ namespace NMib::NPerforce
 	{
 		CStr Temp;
 		Temp.f_AddStr(_pData, _Length);
-		if (m_OnText)
+		if (m_fOnText)
 		{
-			m_OnText(Temp);
+			m_fOnText(Temp);
 			return;
 		}
 
@@ -363,8 +363,8 @@ namespace NMib::NPerforce
 		return false;\
 	}\
 	mp_pClient->Clear();\
-	mp_pClient->m_OnInfo.f_Clear();\
-	mp_pClient->m_OnText.f_Clear();
+	mp_pClient->m_fOnInfo.f_Clear();\
+	mp_pClient->m_fOnText.f_Clear();
 
 	void CPerforceClient::fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments)
 	{
@@ -504,7 +504,7 @@ namespace NMib::NPerforce
 					}
 				;
 				fp_Run("trust");
-				mp_pClient->m_OnText.f_Clear();
+				mp_pClient->m_fOnText.f_Clear();
 				mp_pClient->m_fOnPrompt.f_Clear();
 
 				if (mp_pClient->m_bError)
@@ -833,7 +833,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress, bool _bForce, TCVector<CStr> const &_MoreFiles)
+	bool CPerforceClient::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress, bool _bForce, TCVector<CStr> const &_MoreFiles)
 	{
 		DCheckApi(CStr::CFormat("{}") << _File);
 
@@ -850,9 +850,9 @@ namespace NMib::NPerforce
 
 		int64 TotalFileSize = 0;
 		int64 SyncedFileSize = 0;
-		if (_Progress)
+		if (_fProgress)
 		{
-			mp_pClient->m_OnInfo = [&](CStr const &_Info)
+			mp_pClient->m_fOnInfo = [&](CStr const &_Info)
 				{
 					CStr Command;
 					CStr Data;
@@ -871,7 +871,7 @@ namespace NMib::NPerforce
 
 					if (bDoProgress)
 					{
-						if (!_Progress(TotalFileSize, SyncedFileSize))
+						if (!_fProgress(TotalFileSize, SyncedFileSize))
 							mp_pClient->m_bAbortOperation = true;
 					}
 					//DTrace("{}\r\n", _Info);
@@ -1800,9 +1800,9 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+			for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 			{
-				auto &Info = *Iter;
+				auto &Info = *iInfo;
 				CStr Command;
 				CStr Data;
 				(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -2283,13 +2283,13 @@ namespace NMib::NPerforce
 		Arguments.f_Insert("-b");
 		Arguments.f_Insert(_Branch);
 
-		mp_pClient->m_OnText = [&](CStr const &_Info)
+		mp_pClient->m_fOnText = [&](CStr const &_Info)
 			{
 				o_Patch += _Info;
 			}
 		;
 
-		mp_pClient->m_OnInfo = [&](CStr const &_Info)
+		mp_pClient->m_fOnInfo = [&](CStr const &_Info)
 			{
 				//DConOut("Info: {}", _Info);
 				CStr To = _Info;
@@ -2372,7 +2372,7 @@ namespace NMib::NPerforce
 
 		TCVector<CChange> Changes;
 		CChange *pLastChange = nullptr;
-		mp_pClient->m_OnInfo = [&](CStr const &_Info)
+		mp_pClient->m_fOnInfo = [&](CStr const &_Info)
 			{
 				CStr Command;
 				CStr Data;
@@ -3365,7 +3365,7 @@ namespace NMib::NPerforce
 			CStr const &_SearchPattern
 			, CStr const &_Stream
 			, CStr const &_User
-			, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor
+			, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_fProcessor
 		)
 		-> bool
 	{
@@ -3399,9 +3399,9 @@ namespace NMib::NPerforce
 		}
 
 		CStr CurrentClient;
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -3409,7 +3409,7 @@ namespace NMib::NPerforce
 				CurrentClient = Data;
 
 			if (!CurrentClient.f_IsEmpty())
-				_Processor(CurrentClient, Command, Data);
+				_fProcessor(CurrentClient, Command, Data);
 		}
 		return true;
 	}
@@ -3433,9 +3433,9 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -3445,7 +3445,7 @@ namespace NMib::NPerforce
 		return true;
 	}
 
-	bool CPerforceClient::f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor)
+	bool CPerforceClient::f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_fProcessor)
 	{
 		TCVector<CStr> Clients;
 		if (!f_GetClients(_ClientName, Clients) || Clients.f_IsEmpty())
@@ -3469,12 +3469,12 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
 			CStr Command;
 			CStr Data;
-			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(*Iter);
-			_Processor(Command, Data);
+			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(*iInfo);
+			_fProcessor(Command, Data);
 		}
 		return true;
 	}
@@ -3503,11 +3503,11 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
 			CStr Command;
 			CStr Data;
-			_Contents += *Iter;
+			_Contents += *iInfo;
 			_Contents += "\r\n";
 		}
 		return true;
@@ -3522,9 +3522,9 @@ namespace NMib::NPerforce
 
 		CStr LastCommand;
 		TCVector<CStr> ExtraTags;
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -3648,9 +3648,9 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -3695,9 +3695,9 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -3829,9 +3829,9 @@ namespace NMib::NPerforce
 
 		CStr LastCommand;
 		TCVector<CStr> ExtraTags;
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 
@@ -3931,9 +3931,9 @@ namespace NMib::NPerforce
 
 		CStr LastCommand;
 		TCVector<CStr> ExtraTags;
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(Info);
@@ -4045,9 +4045,9 @@ namespace NMib::NPerforce
 
 		CStr LastCommand;
 		TCVector<CStr> ExtraTags;
-		for (auto Iter = mp_pClient->m_Infos.f_GetIterator(); Iter; ++Iter)
+		for (auto iInfo = mp_pClient->m_Infos.f_GetIterator(); iInfo; ++iInfo)
 		{
-			auto &Info = *Iter;
+			auto &Info = *iInfo;
 			CStr Command;
 			CStr Data;
 
@@ -5064,9 +5064,9 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_Sync(_File, _Synced, _Removed, _bPretend));
 	}
 
-	void CPerforceClientThrow::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_Progress, bool _bForce, TCVector<CStr> const &_MoreFiles)
+	void CPerforceClientThrow::f_Sync(CStr const &_File, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress, bool _bForce, TCVector<CStr> const &_MoreFiles)
 	{
-		fp_Throw(mp_Client.f_Sync(_File, _Progress, _bForce, _MoreFiles));
+		fp_Throw(mp_Client.f_Sync(_File, _fProgress, _bForce, _MoreFiles));
 	}
 
 	int64 CPerforceClientThrow::f_GetHeadChangelist(CStr const &_Path)
@@ -5385,10 +5385,10 @@ namespace NMib::NPerforce
 			CStr const &_SearchPattern
 			, CStr const &_Stream
 			, CStr const &_User
-			, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_Processor
+			, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_fProcessor
 		)
 	{
-		fp_Throw(mp_Client.f_GetClients(_SearchPattern, _Stream, _User, _Processor));
+		fp_Throw(mp_Client.f_GetClients(_SearchPattern, _Stream, _User, _fProcessor));
 	}
 
 	CStr CPerforceClientThrow::f_GetClient(CStr const &_ClientName)
@@ -5410,9 +5410,9 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_UnshelveWithBranch(_SourceChangelist, _BranchMapping, _DestinationChangeList));
 	}
 
-	void CPerforceClientThrow::f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_Processor)
+	void CPerforceClientThrow::f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_fProcessor)
 	{
-		fp_Throw(mp_Client.f_GetClient(_ClientName, _Processor));
+		fp_Throw(mp_Client.f_GetClient(_ClientName, _fProcessor));
 	}
 
 	void CPerforceClientThrow::f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files)
