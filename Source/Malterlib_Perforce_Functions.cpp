@@ -805,7 +805,7 @@ TCSet<CStr> CPerforceFunctions::f_GetDisabledCreate(CPerforceClient::CStream con
 	return Ret;
 }
 
-void CPerforceFunctions::fpr_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed)
+void CPerforceFunctions::fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed)
 {
 	CPerforceClient::CStream Stream = f_GetStreamCached(_Stream);
 
@@ -833,7 +833,7 @@ void CPerforceFunctions::fpr_GetStreamOwned(CStr const &_Stream, COwnedStreams &
 				From = To;
 
 			CStr RecurseValue = iOwned->f_GetThisValue();
-			fpr_GetStreamOwned(RecurseValue, _oOwned, _bReversed);
+			fp_GetStreamOwned(RecurseValue, _oOwned, _bReversed);
 			_oOwned.f_AddStream(From, To);
 		}
 	}
@@ -842,7 +842,7 @@ void CPerforceFunctions::fpr_GetStreamOwned(CStr const &_Stream, COwnedStreams &
 CPerforceFunctions::COwnedStreams CPerforceFunctions::f_GetStreamOwned(CStr const &_Stream, bool _bReversed)
 {
 	COwnedStreams Ret;
-	fpr_GetStreamOwned(_Stream, Ret, _bReversed);
+	fp_GetStreamOwned(_Stream, Ret, _bReversed);
 
 	return Ret;
 }

@@ -32,7 +32,7 @@ namespace NMib::NPerforce
 		};
 
 	private:
-		void fpr_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed);
+		void fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &_oOwned, bool _bReversed);
 
 	public:
 		struct CSwitchResult

@@ -52,7 +52,7 @@ namespace NMib::NPerforce
 		void HandleError(Error *err) override;
 		void Message(Error *err) override;
 		void OutputError(char const *errBuf) override;
-		CStr GetInfo(CStr const &_Name);
+		CStr f_GetInfo(CStr const &_Name);
 		void OutputInfo(char level, char const *data) override;
 		void OutputBinary(char const *data, int length) override;
 		void OutputStat(StrDict *varList) override;
@@ -123,7 +123,7 @@ namespace NMib::NPerforce
 		// return ClientUser::OutputError( errBuf );
 	}
 
-	CStr CPerforceClient::CP4Client::GetInfo(CStr const &_Name)
+	CStr CPerforceClient::CP4Client::f_GetInfo(CStr const &_Name)
 	{
 		umint nInfos = m_Infos.f_GetLen();
 		CStr ToFind = _Name + " ";
@@ -535,10 +535,10 @@ namespace NMib::NPerforce
 			}
 			else
 			{
-				m_ActiveHost = m_pClient->GetInfo("clientHost");
-				m_ActiveClient = m_pClient->GetInfo("clientName");
-				m_ActiveUser = m_pClient->GetInfo("userName");
-				m_ActiveVersion = m_pClient->GetInfo("serverVersion");
+				m_ActiveHost = m_pClient->f_GetInfo("clientHost");
+				m_ActiveClient = m_pClient->f_GetInfo("clientName");
+				m_ActiveUser = m_pClient->f_GetInfo("userName");
+				m_ActiveVersion = m_pClient->f_GetInfo("serverVersion");
 
 				CStr Program;
 				CStr Platform;
@@ -4574,7 +4574,7 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			_UserName = m_pClient->GetInfo("userName");
+			_UserName = m_pClient->f_GetInfo("userName");
 			return true;
 		}
 	}
@@ -4593,7 +4593,7 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			_ClientName = m_pClient->GetInfo("clientName");
+			_ClientName = m_pClient->f_GetInfo("clientName");
 			return true;
 		}
 	}
@@ -4612,7 +4612,7 @@ namespace NMib::NPerforce
 		}
 		else
 		{
-			_Root = m_pClient->GetInfo("clientRoot");
+			_Root = m_pClient->f_GetInfo("clientRoot");
 			return true;
 		}
 	}
