@@ -83,9 +83,8 @@ namespace NMib::NPerforce
 		COwnedStreams f_GetStreamOwned(CStr const &_Stream, bool _bReversed);
 	};
 
-	class CPerforce_TemporaryStreamSwitcher
+	struct CPerforce_TemporaryStreamSwitcher
 	{
-	public:
 		CPerforce_TemporaryStreamSwitcher(CPerforceFunctions &_Functions);
 		~CPerforce_TemporaryStreamSwitcher();
 		CStr f_GetClientForStream(CStr const &_StreamName, bool _bQuite = false);

@@ -23,9 +23,8 @@
 
 namespace NMib::NPerforce
 {
-	class CPerforceClient::CP4Client : public ClientUser, public KeepAlive
+	struct CPerforceClient::CP4Client : public ClientUser, public KeepAlive
 	{
-	public:
 		CPerforceClient *m_pClient;
 		CP4Client(CPerforceClient *_pClient)
 		{

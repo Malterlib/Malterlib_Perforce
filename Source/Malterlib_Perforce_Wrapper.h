@@ -9,9 +9,8 @@ class ClientApi;
 
 namespace NMib::NPerforce
 {
-	class CPerforceClient
+	struct CPerforceClient
 	{
-	public:
 		enum EAction
 		{
 			EAction_Unknown
@@ -47,9 +46,8 @@ namespace NMib::NPerforce
 			bool m_bDisableTagging = false;
 		};
 
-		class CChangeList
+		struct CChangeList
 		{
-		public:
 			uint32 m_ChangeID = 0;
 			uint64 m_Date = 0;
 			bool m_bHasShelvedFiles = false;
@@ -67,9 +65,8 @@ namespace NMib::NPerforce
 			TCVector<CFile> m_Files;
 		};
 
-		class CFileRev
+		struct CFileRev
 		{
-		public:
 			CFileRev()
 				: m_Action(EAction_Unknown)
 			{
@@ -84,9 +81,8 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Comment;
 
-			class CRevDesc
+			struct CRevDesc
 			{
-			public:
 				enum EHow
 				{
 					EHow_Unknown
@@ -112,9 +108,8 @@ namespace NMib::NPerforce
 			TCVector<CRevDesc> m_RevDescs;
 		};
 
-		class CFile
+		struct CFile
 		{
-		public:
 			CStr m_File;
 			TCVector<CFileRev> m_Revisions;
 		};
@@ -134,15 +129,13 @@ namespace NMib::NPerforce
 			}
 		};
 
-		class CFileRevisions
+		struct CFileRevisions
 		{
-		public:
 			TCVector<CFile> m_Files;
 		};
 
-		class CFix
+		struct CFix
 		{
-		public:
 			CStr m_Job;
 			uint32 m_ChangeNumber = 0;
 			uint64 m_Date = 0;
@@ -154,17 +147,15 @@ namespace NMib::NPerforce
 			auto operator <=> (CFix const &_Other) const noexcept = default;
 		};
 
-		class CJob
+		struct CJob
 		{
-		public:
 			uint64 m_Date = 0;
 			CStr m_Status;
 			CStr m_User;
 		};
 
-		class CDescription
+		struct CDescription
 		{
-		public:
 			CStr m_User;
 			CStr m_ChangelistStatus;
 			TCVector<CStr> m_Jobs;
@@ -263,7 +254,7 @@ namespace NMib::NPerforce
 		};
 
 	private:
-		class CP4Client;
+		struct CP4Client;
 
 		CStr m_InitError;
 		CStr m_LastError;
@@ -592,12 +583,8 @@ namespace NMib::NPerforce
 		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
 	};
 
-	class CPerforceClientThrow
+	struct CPerforceClientThrow
 	{
-		CPerforceClient mp_Client;
-		void fp_Throw(bool _bResult) const;
-
-	public:
 		CPerforceClientThrow(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
 		CPerforceClientThrow(CPerforceClient::CConnectionInfo const &_Info);
 
@@ -827,6 +814,10 @@ namespace NMib::NPerforce
 		void f_DeleteBranch(CStr const &_Name);
 
 		static bool fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client);
+
+	private:
+		CPerforceClient mp_Client;
+		void fp_Throw(bool _bResult) const;
 	};
 }
 
