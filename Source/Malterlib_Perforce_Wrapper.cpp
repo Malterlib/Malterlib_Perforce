@@ -29,19 +29,32 @@ namespace NMib::NPerforce
 {
 	struct CPerforceClient::CP4Client : public ClientUser, public KeepAlive
 	{
+		CP4Client(CPerforceClient *_pClient);
+
+		virtual int IsAlive() override;
+
+		void OutputText(char const *_pData, int _Length) override;
+		void InputData(StrBuf *o_pBuffer, Error *_pError) override;
+		void HandleError(Error *_pError) override;
+		void Message(Error *_pError) override;
+		void OutputError(char const *_pErrorText) override;
+		CStr f_GetInfo(CStr const &_Name);
+		void OutputInfo(char _Level, char const *_pData) override;
+		void OutputBinary(char const *_pData, int _Length) override;
+		void OutputStat(StrDict *_pVariables) override;
+		void Prompt(StrPtr const &_Message, StrBuf &o_Response, int _NoEcho, Error *_pError) override;
+		void SetOutputCharset(int _Charset) override;
+		void ErrorPause(char *_pErrorText, Error *_pError) override;
+		void Edit(FileSys *_pFile, Error *_pError) override;
+		void Diff(FileSys *_pFile1, FileSys *_pFile2, int _DoPage, char *_pDiffFlags, Error *_pError) override;
+		void Merge(FileSys *_pBase, FileSys *_pLeg1, FileSys *_pLeg2, FileSys *_pResult, Error *_pError) override;
+		int Resolve(ClientMerge *_pMerge, Error *_pError) override;
+		void Help(char const * const *_pHelp) override;
+		FileSys *File(FileSysType _Type) override;
+		void Finished() override;
+		void Clear() override;
+
 		CPerforceClient *m_pClient;
-		CP4Client(CPerforceClient *_pClient)
-		{
-			m_pClient = _pClient;
-		}
-
-		virtual int IsAlive() override
-		{
-			if (m_Timeout > 0.0 && m_CommandStopwatch.f_GetTime() > m_Timeout)
-				return false;
-
-			return !m_bAbortOperation;
-		}
 
 		bool m_bAbortOperation = false;
 		fp64 m_Timeout = 0.0;                 // Seconds a command may wait for the server, or zero for no limit
@@ -55,29 +68,21 @@ namespace NMib::NPerforce
 		bool m_bError;
 		CStr m_LastError;
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
-
-		void OutputText(char const *_pData, int _Length) override;
-		void InputData(StrBuf *o_pBuffer, Error *_pError) override;
-		void HandleError(Error *_pError) override;
-		void Message(Error *_pError) override;
-		void OutputError(char const *_pErrorText) override;
-		CStr f_GetInfo(CStr const &_Name);
-		void OutputInfo(char _Level, char const *_pData) override;
-		void OutputBinary(char const *_pData, int _Length) override;
-		void OutputStat(StrDict *_pVariables) override;
 		CStr m_PromtOverride;
-		void Prompt(StrPtr const &_Message, StrBuf &o_Response, int _NoEcho, Error *_pError) override;
-		void SetOutputCharset(int _Charset) override;
-		void ErrorPause(char *_pErrorText, Error *_pError) override;
-		void Edit(FileSys *_pFile, Error *_pError) override;
-		void Diff(FileSys *_pFile1, FileSys *_pFile2, int _DoPage, char *_pDiffFlags, Error *_pError) override;
-		void Merge(FileSys *_pBase, FileSys *_pLeg1, FileSys *_pLeg2, FileSys *_pResult, Error *_pError) override;
-		int Resolve(ClientMerge *_pMerge, Error *_pError) override;
-		void Help(char const * const *_pHelp) override;
-		FileSys *File(FileSysType _Type) override;
-		void Finished() override;
-		void Clear() override;
 	};
+
+	CPerforceClient::CP4Client::CP4Client(CPerforceClient *_pClient)
+	{
+		m_pClient = _pClient;
+	}
+
+	int CPerforceClient::CP4Client::IsAlive()
+	{
+		if (m_Timeout > 0.0 && m_CommandStopwatch.f_GetTime() > m_Timeout)
+			return false;
+
+		return !m_bAbortOperation;
+	}
 
 	void CPerforceClient::CP4Client::OutputText(char const *_pData, int _Length)
 	{

@@ -16,22 +16,22 @@ namespace NMib::NPerforce
 	{
 		struct CSettings
 		{
+			NStr::CStr f_GetConfigFile(NStr::CStr const &_Directory) const;
+
 			NStr::CStr m_IgnoreNames; // ';'-separated file names, looked for in every directory above a path, and paths
 			NStr::CStr m_ConfigName;  // P4CONFIG, whose files are always excluded, or empty
 			NStr::CStr m_EnviroFile;  // The enviro file the settings were read with, also while missing, or empty
-
-			NStr::CStr f_GetConfigFile(NStr::CStr const &_Directory) const;
 		};
-
-		static NContainer::TCVector<NStr::CStr> fs_GetEnvironmentVariables();
-		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
-		static NStr::CStr fs_ResolveIgnoreNames(NStr::CStr const &_IgnoreNames, NStr::CStr const &_Directory);
 
 		CPerforceIgnore(CSettings const &_Settings);
 		~CPerforceIgnore();
 
 		CPerforceIgnore(CPerforceIgnore const &_Other) = delete;
 		CPerforceIgnore &operator = (CPerforceIgnore const &_Other) = delete;
+
+		static NContainer::TCVector<NStr::CStr> fs_GetEnvironmentVariables();
+		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
+		static NStr::CStr fs_ResolveIgnoreNames(NStr::CStr const &_IgnoreNames, NStr::CStr const &_Directory);
 
 		bool f_IsIgnored(NStr::CStr const &_Path, bool _bDirectory) const;
 

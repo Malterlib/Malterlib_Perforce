@@ -9,16 +9,13 @@ namespace NMib::NPerforce
 	{
 		struct COwnedStreams
 		{
-			TCLinkedList<TCTuple<CStr, CStr>> m_Streams;
-			TCMap<CStr, CStr> m_StreamMap;
 			void f_AddStream(CStr const &_FromStream, CStr const &_ToStream);
 			COwnedStreams operator += (COwnedStreams const &_Other);
+
+			TCLinkedList<TCTuple<CStr, CStr>> m_Streams;
+			TCMap<CStr, CStr> m_StreamMap;
 		};
 
-	private:
-		void fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &o_Owned, bool _bReversed);
-
-	public:
 		struct CSwitchResult
 		{
 			CStr m_Workspace;
@@ -31,9 +28,6 @@ namespace NMib::NPerforce
 			TCVector<CStr> m_StreamPaths;
 			bool m_bStripped = false;
 		};
-
-		TCUniquePointer<CPerforceClientThrow> &m_pClient;
-		TCMap<CStr, CPerforceClient::CStream> m_StreamCache;
 
 		CPerforceFunctions(TCUniquePointer<CPerforceClientThrow> &_pClient);
 		CPerforceClient::CStream const &f_GetStreamCached(CStr const &_Stream);
@@ -65,6 +59,12 @@ namespace NMib::NPerforce
 		CStr f_GetPatchPrefix(CPerforceClient::CStream const &_Stream);
 
 		COwnedStreams f_GetStreamOwned(CStr const &_Stream, bool _bReversed);
+
+		TCUniquePointer<CPerforceClientThrow> &m_pClient;
+		TCMap<CStr, CPerforceClient::CStream> m_StreamCache;
+
+	private:
+		void fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &o_Owned, bool _bReversed);
 	};
 
 	struct CPerforce_TemporaryStreamSwitcher
