@@ -644,6 +644,243 @@ namespace NMib::NPerforce
 		}
 	}
 
+	// Mints a ticket with `p4 login -p`. An all-hosts ticket (-a) is valid from any client address.
+	bool CPerforceClient::f_GetLoginTicket(CStr const &_Password, bool _bAllHosts, CStr &o_Ticket)
+	{
+		DCheckApi("GetLoginTicket");
+
+		TCVector<CStr> Arguments;
+		if (_bAllHosts)
+			Arguments.f_Insert("-a");
+		Arguments.f_Insert("-p");
+
+		if (!_Password.f_IsEmpty())
+			mp_pAPI->SetPassword(_Password.f_GetStr());
+
+		// `login -p` prompts for the password even with a valid ticket; answering from _Password, which is empty when none
+		// was given, keeps the prompt from reading standard input
+		mp_pClient->m_fOnPrompt = [&_Password](CStr const &_Message, Error *_pError) -> CStr
+			{
+				return _Password;
+			}
+		;
+		fp_Run("login", Arguments);
+		mp_pClient->m_fOnPrompt.f_Clear();
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		// `login -p` prints the ticket as an info line of its own; status messages ("User x logged in.") contain
+		// spaces, so the ticket is the last space-free line.
+		o_Ticket.f_Clear();
+		for (CStr const &Info : mp_pClient->m_Infos)
+		{
+			CStr Line = Info;
+			Line = Line.f_Trim();
+
+			if (!Line.f_IsEmpty() && Line.f_Find(" ") < 0)
+				o_Ticket = Line;
+		}
+
+		if (o_Ticket.f_IsEmpty())
+		{
+			mp_LastError = "No ticket in login output.";
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// Creates or updates a client from the spec, without a template client. Empty fields take the server's defaults.
+	bool CPerforceClient::f_SetClient(CStr const &_ClientName, CClient const &_Client)
+	{
+		DCheckApi(CStr::CFormat("SetClient({})") << _ClientName);
+
+		CStr Spec;
+		Spec += CStr::CFormat("Client:	{}\n") << _ClientName;
+		Spec += "\n";
+		CStr Owner = _Client.m_Owner;
+		if (Owner.f_IsEmpty())
+			Owner = mp_ConnectionInfo.m_User;
+		if (!Owner.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Owner:	{}\n") << Owner;
+			Spec += "\n";
+		}
+		if (!_Client.m_Host.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Host:	{}\n") << _Client.m_Host;
+			Spec += "\n";
+		}
+		if (!_Client.m_Description.f_IsEmpty())
+		{
+			Spec += "Description:\n";
+			CStr Description = _Client.m_Description;
+			while (!Description.f_IsEmpty())
+			{
+				CStr Line = fg_GetStrLineSep(Description);
+				Spec += CStr::CFormat("	{}\n") << Line;
+			}
+			Spec += "\n";
+		}
+		if (!_Client.m_Root.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Root:	{}\n") << _Client.m_Root;
+			Spec += "\n";
+		}
+		if (!_Client.m_AltRoot0.f_IsEmpty())
+		{
+			Spec += "AltRoots:\n";
+			Spec += CStr::CFormat("	{}\n") << _Client.m_AltRoot0;
+			if (!_Client.m_AltRoot1.f_IsEmpty())
+				Spec += CStr::CFormat("	{}\n") << _Client.m_AltRoot1;
+			Spec += "\n";
+		}
+		if (!_Client.m_Options.f_IsEmpty())
+		{
+			Spec += "Options:";
+			for (auto &Option : _Client.m_Options)
+				Spec += CStr::CFormat(" {}") << Option;
+			Spec += "\n";
+			Spec += "\n";
+		}
+		if (!_Client.m_LineEndings.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("LineEnd:	{}\n") << _Client.m_LineEndings;
+			Spec += "\n";
+		}
+		if (!_Client.m_Stream.f_IsEmpty())
+		{
+			Spec += CStr::CFormat("Stream:	{}\n") << _Client.m_Stream;
+			Spec += "\n";
+		}
+		if (!_Client.m_View.f_IsEmpty())
+		{
+			Spec += "View:\n";
+			for (auto &Mapping : _Client.m_View)
+				Spec += CStr::CFormat("	{} {}\n") << (Mapping.m_bNegative ? "-" + Mapping.m_From : Mapping.m_From).f_EscapeStr() << Mapping.m_To.f_EscapeStr();
+			Spec += "\n";
+		}
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-i");
+
+		mp_pClient->m_PromtOverride = Spec;
+
+		fp_Run("client", Arguments);
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// Each line is one entry, like "super user someone * //...". Requires super access, which everyone has without a table.
+	bool CPerforceClient::f_SetProtections(TCVector<CStr> const &_Lines)
+	{
+		DCheckApi("SetProtections");
+
+		CStr Spec = "Protections:\n";
+		for (auto &Line : _Lines)
+			Spec += CStr::CFormat("	{}\n") << Line;
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-i");
+
+		mp_pClient->m_PromtOverride = Spec;
+
+		fp_Run("protect", Arguments);
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// An empty _User is the connection's own, whose password is changed with the one it has, _OldPassword, empty while it has
+	// none. Another user's needs super access.
+	bool CPerforceClient::f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword)
+	{
+		DCheckApi(CStr::CFormat("SetUserPassword({})") << _User);
+
+		TCVector<CStr> Arguments;
+		if (!_User.f_IsEmpty())
+			Arguments.f_Insert(_User);
+
+		// The new password goes through the prompts because servers at security level 2 or higher reject `passwd -P`.
+		// Changing the connection's own password when one is set also prompts for the old one; an empty answer makes the
+		// command fail instead of reading standard input
+		mp_pClient->m_fOnPrompt = [&_Password, &_OldPassword](CStr const &_Message, Error *_pError) -> CStr
+			{
+				if (_Message.f_Find("old") >= 0)
+					return _OldPassword;
+
+				return _Password;
+			}
+		;
+		fp_Run("passwd", Arguments);
+		mp_pClient->m_fOnPrompt.f_Clear();
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// _Type is a depot type like "stream" or "local". Creates or updates the depot.
+	bool CPerforceClient::f_CreateDepot(CStr const &_Name, CStr const &_Type)
+	{
+		DCheckApi(CStr::CFormat("CreateDepot({})") << _Name);
+
+		CStr DepotSpec;
+		DepotSpec += CStr::CFormat("Depot:	{}\n") << _Name;
+		DepotSpec += "\n";
+		CStr Owner = mp_ConnectionInfo.m_User;
+		if (!Owner.f_IsEmpty())
+		{
+			DepotSpec += CStr::CFormat("Owner:	{}\n") << Owner;
+			DepotSpec += "\n";
+		}
+		DepotSpec += "Description:\n";
+		DepotSpec += CStr::CFormat("	Created by {}.\n") << (Owner.f_IsEmpty() ? CStr("Malterlib") : Owner);
+		DepotSpec += "\n";
+		DepotSpec += CStr::CFormat("Type:	{}\n") << _Type;
+		DepotSpec += "\n";
+		if (_Type == "stream")
+		{
+			DepotSpec += CStr::CFormat("StreamDepth:	//{}/1\n") << _Name;
+			DepotSpec += "\n";
+		}
+		DepotSpec += CStr::CFormat("Map:	{}/...\n") << _Name;
+
+		TCVector<CStr> Arguments;
+		Arguments.f_Insert("-i");
+
+		mp_pClient->m_PromtOverride = DepotSpec;
+
+		fp_Run("depot", Arguments);
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_Dropped()
 	{
 		if (!mp_pAPI)
@@ -4617,7 +4854,25 @@ namespace NMib::NPerforce
 			return false;
 		}
 		else
+		{
+			// A session that never logs in, on an open server, learns what the server supports here too.
+			mp_ActiveVersion = mp_pClient->f_GetInfo("serverVersion");
+			if (!mp_ActiveVersion.f_IsEmpty())
+			{
+				CStr Program;
+				CStr Platform;
+				uint64 VersionYear = 3000;
+				uint32 MinorVersion = 1;
+				uint64 Revision = TCLimitsInt<uint64>::mc_Max;
+				CStr Date;
+
+				(CStr::CParse("{}/{}/{}.{}/{} ({})") >> Program >> Platform >> VersionYear >> MinorVersion >> Revision >> Date).f_Parse(mp_ActiveVersion);
+
+				mp_bSupportsParentView = Revision >= 2006716;
+			}
+
 			return true;
+		}
 	}
 
 	bool CPerforceClient::f_GetUserName(CStr &_UserName)
@@ -5065,6 +5320,33 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_Login(CStr const &_Password, CStr const &_WorkingDir)
 	{
 		fp_Throw(mp_Client.f_Login(_Password, _WorkingDir));
+	}
+
+	CStr CPerforceClientThrow::f_GetLoginTicket(CStr const &_Password, bool _bAllHosts)
+	{
+		CStr Ret;
+		fp_Throw(mp_Client.f_GetLoginTicket(_Password, _bAllHosts, Ret));
+		return Ret;
+	}
+
+	void CPerforceClientThrow::f_CreateDepot(CStr const &_Name, CStr const &_Type)
+	{
+		fp_Throw(mp_Client.f_CreateDepot(_Name, _Type));
+	}
+
+	void CPerforceClientThrow::f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword)
+	{
+		fp_Throw(mp_Client.f_SetUserPassword(_User, _Password, _OldPassword));
+	}
+
+	void CPerforceClientThrow::f_SetClient(CStr const &_ClientName, CPerforceClient::CClient const &_Client)
+	{
+		fp_Throw(mp_Client.f_SetClient(_ClientName, _Client));
+	}
+
+	void CPerforceClientThrow::f_SetProtections(TCVector<CStr> const &_Lines)
+	{
+		fp_Throw(mp_Client.f_SetProtections(_Lines));
 	}
 
 	CStr CPerforceClientThrow::f_GetSecurityLevel()

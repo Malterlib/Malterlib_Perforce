@@ -276,6 +276,11 @@ namespace NMib::NPerforce
 		CStr f_GetLastFunction() const;
 		bool f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
 		bool f_GetSecurityLevel(CStr &_SecurityLevel);
+		bool f_GetLoginTicket(CStr const &_Password, bool _bAllHosts, CStr &o_Ticket);
+		bool f_CreateDepot(CStr const &_Name, CStr const &_Type);
+		bool f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword = {});
+		bool f_SetClient(CStr const &_ClientName, CClient const &_Client);
+		bool f_SetProtections(TCVector<CStr> const &_Lines);
 		bool f_Dropped();
 
 		bool f_IsUTF8() const;
@@ -561,6 +566,11 @@ namespace NMib::NPerforce
 		bool f_IsUTF8();
 		void f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
 		CStr f_GetSecurityLevel();
+		CStr f_GetLoginTicket(CStr const &_Password, bool _bAllHosts);
+		void f_CreateDepot(CStr const &_Name, CStr const &_Type);
+		void f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword = {});
+		void f_SetClient(CStr const &_ClientName, CPerforceClient::CClient const &_Client);
+		void f_SetProtections(TCVector<CStr> const &_Lines);
 
 		bool f_FileExistsInDepot(CStr const &_File);
 		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
