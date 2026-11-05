@@ -70,6 +70,10 @@ namespace NMib::NPerforce
 
 		struct CSettings
 		{
+			NStr::CStr f_GetConfigFile(NStr::CStr const &_Directory) const;
+			CSettingsFiles f_GetSettingsFiles(NStr::CStr const &_Directory) const;
+			NStr::CStr f_GetText(CSettingValue const &_Value) const;
+
 			NContainer::TCVector<CSettingValue> m_IgnoreNames; // File names, looked for in every directory above a path, and paths; none for P4IGNORE=unset
 			CSettingValue m_ConfigName;                        // P4CONFIG or empty; as in p4, its files are excluded by a name or relative path, not an absolute one
 			NStr::CStr m_EnviroFile;                        // The enviro file the settings were read with, also while missing, or empty
@@ -77,22 +81,18 @@ namespace NMib::NPerforce
 			NStr::CStr m_CommandCharset;                    // P4COMMANDCHARSET, or empty
 			NStr::CStr m_LearnedCharset;                    // Without P4CHARSET the charset p4 learned for P4PORT, P4_<port>_CHARSET, or empty
 			NStr::CStr m_LearnedCharsetVariable;            // Without P4CHARSET the name of P4_<port>_CHARSET for P4PORT, or empty
-
-			NStr::CStr f_GetConfigFile(NStr::CStr const &_Directory) const;
-			CSettingsFiles f_GetSettingsFiles(NStr::CStr const &_Directory) const;
-			NStr::CStr f_GetText(CSettingValue const &_Value) const;
 		};
-
-		static NContainer::TCVector<NStr::CStr> fs_GetEnvironmentVariables();
-		static bool fs_IsLearnedCharsetVariable(NStr::CStr const &_Name);
-		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
-		static NContainer::TCVector<CSettingValue> fs_ResolveIgnoreNames(NStr::CStr const &_IgnoreNames, NStr::CStr const &_Directory);
 
 		CPerforceIgnore(CSettings const &_Settings);
 		~CPerforceIgnore();
 
 		CPerforceIgnore(CPerforceIgnore const &_Other) = delete;
 		CPerforceIgnore &operator = (CPerforceIgnore const &_Other) = delete;
+
+		static NContainer::TCVector<NStr::CStr> fs_GetEnvironmentVariables();
+		static bool fs_IsLearnedCharsetVariable(NStr::CStr const &_Name);
+		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
+		static NContainer::TCVector<CSettingValue> fs_ResolveIgnoreNames(NStr::CStr const &_IgnoreNames, NStr::CStr const &_Directory);
 
 		bool f_IsIgnored(NStr::CStr const &_Path, bool _bDirectory) const;
 
