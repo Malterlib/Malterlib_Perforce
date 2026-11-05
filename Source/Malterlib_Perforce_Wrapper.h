@@ -26,12 +26,13 @@ namespace NMib::NPerforce
 		{
 			CIntegrationResult();
 
+			auto operator <=> (CIntegrationResult const &_Right) const noexcept = default;
+
 			EAction m_Action;
 			CStr m_From;
 			CStr m_To;
 			uint32 m_StartFromRev = 0;
 			uint32 m_EndFromRev = 0;
-			auto operator <=> (CIntegrationResult const &_Right) const noexcept = default;
 		};
 
 		struct CConnectionInfo
@@ -56,6 +57,11 @@ namespace NMib::NPerforce
 
 		struct CChangeList
 		{
+			struct CFile
+			{
+				CStr m_Name;
+			};
+
 			uint32 m_ChangeID = 0;
 			uint64 m_Date = 0;
 			bool m_bHasShelvedFiles = false;
@@ -65,27 +71,11 @@ namespace NMib::NPerforce
 			CStr m_Status;
 			CStr m_Description;
 			TCVector<CStr> m_Jobs;
-			struct CFile
-			{
-				CStr m_Name;
-			};
-
 			TCVector<CFile> m_Files;
 		};
 
 		struct CFileRev
 		{
-			CFileRev();
-
-			int32 m_ChangeList = 0;
-			int32 m_Revision = 0;
-
-			EAction m_Action;
-			uint64 m_Time = 0;
-			CStr m_User;
-			CStr m_Client;
-			CStr m_Comment;
-
 			struct CRevDesc
 			{
 				enum EHow
@@ -107,6 +97,17 @@ namespace NMib::NPerforce
 				int32 m_EndRev = 0;
 			};
 
+			CFileRev();
+
+			int32 m_ChangeList = 0;
+			int32 m_Revision = 0;
+
+			EAction m_Action;
+			uint64 m_Time = 0;
+			CStr m_User;
+			CStr m_Client;
+			CStr m_Comment;
+
 			TCVector<CRevDesc> m_RevDescs;
 		};
 
@@ -118,14 +119,14 @@ namespace NMib::NPerforce
 
 		struct CFileRevision
 		{
+			CFileRevision();
+
 			CStr m_File;
 			zint32 m_ChangeList;
 			zint32 m_Revision;
 
 			EAction m_Action;
 			zuint64 m_Time;
-
-			CFileRevision();
 		};
 
 		struct CFileRevisions
@@ -135,6 +136,8 @@ namespace NMib::NPerforce
 
 		struct CFix
 		{
+			auto operator <=> (CFix const &_Other) const noexcept = default;
+
 			CStr m_Job;
 			uint32 m_ChangeNumber = 0;
 			uint64 m_Date = 0;
@@ -142,8 +145,6 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Status;
 			uint64 m_PerforceGUID = 0;
-
-			auto operator <=> (CFix const &_Other) const noexcept = default;
 		};
 
 		struct CJob
@@ -155,17 +156,18 @@ namespace NMib::NPerforce
 
 		struct CDescription
 		{
+			struct CFile
+			{
+				CFile();
+
+				CStr m_Name;
+				EAction m_Action;
+			};
+
 			CStr m_User;
 			CStr m_ChangelistStatus;
 			TCVector<CStr> m_Jobs;
 			TCVector<CStr> m_JobStatuses;
-			struct CFile
-			{
-				CStr m_Name;
-				EAction m_Action;
-				CFile();
-			};
-
 			TCVector<CFile> m_Files;
 		};
 
@@ -246,43 +248,6 @@ namespace NMib::NPerforce
 			CStr m_Error;
 		};
 
-	private:
-		struct CP4Client;
-
-		CStr mp_InitError;
-		CStr mp_LastError;
-		CStr mp_LastFunction;
-		CP4Client *mp_pClient;
-		ClientApi *mp_pAPI;
-		Enviro *mp_pEnviro = nullptr; // The API's settings, when the connection's overrides are applied before it reads them
-		bool mp_bUTF8 = false;
-		int mp_CommandCharset = 0; // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
-		int mp_FileNamesCharset = 0; // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
-		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
-
-		CStr mp_ActiveHost;
-		CStr mp_ActiveClient;
-		CStr mp_ActiveUser;
-		CStr mp_ActiveVersion;
-
-		CConnectionInfo mp_ConnectionInfo;
-
-		bool mp_bSupportsParentView = false;
-
-		void fp_Run(char const *_pFunc);
-		void fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments);
-		void fp_CheckDropped();
-		bool fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
-		void fp_SetFileNames(CStr const &_WorkingDirectory);
-		void fp_SetTrans(int _Charset, int _ContentCharset, CStr const &_WorkingDirectory);
-		NStr::CAnsiStr fp_EncodeFileName(CStr const &_Name) const;
-		void fp_SetClientPath();
-		void fp_SetIdentity();
-
-		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
-		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
-
-	public:
 		CPerforceClient(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
 		CPerforceClient(CConnectionInfo const &_Info);
 		~CPerforceClient();
@@ -573,7 +538,42 @@ namespace NMib::NPerforce
 		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory);
 
 	private:
+		struct CP4Client;
+
+		void fp_Run(char const *_pFunc);
+		void fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments);
+		void fp_CheckDropped();
+		bool fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
+		void fp_SetFileNames(CStr const &_WorkingDirectory);
+		void fp_SetTrans(int _Charset, int _ContentCharset, CStr const &_WorkingDirectory);
+		NStr::CAnsiStr fp_EncodeFileName(CStr const &_Name) const;
+		void fp_SetClientPath();
+		void fp_SetIdentity();
+
+		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
+		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
+
 		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
+
+		CStr mp_InitError;
+		CStr mp_LastError;
+		CStr mp_LastFunction;
+		CP4Client *mp_pClient;
+		ClientApi *mp_pAPI;
+		Enviro *mp_pEnviro = nullptr; // The API's settings, when the connection's overrides are applied before it reads them
+		bool mp_bUTF8 = false;
+		int mp_CommandCharset = 0; // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
+		int mp_FileNamesCharset = 0; // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
+		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
+
+		CStr mp_ActiveHost;
+		CStr mp_ActiveClient;
+		CStr mp_ActiveUser;
+		CStr mp_ActiveVersion;
+
+		CConnectionInfo mp_ConnectionInfo;
+
+		bool mp_bSupportsParentView = false;
 	};
 
 	struct CPerforceClientThrow
@@ -820,8 +820,9 @@ namespace NMib::NPerforce
 		static bool fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client);
 
 	private:
-		CPerforceClient mp_Client;
 		void fp_Throw(bool _bResult) const;
+
+		CPerforceClient mp_Client;
 	};
 }
 
