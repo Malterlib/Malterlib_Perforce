@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Perforce_Wrapper.h"
+#include "Malterlib_Perforce_FileNames.h"
+
+#include <Mib/Time/Stopwatch>
 
 #if defined(DPlatformFamily_Windows)
 #	include <Mib/Core/PlatformSpecific/WindowsRegistry>
@@ -14,9 +17,13 @@
 #endif
 #include "clientapi.h"
 #include "i18napi.h"
+#include "charcvt.h"
 #include "enviro.h"
 #include "hostenv.h"
 #include "errornum.h"
+#include "msgdm.h"
+#include "msgserver.h"
+#include "strops.h"
 #ifdef DCompiler_MSVC
 #	pragma warning(pop)
 #endif
@@ -33,10 +40,15 @@ namespace NMib::NPerforce
 
 		virtual int IsAlive() override
 		{
+			if (m_Timeout > 0.0 && m_CommandStopwatch.f_GetTime() > m_Timeout)
+				return false;
+
 			return !m_bAbortOperation;
 		}
 
 		bool m_bAbortOperation = false;
+		fp64 m_Timeout = 0.0;                 // Seconds a command may wait for the server, or zero for no limit
+		NTime::CStopwatch m_CommandStopwatch; // Restarted for each command and for the connection
 
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
@@ -45,6 +57,9 @@ namespace NMib::NPerforce
 		TCFunction<void (CStr const &_Text)> m_fOnText;
 		bool m_bError;
 		CStr m_LastError;
+		TCVector<int> m_ErrorCodes;        // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
+		bool m_bErrorWithoutCode = false;  // An error given as text alone, without the codes
+		bool m_bHandlingError = false;     // Within HandleError, whose text OutputError gets
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 
 		void OutputText(char const *_pData, int _Length) override;
@@ -53,6 +68,8 @@ namespace NMib::NPerforce
 		void Message(Error *_pError) override;
 		void OutputError(char const *_pErrorText) override;
 		CStr f_GetInfo(CStr const &_Name);
+		bool f_HasError(ErrorId const &_Id) const;
+		bool f_HasOnlyErrors(TCVector<ErrorId const *> const &_Ids) const;
 		void OutputInfo(char _Level, char const *_pData) override;
 		void OutputBinary(char const *_pData, int _Length) override;
 		void OutputStat(StrDict *_pVariables) override;
@@ -99,10 +116,42 @@ namespace NMib::NPerforce
 		// DConOut("P4: InputData" DNewLine, 0);
 	}
 
+	// The codes of the error are kept, as its text is in the server's language.
 	void CPerforceClient::CP4Client::HandleError(Error *_pError)
 	{
-		// DDTrace("P4: HandleError: {}\r\n", _pError->GetGeneric());
-		return ClientUser::HandleError(_pError);
+		int nIds = _pError->GetErrorCount();
+		if (nIds == 0)
+			m_bErrorWithoutCode = true;
+		for (int iId = 0; iId < nIds; ++iId)
+			m_ErrorCodes.f_Insert(_pError->GetId(iId)->UniqueCode());
+
+		m_bHandlingError = true;
+		ClientUser::HandleError(_pError);
+		m_bHandlingError = false;
+	}
+
+	// Whether any error or warning of the command was the one of _Id.
+	bool CPerforceClient::CP4Client::f_HasError(ErrorId const &_Id) const
+	{
+		return m_ErrorCodes.f_Contains(_Id.UniqueCode()) >= 0;
+	}
+
+	// Whether the command had errors or warnings, all of them among _Ids.
+	bool CPerforceClient::CP4Client::f_HasOnlyErrors(TCVector<ErrorId const *> const &_Ids) const
+	{
+		if (m_bErrorWithoutCode || m_ErrorCodes.f_IsEmpty())
+			return false;
+
+		for (int Code : m_ErrorCodes)
+		{
+			bool bFound = false;
+			for (auto *pId : _Ids)
+				bFound = bFound || pId->UniqueCode() == Code;
+			if (!bFound)
+				return false;
+		}
+
+		return true;
 	}
 
 	void CPerforceClient::CP4Client::Message(Error *_pError)
@@ -118,6 +167,8 @@ namespace NMib::NPerforce
 	void CPerforceClient::CP4Client::OutputError(char const *_pErrorText)
 	{
 		m_bError = true;
+		if (!m_bHandlingError)
+			m_bErrorWithoutCode = true;
 		m_LastError += m_pClient->f_DecodeStr(_pErrorText) + "\r\n";
 		// 		DConOut("P4: OutputError: {}" DNewLine, _pErrorText);
 		// return ClientUser::OutputError( _pErrorText );
@@ -255,6 +306,8 @@ namespace NMib::NPerforce
 		m_Infos.f_Clear();
 		m_bError = false;
 		m_LastError.f_Clear();
+		m_ErrorCodes.f_Clear();
+		m_bErrorWithoutCode = false;
 		m_PromtOverride.f_Clear();
 		m_bAbortOperation = false;
 	}
@@ -307,28 +360,122 @@ namespace NMib::NPerforce
 		mp_pClient = nullptr;
 		mp_pAPI = nullptr;
 		mp_pClient = fg_ConstructObject<CP4Client>(NMemory::CDefaultAllocator(), this);
-		mp_pAPI = fg_ConstructObject<ClientApi>(NMemory::CDefaultAllocator());
+
+		// The API's own settings would read the current directory's P4CONFIG files and the enviro file of the environment as it is
+		// constructed, which a FIFO among them blocks, so the settings are made here, with the connection's enviro file and
+		// P4CONFIG applied before anything is read from them.
+		mp_pEnviro = fg_ConstructObject<Enviro>(NMemory::CDefaultAllocator());
+		if (_Info.m_EnviroFile != "")
+			mp_pEnviro->SetEnviroFile(fp_EncodeFileName(_Info.m_EnviroFile).f_GetStr());
+		if (_Info.m_ConfigName)
+			mp_pEnviro->Update("P4CONFIG", fp_EncodeFileName(*_Info.m_ConfigName).f_GetStr());
+		mp_pAPI = fg_ConstructObject<ClientApi>(NMemory::CDefaultAllocator(), mp_pEnviro);
 		Error P4error;
 
 		if (mp_pAPI)
 		{
+			mp_ConnectionInfo = _Info;
+
+			// The break callback bounds the reads of commands. Init's blocking TCP connect consults no callback, so only the system
+			// bounds it.
+			mp_pClient->m_Timeout = _Info.m_Timeout;
+			mp_pClient->m_CommandStopwatch.f_Start();
+			mp_pAPI->SetBreak(mp_pClient);
+			if (_Info.m_bIgnorePasswordSetting)
+				mp_pAPI->SetIgnorePassword();
+			if (_Info.m_Charset != "")
+				mp_pAPI->SetCharset(f_EncodeStr(_Info.m_Charset));
+
+			// Setting the enviro file reloads the settings without the current directory's, so the directory is always set.
+			CStr WorkingDirectory = _Info.m_WorkingDirectory;
+			if (WorkingDirectory.f_IsEmpty())
+				WorkingDirectory = NFile::CFile::fs_GetCurrentDirectory();
+			fp_SetFileNames(WorkingDirectory);
 			if (_Info.m_Server != "")
 				mp_pAPI->SetPort(f_EncodeStr(_Info.m_Server));
+			fp_SetIdentity();
 			if (!_Info.m_bDisableTagging)
 				mp_pAPI->SetProtocol("tag", "");
 			//mp_pAPI->SetProtocol("api", "58");
 
+			// p4's charsets as its command line client selects them (fg_PerforceCharsets): from the connection's charset or else
+			// P4CHARSET, P4COMMANDCHARSET, and without either the charset p4 learned for the port, read as p4 reads them, before any
+			// translation. "auto" resolves to the console's code page, which can be UTF-8. With a translation Init would set it up
+			// itself, with the overrides still spelled for no translation, so it is set up here, and the settings are applied again
+			// after it, respelled.
+			Enviro *pEnviro = mp_pAPI->GetEnviro();
+			auto fSetting = [&](ch8 const *_pName, CAnsiStr &o_Value) -> ch8 const *
+				{
+					ch8 const *pValue = pEnviro->Get(_pName);
+					if (!pValue)
+						return nullptr;
+					o_Value = pValue;
+					return o_Value.f_GetStr();
+				}
+			;
+			CAnsiStr Charset;
+			ch8 const *pCharset = nullptr;
+			if (_Info.m_Charset != "")
+			{
+				Charset = f_EncodeStr(_Info.m_Charset).f_GetStr();
+				pCharset = Charset.f_GetStr();
+			}
+			else
+				pCharset = fSetting("P4CHARSET", Charset);
+			CAnsiStr CommandCharset;
+			ch8 const *pCommandCharset = nullptr;
+			if (_Info.m_CommandCharset)
+			{
+				CommandCharset = _Info.m_CommandCharset->f_GetStr();
+				pCommandCharset = CommandCharset ? CommandCharset.f_GetStr() : nullptr;
+			}
+			else
+				pCommandCharset = fSetting("P4COMMANDCHARSET", CommandCharset);
+			CAnsiStr LearnedCharset;
+			ch8 const *pLearnedCharset = nullptr;
+			if (!pCharset)
+			{
+				CAnsiStr Port = mp_pAPI->GetPort().Text();
+				CAnsiStr LearnedName = CAnsiStr("P4_") + Port.f_Replace("=", "@") + "_CHARSET";
+				pLearnedCharset = fSetting(LearnedName.f_GetStr(), LearnedCharset);
+			}
+
+			CPerforceCharsets Charsets = fg_PerforceCharsets(pCharset, pCommandCharset, pLearnedCharset, pEnviro);
+			if (Charsets.m_Error)
+				mp_InitError = Charsets.m_Error;
+			for (auto UTF8Charset : {CharSetApi::UTF_8, CharSetApi::UTF_8_BOM, CharSetApi::UTF_8_UNCHECKED, CharSetApi::UTF_8_UNCHECKED_BOM})
+				mp_bUTF8 = mp_bUTF8 || (Charsets.m_bTranslated && Charsets.m_Command == UTF8Charset);
+			if (Charsets.m_bTranslated)
+			{
+				fp_SetTrans(Charsets.m_Command, Charsets.m_Content, WorkingDirectory);
+				fp_SetFileNames(WorkingDirectory);
+				if (_Info.m_Server != "")
+					mp_pAPI->SetPort(f_EncodeStr(_Info.m_Server));
+				fp_SetIdentity();
+			}
+
 			mp_pAPI->Init(&P4error);
+
+			// Without a charset Init learns the server's: a Unicode server's sessions are translated from then on ("auto"), which
+			// the overrides are respelled for, as for a translation set up here. The settings keep the overrides through the
+			// translation's reload of them (enviro.cc's SetCharSet), so it reads no P4CONFIG files the connection overrides.
+			if (mp_pAPI->IsUnicode() && mp_pAPI->GetTrans() != mp_CommandCharset)
+			{
+				mp_CommandCharset = mp_pAPI->GetTrans();
+				mp_FileNamesCharset = mp_CommandCharset;
+				for (auto UTF8Charset : {CharSetApi::UTF_8, CharSetApi::UTF_8_BOM, CharSetApi::UTF_8_UNCHECKED, CharSetApi::UTF_8_UNCHECKED_BOM})
+					mp_bUTF8 = mp_bUTF8 || mp_CommandCharset == UTF8Charset;
+				fp_SetFileNames(WorkingDirectory);
+				fp_SetIdentity();
+			}
+			fp_SetClientPath();
 			if (P4error.IsError())
 			{
 				StrBuf Buffer;
 				P4error.Fmt(&Buffer);
 				mp_InitError = Buffer.Text();
 			}
-			mp_pAPI->SetBreak(mp_pClient);
 			mp_pAPI->SetProg("Malterlib Perforce Wrapper");
-
-			mp_ConnectionInfo = _Info;
 		}
 	}
 
@@ -397,6 +544,15 @@ namespace NMib::NPerforce
 		return mp_LastFunction;
 	}
 
+	// A field of the tagged output of the last command, like "serverVersion" of f_Info, or empty.
+	CStr CPerforceClient::f_GetLastInfo(CStr const &_Name) const
+	{
+		if (!mp_pClient)
+			return {};
+
+		return mp_pClient->f_GetInfo(_Name);
+	}
+
 	CStr CPerforceClient::f_GetLastError() const
 	{
 		if (!mp_LastError.f_IsEmpty())
@@ -446,40 +602,135 @@ namespace NMib::NPerforce
 		DConOutRaw(ToOutput);
 #endif
 
+		mp_pClient->m_CommandStopwatch.f_Start();
 		mp_pAPI->SetVar("enableStreams");
 		mp_pAPI->Run(_pFunc, mp_pClient);
+		fp_CheckDropped();
 	}
 
 	void CPerforceClient::fp_Run(char const *_pFunc)
 	{
+		mp_pClient->m_CommandStopwatch.f_Start();
 		mp_pAPI->SetVar("enableStreams");
 		mp_pAPI->Run(_pFunc, mp_pClient);
+		fp_CheckDropped();
+	}
+
+	// A name of a file the API opens itself, through its file functions: in the encoding of its file names (fg_FileNameEncoding),
+	// not the command charset of arguments and output.
+	NStr::CAnsiStr CPerforceClient::fp_EncodeFileName(CStr const &_Name) const
+	{
+		return fg_EncodePerforceString(_Name, fg_FileNameEncoding(mp_FileNamesCharset));
+	}
+
+	// Called again whenever the charset changes, which changes how the API names files.
+	void CPerforceClient::fp_SetFileNames(CStr const &_WorkingDirectory)
+	{
+		if (mp_ConnectionInfo.m_EnviroFile != "")
+			mp_pAPI->SetEnviroFile(fp_EncodeFileName(mp_ConnectionInfo.m_EnviroFile).f_GetStr());
+		if (mp_ConnectionInfo.m_TicketFile != "")
+			mp_pAPI->SetTicketFile(fp_EncodeFileName(mp_ConnectionInfo.m_TicketFile).f_GetStr());
+		if (mp_ConnectionInfo.m_IgnoreFiles != "")
+			mp_pAPI->SetIgnoreFile(fp_EncodeFileName(mp_ConnectionInfo.m_IgnoreFiles).f_GetStr());
+
+		// The API has no setter for P4CONFIG, which the working directory's files are found by. Without one the settings of the
+		// files found before are read again without them.
+		if (mp_ConnectionInfo.m_ConfigName)
+		{
+			CAnsiStr ConfigName = fp_EncodeFileName(*mp_ConnectionInfo.m_ConfigName);
+			if (ConfigName.f_IsEmpty())
+				mp_pAPI->GetEnviro()->Reload();
+			mp_pAPI->GetEnviro()->Update("P4CONFIG", ConfigName.f_GetStr());
+		}
+		if (_WorkingDirectory != "")
+			mp_pAPI->SetCwd(fp_EncodeFileName(_WorkingDirectory).f_GetStr());
+		fp_SetClientPath();
+	}
+
+	// Translates the strings to the command charset _Charset, which is also the one of the output, the file names and the dialogs,
+	// and the contents of files to _ContentCharset. A translation sets the charset of the settings, which on Windows reads them
+	// again in it, keeping the connection's overrides as they were spelled, and then reads the P4CONFIG files of the working
+	// directory, so the charset is set and the overrides spelled in it first, and the translation's setting of the same charset
+	// keeps them.
+	void CPerforceClient::fp_SetTrans(int _Charset, int _ContentCharset, CStr const &_WorkingDirectory)
+	{
+		mp_CommandCharset = _Charset;
+		mp_FileNamesCharset = _Charset;
+#ifdef DPlatformFamily_Windows
+		// Untranslated the API's translation leaves the settings' charset as it was, while an untranslated session reads them in
+		// the code page, so their charset is set here too.
+		mp_pAPI->GetEnviro()->SetCharSet(_Charset);
+		fp_SetFileNames(_WorkingDirectory);
+#endif
+		mp_pAPI->SetTrans(_Charset, _ContentCharset, _Charset, _Charset);
+	}
+
+	// The API has no setter for P4CLIENTPATH, so the setting is overridden in its settings, which a change of charset reloads.
+	// Without P4CLIENTPATH the API restricts the files to P4INITROOT, so "unset" clears that too.
+	void CPerforceClient::fp_SetClientPath()
+	{
+		if (mp_ConnectionInfo.m_ClientPath == "")
+			return;
+
+		if (mp_ConnectionInfo.m_ClientPath == "unset")
+		{
+			mp_pAPI->GetEnviro()->Update("P4CLIENTPATH", "");
+			mp_pAPI->GetEnviro()->Update("P4INITROOT", "");
+			return;
+		}
+
+		mp_pAPI->GetEnviro()->Update("P4CLIENTPATH", fp_EncodeFileName(mp_ConnectionInfo.m_ClientPath).f_GetStr());
+	}
+
+	// Called again whenever the charset changes. A session that never logs in needs the identity too. What the connection leaves
+	// unset the API takes from its settings, in the charset they are read in, and keeps: it is cleared, so that it is read again in
+	// the new one.
+	void CPerforceClient::fp_SetIdentity()
+	{
+		mp_pAPI->SetUser(mp_ConnectionInfo.m_User != "" ? f_EncodeStr(mp_ConnectionInfo.m_User).f_GetStr() : "");
+		mp_pAPI->SetHost(mp_ConnectionInfo.m_Host != "" ? f_EncodeStr(mp_ConnectionInfo.m_Host).f_GetStr() : "");
+		mp_pAPI->SetClient(mp_ConnectionInfo.m_Client != "" ? f_EncodeStr(mp_ConnectionInfo.m_Client).f_GetStr() : "");
+	}
+
+	// A broken connection, as the timeout breaks it, gives no error of its own. A timeout is reported even after the command's
+	// warnings, which don't tell that its output is incomplete.
+	void CPerforceClient::fp_CheckDropped()
+	{
+		if (!mp_pAPI->Dropped())
+			return;
+
+		if (mp_pClient->m_Timeout > 0.0 && mp_pClient->m_CommandStopwatch.f_GetTime() > mp_pClient->m_Timeout)
+		{
+			mp_pClient->m_bError = true;
+			mp_pClient->m_LastError += "The Perforce server did not answer within {} seconds\r\n"_f << mp_pClient->m_Timeout;
+		}
+		else if (!mp_pClient->m_bError)
+		{
+			mp_pClient->m_bError = true;
+			mp_pClient->m_LastError += "The connection to the Perforce server was lost\r\n";
+		}
 	}
 
 	bool CPerforceClient::f_Login(CStr const &_Password, CStr const &_WorkingDir)
 	{
 		DCheckApi("Login");
 
-		if (!_WorkingDir.f_IsEmpty())
-		{
-			CStr CurrentDir = _WorkingDir;
-			mp_pAPI->SetCwd(CurrentDir);
-		}
-		else
-		{
-			CStr CurrentDir = NFile::CFile::fs_GetCurrentDirectory();
-			mp_pAPI->SetCwd(CurrentDir);
-		}
+		CStr WorkingDirectory = _WorkingDir;
+		if (WorkingDirectory.f_IsEmpty())
+			WorkingDirectory = mp_ConnectionInfo.m_WorkingDirectory;
+		if (WorkingDirectory.f_IsEmpty())
+			WorkingDirectory = NFile::CFile::fs_GetCurrentDirectory();
 
-		mp_bUTF8 = false;
-		mp_pAPI->SetCharset("");
-		mp_pAPI->SetTrans(CharSetApi::NOCONV);
-		if (mp_ConnectionInfo.m_User != "")
-			mp_pAPI->SetUser(f_EncodeStr(mp_ConnectionInfo.m_User));
-		if (mp_ConnectionInfo.m_Host != "")
-			mp_pAPI->SetHost(f_EncodeStr(mp_ConnectionInfo.m_Host));
-		if (mp_ConnectionInfo.m_Client != "")
-			mp_pAPI->SetClient(f_EncodeStr(mp_ConnectionInfo.m_Client));
+		// A session that the connection or its settings made UTF-8 stays so until a non-Unicode server refuses it: on Windows the
+		// settings under a path outside the code page are only found with UTF-8 file names, and the API caches the user and client
+		// it reads from them. Other sessions start untranslated until a Unicode server refuses them.
+		if (!mp_bUTF8)
+		{
+			mp_pAPI->SetCharset("");
+			fp_SetTrans(CharSetApi::NOCONV, CharSetApi::NOCONV, WorkingDirectory);
+		}
+		fp_SetFileNames(WorkingDirectory);
+		fp_SetIdentity();
 
 		bool bTriedTrust = false;
 
@@ -490,17 +741,22 @@ namespace NMib::NPerforce
 			mp_pAPI->SetArgv(0, (char * const *)CommandsProtect);
 			fp_Run("protects");
 
-			if (mp_pClient->m_bError && mp_pClient->m_LastError.f_Find("Unicode server permits only unicode enabled clients.") >= 0)
+			if (mp_pClient->m_bError && mp_pClient->f_HasError(MsgServer::Unicode))
 			{
 				mp_pAPI->SetCharset("utf8");
-				mp_pAPI->SetTrans(CharSetApi::UTF_8);
 				mp_bUTF8 = true;
-				if (mp_ConnectionInfo.m_User != "")
-					mp_pAPI->SetUser(f_EncodeStr(mp_ConnectionInfo.m_User));
-				if (mp_ConnectionInfo.m_Host != "")
-					mp_pAPI->SetHost(f_EncodeStr(mp_ConnectionInfo.m_Host));
-				if (mp_ConnectionInfo.m_Client != "")
-					mp_pAPI->SetClient(f_EncodeStr(mp_ConnectionInfo.m_Client));
+				fp_SetTrans(CharSetApi::UTF_8, CharSetApi::UTF_8, WorkingDirectory);
+				fp_SetFileNames(WorkingDirectory);
+				fp_SetIdentity();
+				continue;
+			}
+			else if (mp_bUTF8 && mp_pClient->m_bError && mp_pClient->f_HasError(MsgServer::Unicode2))
+			{
+				mp_pAPI->SetCharset("");
+				mp_bUTF8 = false;
+				fp_SetTrans(CharSetApi::NOCONV, CharSetApi::NOCONV, WorkingDirectory);
+				fp_SetFileNames(WorkingDirectory);
+				fp_SetIdentity();
 				continue;
 			}
 			else if
@@ -524,7 +780,7 @@ namespace NMib::NPerforce
 				mp_pClient->m_PromtOverride.f_Clear();
 				if (mp_pClient->m_bError)
 				{
-					if (mp_pClient->m_LastError.f_Find("Unicode server permits only unicode enabled clients.") >= 0)
+					if (mp_pClient->f_HasError(MsgServer::Unicode))
 						continue;
 					fOnError();
 					return false;
@@ -574,7 +830,8 @@ namespace NMib::NPerforce
 				}
 				continue;
 			}
-			else if (mp_pClient->m_bError)
+			// An open server has no protections table, which fails p4 protects after the server accepted the session.
+			else if (mp_pClient->m_bError && !mp_pClient->f_HasOnlyErrors({&MsgDm::ProtectsEmpty}))
 			{
 				fOnError();
 				return false;
@@ -584,6 +841,7 @@ namespace NMib::NPerforce
 		}
 
 		{
+			DCheckApi("Login");
 			char const *Commands[] = {0};
 			mp_pAPI->SetArgv(0, (char * const *)Commands);
 			fp_Run("info");
@@ -698,6 +956,18 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_SetClient(CStr const &_ClientName, CClient const &_Client)
 	{
 		DCheckApi(CStr::CFormat("SetClient({})") << _ClientName);
+
+		// Root and AltRoots are line fields, which take a value as it is, spaces included, but where a # starts a comment that
+		// would cut the root short. p4d refuses a # in a root anyway.
+		for (auto const *pRoot : {&_Client.m_Root, &_Client.m_AltRoot0, &_Client.m_AltRoot1})
+		{
+			if (pRoot->f_FindChar('#') >= 0)
+			{
+				mp_LastError = "The client root '{}' has a #, which a client spec cannot hold"_f << *pRoot;
+				fOnError();
+				return false;
+			}
+		}
 
 		CStr Spec;
 		Spec += CStr::CFormat("Client:	{}\n") << _ClientName;
@@ -901,6 +1171,8 @@ namespace NMib::NPerforce
 			mp_pAPI->Final(&P4error);
 			fg_DeleteObject(NMemory::CDefaultAllocator(), mp_pAPI);
 		}
+		if (mp_pEnviro)
+			fg_DeleteObject(NMemory::CDefaultAllocator(), mp_pEnviro);
 		if (mp_pClient)
 			fg_DeleteObject(NMemory::CDefaultAllocator(), mp_pClient);
 	}
@@ -947,8 +1219,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			CStr Error = f_GetLastError();
-			if (Error.f_Find(" - no such file(s).") >= 0)
+			if (mp_pClient->f_HasError(MsgDm::ExFILE))
 			{
 				mp_LastError.f_Clear();
 				mp_pClient->m_LastError.f_Clear();
@@ -983,8 +1254,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			CStr Error = f_GetLastError();
-			if (Error.f_Find(" - no such file(s).") >= 0)
+			if (mp_pClient->f_HasError(MsgDm::ExFILE))
 			{
 				mp_LastError.f_Clear();
 				mp_pClient->m_LastError.f_Clear();
@@ -1049,7 +1319,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			if (mp_pClient->m_LastError.f_FindReverse(" - no such file(s).") >= 0)
+			if (mp_pClient->f_HasError(MsgDm::ExFILE))
 			{
 				mp_pClient->m_LastError = CStr();
 				return false;
@@ -1363,6 +1633,128 @@ namespace NMib::NPerforce
 			}
 			return true;
 		}
+	}
+
+	bool CPerforceClient::fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles)
+	{
+		fp_Run("fstat", _Arguments);
+
+		CStr ToFindClient = "clientFile ";
+		for (CStr const &Info : mp_pClient->m_Infos)
+		{
+			if (Info.f_StartsWith(ToFindClient))
+				o_ClientFiles.f_Insert(Info.f_Extract(ToFindClient.f_GetLen()));
+		}
+
+		if (!mp_pClient->m_bError)
+			return true;
+
+		// A path or changelist without files is a warning, one line per argument. After a dropped connection the output can be
+		// incomplete.
+		return !mp_pAPI->Dropped() && mp_pClient->f_HasOnlyErrors({&MsgDm::ExFILE, &MsgDm::ExOPENCLIENT, &MsgDm::ExATCHANGE});
+	}
+
+	// The local paths of the files `p4 fstat` reports, opened for add or not, like {"-Ro", "<Root>/..."} for the opened files
+	// and {"-c", "<Changelist>", "<Root>/..."} for those changed at or after a changelist. No match gives no files.
+	bool CPerforceClient::f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles)
+	{
+		DCheckApi(CStr::CFormat("GetFileStatClientFiles({})") << CStr::fs_Join(_Arguments, " "));
+
+		TCVector<CStr> ClientFiles;
+		if (!fp_FileStatClientFiles(_Arguments, ClientFiles))
+		{
+			fOnError();
+			return false;
+		}
+
+		for (auto const &ClientFile : ClientFiles)
+			o_ClientFiles.f_Insert(fg_MalterlibPath(ClientFile));
+
+		return true;
+	}
+
+	// The files of f_GetFileStatClientFiles under _LocalRoot, spelled as _LocalRoot is. p4 spells local paths with the workspace's
+	// root, which can differ in case, separators, symbolic links or alternate root, so the files are mapped through client syntax.
+	bool CPerforceClient::f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files)
+	{
+		DCheckApi(CStr::CFormat("GetFileStatFilesUnder({}, {})") << _LocalRoot << CStr::fs_Join(_Arguments, " "));
+
+		// Any mapping's client path, //<Client>/<Path>, and local path, <Root>/<Path>, share <Path>, which gives the root as p4
+		// spells it. Every mapping of the view has that root.
+		fp_Run("where", {fs_EscapeFileName(_LocalRoot) / "..."});
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		CStr MappedClient = mp_pClient->f_GetInfo("clientFile");
+		CStr MappedLocal = fg_MalterlibPath(mp_pClient->f_GetInfo("path"));
+		aint iClientPath = MappedClient.f_StartsWith("//") ? MappedClient.f_Extract(2).f_FindChar('/') : -1;
+		if (iClientPath >= 0)
+			iClientPath += 2;
+		if (iClientPath < 0 || MappedLocal.f_IsEmpty())
+		{
+			mp_LastError = "'{}' is not in the workspace's view"_f << _LocalRoot;
+			fOnError();
+			return false;
+		}
+
+		CStr ClientPrefix = MappedClient.f_Left(iClientPath + 1);
+		CStr MappedPath = fs_UnescapeFileName(MappedClient.f_Extract(iClientPath + 1));
+		if (!MappedLocal.f_EndsWith(MappedPath))
+		{
+			mp_LastError = "'{}' maps to '{}', which is not under the workspace's root"_f << MappedClient << MappedLocal;
+			fOnError();
+			return false;
+		}
+		CStr WorkspaceRoot = MappedLocal.f_Left(MappedLocal.f_GetLen() - MappedPath.f_GetLen());
+
+		// p4 accepted _LocalRoot as under the root, ignoring case where the server does, and always on Windows.
+#ifdef DPlatformFamily_Windows
+		bool bIgnoreCase = true;
+#else
+		bool bIgnoreCase = mp_pAPI->GetProtocol("nocase") != nullptr;
+#endif
+		auto fStartsWith = [&](CStr const &_Path, CStr const &_Prefix)
+			{
+				if (_Path.f_GetLen() < _Prefix.f_GetLen())
+					return false;
+				CStr Start = _Path.f_Left(_Prefix.f_GetLen());
+				return bIgnoreCase ? Start.f_CmpNoCase(_Prefix) == 0 : Start == _Prefix;
+			}
+		;
+		CStr LocalRoot = fg_DirectoryPrefix(_LocalRoot);
+		if (!fStartsWith(LocalRoot, WorkspaceRoot))
+		{
+			mp_LastError = "'{}' is not under the workspace's root '{}'"_f << _LocalRoot << WorkspaceRoot;
+			fOnError();
+			return false;
+		}
+		CStr LocalRootPath = LocalRoot.f_Extract(WorkspaceRoot.f_GetLen());
+
+		mp_pClient->Clear();
+		// A file a view maps more than once, with & ditto mappings, has a client file per mapping with -Om.
+		TCVector<CStr> Arguments = {"-Op", "-Om"};
+		Arguments.f_Insert(_Arguments);
+		TCVector<CStr> ClientFiles;
+		if (!fp_FileStatClientFiles(Arguments, ClientFiles))
+		{
+			fOnError();
+			return false;
+		}
+
+		for (auto const &ClientFile : ClientFiles)
+		{
+			if (!ClientFile.f_StartsWith(ClientPrefix))
+				continue;
+
+			CStr Path = fs_UnescapeFileName(ClientFile.f_Extract(ClientPrefix.f_GetLen()));
+			if (Path.f_GetLen() > LocalRootPath.f_GetLen() && fStartsWith(Path, LocalRootPath))
+				o_Files.f_Insert(_LocalRoot / Path.f_Extract(LocalRootPath.f_GetLen()));
+		}
+
+		return true;
 	}
 
 	bool CPerforceClient::f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User)
@@ -1893,6 +2285,22 @@ namespace NMib::NPerforce
 	CStr CPerforceClient::fs_FixSpecialChars(CStr const &_In)
 	{
 		return _In.f_ReplaceChar('\"', '\'');
+	}
+
+	// Escapes the @, #, % and * that a file specification reads as revisions and wildcards.
+	CStr CPerforceClient::fs_EscapeFileName(CStr const &_FileName)
+	{
+		StrBuf Escaped;
+		StrOps::WildToStr(StrRef(_FileName.f_GetStr()), Escaped);
+		return Escaped.Text();
+	}
+
+	// The reverse of fs_EscapeFileName, for paths p4 gives.
+	CStr CPerforceClient::fs_UnescapeFileName(CStr const &_FileName)
+	{
+		StrBuf Unescaped;
+		StrOps::StrToWild(StrRef(_FileName.f_GetStr()), Unescaped);
+		return Unescaped.Text();
 	}
 
 	CStr CPerforceClient::fs_FixWhiteSpace(CStr const &_In)
@@ -3715,14 +4123,11 @@ namespace NMib::NPerforce
 	{
 		DCheckApi(CStr::CFormat("GetClients({})") << _SearchPattern);
 
-		char const *Commands[] = {"-e", (ch8 *)_SearchPattern.f_GetStr()};
+		TCVector<CStr> Arguments;
+		if (!_SearchPattern.f_IsEmpty())
+			Arguments = {"-e", _SearchPattern};
 
-		if (_SearchPattern.f_IsEmpty())
-			mp_pAPI->SetArgv(0, (char * const *)Commands);
-		else
-			mp_pAPI->SetArgv(2, (char * const *)Commands);
-
-		fp_Run("clients");
+		fp_Run("clients", Arguments);
 
 		if (mp_pClient->m_bError)
 		{
@@ -3754,12 +4159,7 @@ namespace NMib::NPerforce
 
 		DCheckApi(CStr::CFormat("GetClient({})") << _ClientName);
 
-		char const *Commands[] = {"-o", nullptr};
-		Commands[1] = (ch8 *)_ClientName.f_GetStr();
-
-		mp_pAPI->SetArgv(2, (char * const *)Commands);
-
-		fp_Run("client");
+		fp_Run("client", {"-o", _ClientName});
 		if (mp_pClient->m_bError)
 		{
 			fOnError();
@@ -3788,12 +4188,7 @@ namespace NMib::NPerforce
 
 		DCheckApi(CStr::CFormat("GetClient({})") << _ClientName);
 
-		char const *Commands[] = {"-o", nullptr};
-		Commands[1] = (ch8 *)_ClientName.f_GetStr();
-
-		mp_pAPI->SetArgv(2, (char * const *)Commands);
-
-		fp_Run("client");
+		fp_Run("client", {"-o", _ClientName});
 		if (mp_pClient->m_bError)
 		{
 			fOnError();
@@ -4935,9 +5330,7 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_OpenForEdit(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("OpenForEdit({})") << _File);
-		char const *Commands[] = {(ch8 *)_File.f_GetStr()};
-		mp_pAPI->SetArgv(1, (char * const *)Commands);
-		fp_Run("edit");
+		fp_Run("edit", {_File});
 		if (mp_pClient->m_bError)
 		{
 			fOnError();
@@ -5012,9 +5405,7 @@ namespace NMib::NPerforce
 
 		if (_Job.f_IsEmpty())
 		{
-			char const *Commands[] = {"-d", (ch8 *)_Comment.f_GetStr(), (ch8 *)_File.f_GetStr()};
-			mp_pAPI->SetArgv(3, (char * const *)Commands);
-			fp_Run("submit");
+			fp_Run("submit", {"-d", _Comment, _File});
 			if (mp_pClient->m_bError)
 			{
 				fOnError();
@@ -5109,12 +5500,14 @@ namespace NMib::NPerforce
 			return true;
 	}
 
-	bool CPerforceClient::f_Add(CStr const &_File)
+	// With _bLiteral an @, #, % or * in the name is part of it (p4 add -f).
+	bool CPerforceClient::f_Add(CStr const &_File, bool _bLiteral)
 	{
 		DCheckApi(CStr::CFormat("Add({})") << _File);
-		char const *Commands[] = {(ch8 *)_File.f_GetStr()};
-		mp_pAPI->SetArgv(1, (char * const *)Commands);
-		fp_Run("add");
+		if (_bLiteral)
+			fp_Run("add", {"-f", _File});
+		else
+			fp_Run("add", {_File});
 		if (mp_pClient->m_bError)
 		{
 			fOnError();
@@ -5223,38 +5616,60 @@ namespace NMib::NPerforce
 		*/
 	}
 
+	// The API takes and gives strings, paths among them, in the command charset (never a wide one), which they are converted to
+	// and from with the API's own converters, unless it is UTF-8. Without a command charset (none) the API passes them on as the
+	// bytes they are, as p4 does: in a translated session, whose server is a Unicode one, as UTF-8 bytes, and in a session that
+	// translates nothing as UTF-8 bytes outside Windows and in the active code page on Windows.
 	CStr CPerforceClient::f_EncodeStr(CStr const &_Str)
 	{
 		if (mp_bUTF8)
 			return _Str;
 
+		if (mp_CommandCharset > CharSetApi::NOCONV)
+			return fg_ConvertCharset(_Str, mp_CommandCharset, true);
+
+		if (mp_pAPI && mp_pAPI->IsUnicode())
+			return _Str;
+
+#ifndef DPlatformFamily_Windows
+		return _Str;
+#else
 		CAnsiStr Temp;
 		NMib::NStr::NPlatform::fg_SystemEncodeAnsiStr(_Str, Temp, '?');
 
 		CStr Out;
 		Out.f_AddStr(Temp.f_GetStr(), Temp.f_GetLen());
 		return Out;
+#endif
 	}
 
 	CStr CPerforceClient::f_DecodeStr(CStr const &_Str)
 	{
 		if (mp_bUTF8)
 			return _Str;
-		else
+
+		if (mp_CommandCharset > CharSetApi::NOCONV)
+			return fg_ConvertCharset(_Str, mp_CommandCharset, false);
+
+		if (mp_pAPI && mp_pAPI->IsUnicode())
+			return _Str;
+
+#ifndef DPlatformFamily_Windows
+		return _Str;
+#else
+		CAnsiStr Temp;
+		Temp.f_AddStr(_Str.f_GetStr(), _Str.f_GetLen());
+		CStr Out;
+		try
 		{
-			CAnsiStr Temp;
-			Temp.f_AddStr(_Str.f_GetStr(), _Str.f_GetLen());
-			CStr Out;
-			try
-			{
-				NMib::NStr::NPlatform::fg_SystemDecodeAnsiStr(Temp, Out);
-			}
-			catch (CException const &)
-			{
-				return _Str; // No conversion performed
-			}
-			return Out;
+			NMib::NStr::NPlatform::fg_SystemDecodeAnsiStr(Temp, Out);
 		}
+		catch (CException const &)
+		{
+			return _Str; // No conversion performed
+		}
+		return Out;
+#endif
 	}
 
 	CPerforceClientThrow::CPerforceClientThrow(CStr const &_Server, CStr const &_User, CStr const &_Client, CStr const &_Host)
@@ -5441,6 +5856,20 @@ namespace NMib::NPerforce
 	{
 		TCVector<CStr> Ret;
 		fp_Throw(mp_Client.f_Files(_Search, Ret, _Deleted));
+		return Ret;
+	}
+
+	TCVector<CStr> CPerforceClientThrow::f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments)
+	{
+		TCVector<CStr> Ret;
+		fp_Throw(mp_Client.f_GetFileStatClientFiles(_Arguments, Ret));
+		return Ret;
+	}
+
+	TCVector<CStr> CPerforceClientThrow::f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments)
+	{
+		TCVector<CStr> Ret;
+		fp_Throw(mp_Client.f_GetFileStatFilesUnder(_LocalRoot, _Arguments, Ret));
 		return Ret;
 	}
 
@@ -5686,9 +6115,9 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_RevertChangelist(_Changelist, _bOnlyIfUnchanged, _bDeleteAddedFiles));
 	}
 
-	void CPerforceClientThrow::f_Add(CStr const &_File)
+	void CPerforceClientThrow::f_Add(CStr const &_File, bool _bLiteral)
 	{
-		fp_Throw(mp_Client.f_Add(_File));
+		fp_Throw(mp_Client.f_Add(_File, _bLiteral));
 	}
 
 	void CPerforceClientThrow::f_Delete(CStr const &_File)
@@ -6134,6 +6563,16 @@ namespace NMib::NPerforce
 			Path = CFile::fs_GetPath(Path);
 		}
 		return false;
+	}
+
+	// The connection p4 run in the directory makes: what its settings leave unset takes p4's defaults, not the current
+	// directory's settings.
+	CPerforceClient::CConnectionInfo CPerforceClient::fs_GetConnectionInfo(CStr const &_Directory)
+	{
+		CConnectionInfo Info;
+		Info.m_WorkingDirectory = _Directory;
+
+		return Info;
 	}
 
 	bool CPerforceClient::fs_HasP4Config(CStr const &_Path)

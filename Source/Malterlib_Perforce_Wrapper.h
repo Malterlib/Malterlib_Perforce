@@ -6,6 +6,7 @@
 #include <Mib/Container/Registry>
 
 class ClientApi; // NOLINT(malterlib-type-naming): the name in the Perforce API
+class Enviro; // NOLINT(malterlib-type-naming): the name in the Perforce API
 
 namespace NMib::NPerforce
 {
@@ -40,7 +41,17 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Host;
 			CStr m_TrustedCertificateDigest;
+			CStr m_WorkingDirectory;                 // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
+			CStr m_TicketFile;
+			CStr m_EnviroFile;
+			CStr m_Charset;                          // Overrides P4CHARSET, like "none" or "utf8"
+			NStorage::TCOptional<CStr> m_CommandCharset; // Overrides P4COMMANDCHARSET, as p4's -Q; empty for none
+			CStr m_IgnoreFiles;                      // Overrides P4IGNORE; "unset" for none
+			CStr m_ClientPath;                       // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
+			NStorage::TCOptional<CStr> m_ConfigName; // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
+			fp64 m_Timeout = 0.0;                    // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
 			bool m_bDisableTagging = false;
+			bool m_bIgnorePasswordSetting = false;   // P4PASSWD is not read: only the password given to f_Login and the tickets are used
 		};
 
 		struct CChangeList
@@ -243,7 +254,10 @@ namespace NMib::NPerforce
 		CStr mp_LastFunction;
 		CP4Client *mp_pClient;
 		ClientApi *mp_pAPI;
+		Enviro *mp_pEnviro = nullptr; // The API's settings, when the connection's overrides are applied before it reads them
 		bool mp_bUTF8 = false;
+		int mp_CommandCharset = 0; // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
+		int mp_FileNamesCharset = 0; // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
 		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
 
 		CStr mp_ActiveHost;
@@ -257,6 +271,13 @@ namespace NMib::NPerforce
 
 		void fp_Run(char const *_pFunc);
 		void fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments);
+		void fp_CheckDropped();
+		bool fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
+		void fp_SetFileNames(CStr const &_WorkingDirectory);
+		void fp_SetTrans(int _Charset, int _ContentCharset, CStr const &_WorkingDirectory);
+		NStr::CAnsiStr fp_EncodeFileName(CStr const &_Name) const;
+		void fp_SetClientPath();
+		void fp_SetIdentity();
 
 		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
 		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
@@ -274,6 +295,7 @@ namespace NMib::NPerforce
 
 		CStr f_GetLastError() const;
 		CStr f_GetLastFunction() const;
+		CStr f_GetLastInfo(CStr const &_Name) const;
 		bool f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
 		bool f_GetSecurityLevel(CStr &_SecurityLevel);
 		bool f_GetLoginTicket(CStr const &_Password, bool _bAllHosts, CStr &o_Ticket);
@@ -308,6 +330,8 @@ namespace NMib::NPerforce
 		bool f_Files(CStr const &_Search, TCVector<CStr> &_Existing);
 		bool f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted);
 		bool f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing);
+		bool f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
+		bool f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files);
 		bool f_GetJobSpec(CStr &_JobSpec);
 		bool f_GetJobs(CRegistry &_Jobs, CStr const &_JobView);
 		bool f_GetTriggers(CStr &_Triggers);
@@ -351,7 +375,7 @@ namespace NMib::NPerforce
 		bool f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
 		// Changelist 0 selects the current client's default changelist.
 		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
-		bool f_Add(CStr const &_File);
+		bool f_Add(CStr const &_File, bool _bLiteral = false);
 		bool f_Delete(CStr const &_File);
 		bool f_OpenForEditOrMakeWritable(CStr const &_File);
 		bool f_TryOpenForEdit(CStr const &_File);
@@ -540,10 +564,13 @@ namespace NMib::NPerforce
 		static CStr fs_FixWhiteSpace(CStr const &_In);
 		static CStr fs_FixLineStartingTabs(CStr const &_In);
 		static CStr fs_FixSpecialChars(CStr const &_In);
+		static CStr fs_EscapeFileName(CStr const &_FileName);
+		static CStr fs_UnescapeFileName(CStr const &_FileName);
 
 		static CStr fs_ActionToStr(EAction _Action);
 
 		static bool fs_HasP4Config(CStr const &_Path);
+		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory);
 
 	private:
 		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
@@ -593,6 +620,8 @@ namespace NMib::NPerforce
 		TCVector<CStr> f_Files(CStr const &_Search);
 		TCVector<CStr> f_Files(CStr const &_Search, TCVector<CStr> &_Deleted);
 		TCVector<CStr> f_ClientFiles(CStr const &_Search);
+		TCVector<CStr> f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments);
+		TCVector<CStr> f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments);
 		CStr f_GetJobSpec();
 		CRegistry f_GetJobs(CStr const &_JobView);
 		CStr f_GetTriggers();
@@ -636,7 +665,7 @@ namespace NMib::NPerforce
 		void f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
 		void f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
 		void f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
-		void f_Add(CStr const &_File);
+		void f_Add(CStr const &_File, bool _bLiteral = false);
 		void f_Delete(CStr const &_File);
 		void f_OpenForEditOrMakeWritable(CStr const &_File);
 		void f_TryOpenForEdit(CStr const &_File);
