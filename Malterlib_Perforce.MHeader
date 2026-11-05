@@ -69,6 +69,7 @@ Property
 	Property
 	{
 		MalterlibNoShortcuts false
+		AddIncludePaths_p4api true // The charset tests compare with what the Perforce API's own code does
 	}
 }
 
