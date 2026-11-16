@@ -41,7 +41,7 @@ namespace NMib::NPerforce
 #else
 		EPerforceEncoding m_FileSystem = EPerforceEncoding_UTF8;
 #endif
-		NStr::CStr m_Error;  // Why p4 stops, as for an unknown charset; the charsets are then untranslated
+		NStr::CStr m_Error; // Why p4 stops, as for an unknown charset; the charsets are then untranslated
 		bool m_bTranslated = false;
 	};
 

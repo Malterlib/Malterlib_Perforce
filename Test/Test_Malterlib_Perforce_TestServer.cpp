@@ -148,16 +148,15 @@ namespace
 			bool bSet = true;
 			// An ambient P4COMMANDCHARSET p4 can't use would stop the sessions, and without P4CHARSET a session learns the server's.
 			for
-				(
-					auto &[Name, Value]
-					: TCVector<TCTuple<CStr, TCOptional<CStr>>>
-					{
-						{"P4CONFIG", AmbientConfig}
-						, {"P4ENVIRO", AmbientEnviro}
-						, {"P4COMMANDCHARSET", CStr("nosuchcharset")}
-						, {"P4CHARSET", {}}
-					}
-				)
+			(
+				auto &[Name, Value] : TCVector<TCTuple<CStr, TCOptional<CStr>>>
+				{
+					{"P4CONFIG", AmbientConfig}
+					, {"P4ENVIRO", AmbientEnviro}
+					, {"P4COMMANDCHARSET", CStr("nosuchcharset")}
+					, {"P4CHARSET", {}}
+				}
+			)
 			{
 #ifdef DPlatformFamily_Windows
 				char PreviousValue[32768];

@@ -72,9 +72,9 @@ namespace NMib::NPerforce
 		TCFunction<void (CStr const &_Text)> m_fOnText;
 		bool m_bError;
 		CStr m_LastError;
-		TCVector<int> m_ErrorCodes;        // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
-		bool m_bErrorWithoutCode = false;  // An error given as text alone, without the codes
-		bool m_bHandlingError = false;     // Within HandleError, whose text OutputError gets
+		TCVector<int> m_ErrorCodes;       // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
+		bool m_bErrorWithoutCode = false; // An error given as text alone, without the codes
+		bool m_bHandlingError = false;    // Within HandleError, whose text OutputError gets
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 		CStr m_PromtOverride;
 	};

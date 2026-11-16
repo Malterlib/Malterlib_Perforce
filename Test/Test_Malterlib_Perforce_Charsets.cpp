@@ -72,9 +72,9 @@ namespace
 
 	struct CResult
 	{
-		TCVector<CStr> m_ReadTags;   // Of the rule files whose rules apply: each ignores the probe Probe_<tag>.cpp, sorted
-		TCVector<CStr> m_OtherTags;  // p4: of the rule files it opened; Malterlib: of the rule files it tracks, sorted
-		bool m_bIgnored = false;     // Whether the non-ASCII probe, Probé.cpp, is ignored
+		TCVector<CStr> m_ReadTags;  // Of the rule files whose rules apply: each ignores the probe Probe_<tag>.cpp, sorted
+		TCVector<CStr> m_OtherTags; // p4: of the rule files it opened; Malterlib: of the rule files it tracks, sorted
+		bool m_bIgnored = false;    // Whether the non-ASCII probe, Probé.cpp, is ignored
 	};
 
 	constexpr ch8 const *gc_Tags[] = {"CP1252", "UTF-8", "CP850"}; // The rule files' tags, by the encoding of their names and rules
@@ -399,6 +399,7 @@ namespace
 				CAnsiStr m_Character;
 				ch8 const *m_pTag;
 			};
+
 			TCVector<CEncoding> Encodings = {{"\xE9", gc_Tags[0]}, {"\xC3\xA9", gc_Tags[1]}, {"\x82", gc_Tags[2]}};
 #ifdef DPlatformFamily_Windows
 			if (GetACP() != 1252)

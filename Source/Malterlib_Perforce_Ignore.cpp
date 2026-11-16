@@ -38,9 +38,9 @@ namespace NMib::NPerforce
 	{
 		CMutual m_Lock;
 		TCMap<CStr, NStorage::TCUniquePointer<Ignore>> m_Matchers; // Per directory, under m_Lock
-		StrArray m_IgnoreFiles;   // In m_Charsets.m_FileSystem
-		CStr m_IgnoreName;        // The P4IGNORE value the matchers take for m_IgnoreFiles
-		CAnsiStr m_ConfigName;    // In m_Charsets.m_FileSystem
+		StrArray m_IgnoreFiles;                                    // In m_Charsets.m_FileSystem
+		CStr m_IgnoreName;                                         // The P4IGNORE value the matchers take for m_IgnoreFiles
+		CAnsiStr m_ConfigName;                                     // In m_Charsets.m_FileSystem
 		CPerforceCharsets m_Charsets;
 	};
 
@@ -56,7 +56,7 @@ namespace NMib::NPerforce
 		CPerforceIgnore::CSettings const m_Settings;
 		CPerforceIgnore m_Ignore;
 		CMutual m_Lock;
-		TCMap<CStr, bool> m_Directories; // Whether each directory asked about is the root's, under m_Lock
+		TCMap<CStr, bool> m_Directories;      // Whether each directory asked about is the root's, under m_Lock
 	};
 
 	namespace
@@ -644,14 +644,7 @@ namespace NMib::NPerforce
 					return _Value ? _Value.f_GetStr() : nullptr;
 				}
 			;
-			CPerforceCharsets Charsets = fg_PerforceCharsets
-				(
-					fValue(_Settings.m_Charset)
-					, fValue(_Settings.m_CommandCharset)
-					, fValue(_Settings.m_LearnedCharset)
-					, nullptr
-				)
-			;
+			CPerforceCharsets Charsets = fg_PerforceCharsets(fValue(_Settings.m_Charset), fValue(_Settings.m_CommandCharset), fValue(_Settings.m_LearnedCharset), nullptr);
 			if (Charsets.m_Error)
 				return {};
 			return Charsets;
@@ -948,8 +941,7 @@ namespace NMib::NPerforce
 		// A value: a settings file's bytes, or the environment's text, with $home the home directory's as p4 has it in the
 		// encoding, as p4's Enviro::GetItem replaces it.
 		// A name is the bytes as text (fg_BytesAsText) in the settings files and text in the environment, the same for ASCII names.
-		auto fGetNamed = [&](EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_FileName, CStr const &_EnvironmentName)
-			-> CSettingValue
+		auto fGetNamed = [&](EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_FileName, CStr const &_EnvironmentName) -> CSettingValue
 			{
 				CStr SettingName = fg_SettingName(_FileName);
 				CAnsiStr const *pBytes = _pConfigSettings ? _pConfigSettings->f_FindEqual(SettingName) : nullptr;
@@ -1031,11 +1023,7 @@ namespace NMib::NPerforce
 			Settings.m_LearnedCharsetVariable = fg_DecodePerforceString(NameBytes, UntranslatedEncoding);
 			Settings.m_LearnedCharset = fg_BytesAsText
 				(
-					fg_ValueBytes
-					(
-						fGetNamed(UntranslatedEncoding, &UntranslatedConfigSettings, fg_BytesAsText(NameBytes), Settings.m_LearnedCharsetVariable)
-						, UntranslatedEncoding
-					)
+					fg_ValueBytes(fGetNamed(UntranslatedEncoding, &UntranslatedConfigSettings, fg_BytesAsText(NameBytes), Settings.m_LearnedCharsetVariable), UntranslatedEncoding)
 				)
 			;
 		}
@@ -1323,7 +1311,8 @@ namespace NMib::NPerforce
 			{
 				bool bDirectory = (Entry.m_Attribs & EFileAttrib_Directory) != 0;
 
-				bool bOfRoot = bDirectory
+				bool bOfRoot
+					= bDirectory
 					? f_IsDirectoryOfRoot(Entry.m_Path)
 					: !(Entry.m_Attribs & EFileAttrib_Link) && fg_GetPathType(Entry.m_Path) != EPathType_Special && !m_Ignore.f_IsIgnored(Entry.m_Path, false)
 				;

@@ -127,10 +127,7 @@ namespace NMib::NPerforce
 			return _Str;
 
 		int Length = 0;
-		char const *pConverted = _bToCharset
-			? pConverter->FastCvtQues(_Str.f_GetStr(), int(_Str.f_GetLen()), &Length)
-			: pConverter->FastCvt(_Str.f_GetStr(), int(_Str.f_GetLen()), &Length)
-		;
+		char const *pConverted = _bToCharset ? pConverter->FastCvtQues(_Str.f_GetStr(), int(_Str.f_GetLen()), &Length) : pConverter->FastCvt(_Str.f_GetStr(), int(_Str.f_GetLen()), &Length);
 		if (!pConverted)
 			return _Str;
 

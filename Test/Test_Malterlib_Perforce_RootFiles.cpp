@@ -170,6 +170,7 @@ namespace
 						CStr m_UpperDecomposed;
 						CStr m_LowerDecomposed;
 					};
+
 					CLetter Letter{"\u00e9", "\u00c9", "E\u0301", "e\u0301"};
 #ifdef DPlatformFamily_Windows
 					// A letter the active code page represents, as the paths are matched in it.
@@ -493,18 +494,19 @@ namespace
 					)
 				;
 				// A settings file's value is its bytes.
-				DMibExpect(ConfigSettings.m_IgnoreNames, ==, TCVector<CPerforceIgnore::CSettingValue>{CPerforceIgnore::CSettingValue::fs_FromBytes(CStr(ConfigDirectory + "/Config.ignore").f_GetStr())});
+				DMibExpect
+					(
+						ConfigSettings.m_IgnoreNames
+						, ==
+						, TCVector<CPerforceIgnore::CSettingValue>{CPerforceIgnore::CSettingValue::fs_FromBytes(CStr(ConfigDirectory + "/Config.ignore").f_GetStr())}
+					)
+				;
 
 				// The rule files are spelled as p4 opens them.
 				CStr RuleRoot = Root / "BackslashRules";
 				fg_WriteFile(RuleRoot / "A.cpp", "");
 				TCVector<CStr> RuleFiles;
-				CPerforceRootFiles
-					(
-						RuleRoot
-						, {}
-						, CPerforceIgnore::CSettings{.m_IgnoreNames = PathNames, .m_ConfigName = "Local\\p4config", .m_EnviroFile = Backslash + "/Local\\enviro"}
-					)
+				CPerforceRootFiles(RuleRoot, {}, CPerforceIgnore::CSettings{.m_IgnoreNames = PathNames, .m_ConfigName = "Local\\p4config", .m_EnviroFile = Backslash + "/Local\\enviro"})
 					.f_ListExcluded(&RuleFiles)
 				;
 				TCVector<CStr> MissingRuleFiles;
@@ -565,11 +567,7 @@ namespace
 					char ResolvedLinkedPath[PATH_MAX];
 					DMibAssertTrue(realpath(Linked.f_GetStr(), ResolvedLinkedPath) != nullptr);
 					CStr LinkDirectory = ResolvedLinkedPath;
-					auto SettingsFiles = CPerforceIgnore::fs_GetSettings
-						(
-							Linked
-							, {{"P4CONFIG", "Config/../linked.p4config"}, {"P4ENVIRO", Linked + "/Config/../linked.p4enviro"}}
-						)
+					auto SettingsFiles = CPerforceIgnore::fs_GetSettings(Linked, {{"P4CONFIG", "Config/../linked.p4config"}, {"P4ENVIRO", Linked + "/Config/../linked.p4enviro"}})
 						.f_GetSettingsFiles(Linked)
 					;
 					DMibExpect(SettingsFiles.m_ConfigFile, ==, Linked + "/Config/../linked.p4config");
@@ -643,11 +641,7 @@ namespace
 						TCVector<CStr> RuleFiles;
 						CPerforceRootFiles(Root / "PlainWork", {}, PlainSettings).f_ListExcluded(&RuleFiles);
 						TCVector<CStr> Found;
-						for
-							(
-								CStr const &File
-								: {ResolvedPlain, ResolvedPlain + "/A", ResolvedPlain + "/plain.ignore", ResolvedPlain + "/nested.ignore", ResolvedPlain + "/Config"}
-							)
+						for (CStr const &File : {ResolvedPlain, ResolvedPlain + "/A", ResolvedPlain + "/plain.ignore", ResolvedPlain + "/nested.ignore", ResolvedPlain + "/Config"})
 						{
 							if (RuleFiles.f_Contains(File) >= 0)
 								Found.f_Insert(File);
@@ -655,26 +649,14 @@ namespace
 						return Found;
 					}
 				;
-				DMibExpect
-					(
-						fPlainRuleFiles()
-						, ==
-						, (TCVector<CStr>{ResolvedPlain, ResolvedPlain + "/A", ResolvedPlain + "/plain.ignore", ResolvedPlain + "/nested.ignore"})
-					)
-				;
+				DMibExpect(fPlainRuleFiles(), ==, (TCVector<CStr>{ResolvedPlain, ResolvedPlain + "/A", ResolvedPlain + "/plain.ignore", ResolvedPlain + "/nested.ignore"}));
 
 				NTime::CTime OldTime = NTime::CTime::fs_NowUTC() - NTime::CTimeSpanConvert::fs_CreateMinuteSpan(10);
 				CFile::fs_SetWriteTime(ResolvedPlain, OldTime);
 				CFile::fs_DeleteDirectoryRecursive(Plain / "Config");
 				DMibExpect(CFile::fs_GetWriteTime(ResolvedPlain), !=, OldTime);
 				// The open now fails at the missing directory, whose creation is tracked instead.
-				DMibExpect
-					(
-						fPlainRuleFiles()
-						, ==
-						, (TCVector<CStr>{ResolvedPlain, ResolvedPlain + "/A", ResolvedPlain + "/nested.ignore", ResolvedPlain + "/Config"})
-					)
-				;
+				DMibExpect(fPlainRuleFiles(), ==, (TCVector<CStr>{ResolvedPlain, ResolvedPlain + "/A", ResolvedPlain + "/nested.ignore", ResolvedPlain + "/Config"}));
 			}
 
 			{
@@ -706,13 +688,28 @@ namespace
 
 						NTime::CTime OldTime = NTime::CTime::fs_NowUTC() - NTime::CTimeSpanConvert::fs_CreateMinuteSpan(10);
 						for
-							(
-								CStr const &Entry
-								: {
-									"", "Rules", "Rules/ignore", "Rules/Sub", "Rules/Sub/ignore", "Rules/Sub/Deeper", "Rules/Sub/Deeper/ignore", "Rules/A"
-									, "Rules/A/ignore", "Rules/A/B", "Other", "Other/ignore", "Other/X", "Other/X/ignore", "W", "W/ignore", "Links"
-								}
-							)
+						(
+							CStr const &Entry :
+							{
+								""
+								, "Rules"
+								, "Rules/ignore"
+								, "Rules/Sub"
+								, "Rules/Sub/ignore"
+								, "Rules/Sub/Deeper"
+								, "Rules/Sub/Deeper/ignore"
+								, "Rules/A"
+								, "Rules/A/ignore"
+								, "Rules/A/B"
+								, "Other"
+								, "Other/ignore"
+								, "Other/X"
+								, "Other/X/ignore"
+								, "W"
+								, "W/ignore"
+								, "Links"
+							}
+						)
 						{
 							CFile::fs_SetWriteTime(Entry.f_IsEmpty() ? _Tree : _Tree / Entry, OldTime);
 						}
@@ -726,22 +723,103 @@ namespace
 				;
 				TCVector<TCTuple<CStr, NFunction::TCFunction<void (CStr const &_Tree)>>> Changes =
 					{
-						{"RemoveB", [](CStr const &_Tree){DMibAssert(rmdir((_Tree / "Rules/A/B").f_GetStr()), ==, 0);}}
-						, {"RemoveA", [](CStr const &_Tree){CFile::fs_DeleteDirectoryRecursive(_Tree / "Rules/A");}}
-						, {"RemoveSub", [](CStr const &_Tree){CFile::fs_DeleteDirectoryRecursive(_Tree / "Rules/Sub");}}
-						, {"RemoveDeeper", [](CStr const &_Tree){CFile::fs_DeleteDirectoryRecursive(_Tree / "Rules/Sub/Deeper");}}
-						, {"RemoveRulesIgnore", [](CStr const &_Tree){CFile::fs_DeleteFile(_Tree / "Rules/ignore");}}
-						, {"RemoveSubIgnore", [](CStr const &_Tree){CFile::fs_DeleteFile(_Tree / "Rules/Sub/ignore");}}
-						, {"RetargetConfig", [&](CStr const &_Tree){fRelink(_Tree / "W/Config", _Tree / "Other/X/../X");}}
-						, {"RetargetCurrent", [&](CStr const &_Tree){fRelink(_Tree / "Links/Current", "../Other/X");}}
-						, {"RetargetDotted", [&](CStr const &_Tree){fRelink(_Tree / "W/Dotted", "../Other/./X");}}
-						, {"BreakLoop", [&](CStr const &_Tree){fRelink(_Tree / "W/Loop", "../Rules/Sub");}}
-						, {"CreateNope", [](CStr const &_Tree){CFile::fs_CreateDirectory(_Tree / "W/Nope");}}
-						, {
-							"CreateNopeLink"
-							, [](CStr const &_Tree){DMibAssert(symlink("../Rules/A", (_Tree / "W/Nope").f_GetStr()), ==, 0);}
+						{
+							"RemoveB"
+							, [](CStr const &_Tree)
+							{
+								DMibAssert(rmdir((_Tree / "Rules/A/B").f_GetStr()), ==, 0);
+							}
 						}
-						, {
+						,
+						{
+							"RemoveA"
+							, [](CStr const &_Tree)
+							{
+								CFile::fs_DeleteDirectoryRecursive(_Tree / "Rules/A");
+							}
+						}
+						,
+						{
+							"RemoveSub"
+							, [](CStr const &_Tree)
+							{
+								CFile::fs_DeleteDirectoryRecursive(_Tree / "Rules/Sub");
+							}
+						}
+						,
+						{
+							"RemoveDeeper"
+							, [](CStr const &_Tree)
+							{
+								CFile::fs_DeleteDirectoryRecursive(_Tree / "Rules/Sub/Deeper");
+							}
+						}
+						,
+						{
+							"RemoveRulesIgnore"
+							, [](CStr const &_Tree)
+							{
+								CFile::fs_DeleteFile(_Tree / "Rules/ignore");
+							}
+						}
+						,
+						{
+							"RemoveSubIgnore"
+							, [](CStr const &_Tree)
+							{
+								CFile::fs_DeleteFile(_Tree / "Rules/Sub/ignore");
+							}
+						}
+						,
+						{
+							"RetargetConfig"
+							, [&](CStr const &_Tree)
+							{
+								fRelink(_Tree / "W/Config", _Tree / "Other/X/../X");
+							}
+						}
+						,
+						{
+							"RetargetCurrent"
+							, [&](CStr const &_Tree)
+							{
+								fRelink(_Tree / "Links/Current", "../Other/X");
+							}
+						}
+						,
+						{
+							"RetargetDotted"
+							, [&](CStr const &_Tree)
+							{
+								fRelink(_Tree / "W/Dotted", "../Other/./X");
+							}
+						}
+						,
+						{
+							"BreakLoop"
+							, [&](CStr const &_Tree)
+							{
+								fRelink(_Tree / "W/Loop", "../Rules/Sub");
+							}
+						}
+						,
+						{
+							"CreateNope"
+							, [](CStr const &_Tree)
+							{
+								CFile::fs_CreateDirectory(_Tree / "W/Nope");
+							}
+						}
+						,
+						{
+							"CreateNopeLink"
+							, [](CStr const &_Tree)
+							{
+								DMibAssert(symlink("../Rules/A", (_Tree / "W/Nope").f_GetStr()), ==, 0);
+							}
+						}
+						,
+						{
 							"ReplaceBWithLink"
 							, [](CStr const &_Tree)
 							{
@@ -776,6 +854,7 @@ namespace
 					NTime::CTime m_Time;
 					bool m_bExists = false;
 				};
+
 				auto fWriteTime = [](CStr const &_Path) -> CWriteTime
 					{
 						try
@@ -803,6 +882,7 @@ namespace
 						CStr m_Opened;
 						TCMap<CStr, CWriteTime> m_WriteTimes;
 					};
+
 					TCVector<CCheck> Checks;
 					for (auto &Start : Starts)
 					{
@@ -879,18 +959,8 @@ namespace
 			{
 				// A root that doesn't exist or isn't a directory cannot be listed.
 				DMibTestPath("MissingRoot");
-				DMibExpectException
-					(
-						CPerforceRootFiles(Workspace / "Missing", {}, Settings).f_List()
-						, DMibErrorInstance("'{}' cannot be listed"_f << (Workspace / "Missing"))
-					)
-				;
-				DMibExpectException
-					(
-						CPerforceRootFiles(Workspace / "A.cpp", {}, Settings).f_List()
-						, DMibErrorInstance("'{}' cannot be listed"_f << (Workspace / "A.cpp"))
-					)
-				;
+				DMibExpectException(CPerforceRootFiles(Workspace / "Missing", {}, Settings).f_List(), DMibErrorInstance("'{}' cannot be listed"_f << (Workspace / "Missing")));
+				DMibExpectException(CPerforceRootFiles(Workspace / "A.cpp", {}, Settings).f_List(), DMibErrorInstance("'{}' cannot be listed"_f << (Workspace / "A.cpp")));
 			}
 
 #ifdef DPlatformFamily_Windows
@@ -906,18 +976,7 @@ namespace
 					{
 						PACL pOldAcl = nullptr;
 						PSECURITY_DESCRIPTOR pDescriptor = nullptr;
-						DWORD Error = GetNamedSecurityInfoW
-							(
-								(LPWSTR)LockedPath.f_GetStr()
-								, SE_FILE_OBJECT
-								, DACL_SECURITY_INFORMATION
-								, nullptr
-								, nullptr
-								, &pOldAcl
-								, nullptr
-								, &pDescriptor
-							)
-						;
+						DWORD Error = GetNamedSecurityInfoW((LPWSTR)LockedPath.f_GetStr(), SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &pOldAcl, nullptr, &pDescriptor);
 						if (Error != ERROR_SUCCESS)
 							return Error;
 
@@ -1150,13 +1209,7 @@ namespace
 			// The default enviro file of a relative home is opened from the directory, as a relative P4ENVIRO is, not from the
 			// process's current directory.
 			auto RelativeHome = CPerforceIgnore::fs_GetSettings(Root, {{HomeVariable, "Home"}});
-			DMibExpect
-				(
-					(TCVector<CStr>{RelativeHome.m_EnviroFile, fg_JoinDescriptions(RelativeHome.m_IgnoreNames)})
-					, ==
-					, (TCVector<CStr>{Root / "Home/.p4enviro", "Enviro.ignore"})
-				)
-			;
+			DMibExpect((TCVector<CStr>{RelativeHome.m_EnviroFile, fg_JoinDescriptions(RelativeHome.m_IgnoreNames)}), ==, (TCVector<CStr>{Root / "Home/.p4enviro", "Enviro.ignore"}));
 #endif
 
 #ifdef DPlatformFamily_Windows
@@ -1202,12 +1255,7 @@ namespace
 
 			// P4CHARSET and P4COMMANDCHARSET are read like the other settings: a P4CONFIG file outranks the environment.
 			fg_WriteFile(Root / "Charset/.p4config", "P4CHARSET=cp850\n");
-			auto CharsetSettings = CPerforceIgnore::fs_GetSettings
-				(
-					Root / "Charset"
-					, {{"P4CONFIG", ".p4config"}, {"P4CHARSET", "winansi"}, {"P4COMMANDCHARSET", "cp1251"}}
-				)
-			;
+			auto CharsetSettings = CPerforceIgnore::fs_GetSettings(Root / "Charset", {{"P4CONFIG", ".p4config"}, {"P4CHARSET", "winansi"}, {"P4COMMANDCHARSET", "cp1251"}});
 			DMibExpect((TCVector<CStr>{CharsetSettings.m_Charset, CharsetSettings.m_CommandCharset}), ==, (TCVector<CStr>{"cp850", "cp1251"}));
 
 			// Without P4CHARSET the charset p4 learned for the port the settings give, here a P4CONFIG file's, is read from the
@@ -1219,13 +1267,7 @@ namespace
 					, {{"P4CONFIG", ".p4config"}, {"P4PORT", "other:1666"}, {"P4_ssl:server@1666_CHARSET", "utf8"}, {"P4_other:1666_CHARSET", "cp850"}}
 				)
 			;
-			DMibExpect
-				(
-					(TCVector<CStr>{LearnedSettings.m_LearnedCharset, LearnedSettings.m_LearnedCharsetVariable})
-					, ==
-					, (TCVector<CStr>{"utf8", "P4_ssl:server@1666_CHARSET"})
-				)
-			;
+			DMibExpect((TCVector<CStr>{LearnedSettings.m_LearnedCharset, LearnedSettings.m_LearnedCharsetVariable}), ==, (TCVector<CStr>{"utf8", "P4_ssl:server@1666_CHARSET"}));
 			DMibExpect
 				(
 					(
@@ -1264,24 +1306,13 @@ namespace
 					;
 					fWriteBytes(Root / "NonASCIIPort/.p4config", CAnsiStr("P4PORT=") + Port + "\n");
 					fWriteBytes(Root / "NonASCIIPort.p4enviro", CAnsiStr("P4_") + Port + "_CHARSET=utf8\n");
-					auto PortSettings = CPerforceIgnore::fs_GetSettings
-						(
-							Root / "NonASCIIPort"
-							, {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", Root / "NonASCIIPort.p4enviro"}}
-						)
-					;
+					auto PortSettings = CPerforceIgnore::fs_GetSettings(Root / "NonASCIIPort", {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", Root / "NonASCIIPort.p4enviro"}});
 #ifdef DPlatformFamily_Windows
 					CStr Variable = "P4_rsh:C:\\D\u00e9pot\\p4d.exe_CHARSET";
 #else
 					CStr Variable = "P4_rsh:/D\u00e9pot/p4d_CHARSET";
 #endif
-					DMibExpect
-						(
-							(TCVector<CStr>{PortSettings.m_LearnedCharset, PortSettings.m_LearnedCharsetVariable})
-							, ==
-							, (TCVector<CStr>{"utf8", Variable})
-						)
-					;
+					DMibExpect((TCVector<CStr>{PortSettings.m_LearnedCharset, PortSettings.m_LearnedCharsetVariable}), ==, (TCVector<CStr>{"utf8", Variable}));
 				}
 			}
 
@@ -1384,14 +1415,7 @@ namespace
 			if (CStr Character = fg_CodePageCharacter())
 				SpecialDirectories.f_Insert("Special " + Character);
 			else
-			{
-				DMibConOut
-					(
-						"Skipping the Perforce test of a non-ASCII name: the active code page {} represents none of the characters tried\n"
-						, GetACP()
-					)
-				;
-			}
+				DMibConOut("Skipping the Perforce test of a non-ASCII name: the active code page {} represents none of the characters tried\n", GetACP());
 #else
 			SpecialDirectories.f_Insert("Special *\u00e9");
 #endif
@@ -1470,12 +1494,7 @@ namespace
 						}
 
 						// A root spelled with a separator ending it gives the files under it.
-						Result.m_ChangedUnderSeparatorRoot = Client.f_GetFileStatFilesUnder
-							(
-								WorkRoot / "Source/"
-								, {"-c", CStr::fs_ToStr(SecondChangelist), WorkRoot / "Source/..."}
-							)
-						;
+						Result.m_ChangedUnderSeparatorRoot = Client.f_GetFileStatFilesUnder(WorkRoot / "Source/", {"-c", CStr::fs_ToStr(SecondChangelist), WorkRoot / "Source/..."});
 
 						// The files under a root are spelled as it is, while p4 spells them as the workspace's root.
 						if (bOtherCase)
@@ -1645,13 +1664,7 @@ namespace
 			;
 
 			CStr Expected = WorkRoot / "Special \u00e9/New.cpp";
-			DMibExpect
-				(
-					Queried
-					, ==
-					, (TCVector<TCVector<CStr>>{{Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}})
-				)
-			;
+			DMibExpect(Queried, ==, (TCVector<TCVector<CStr>>{{Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}}));
 
 			co_return {};
 		};
@@ -1720,10 +1733,10 @@ namespace
 							TCVector<CStr> Files;
 							TCVector<CStr> EscapedFiles;
 							if
-								(
-									!Client.f_GetFileStatClientFiles({WorkRoot / "..."}, Files)
-									|| !Client.f_GetFileStatClientFiles({CPerforceClient::fs_EscapeFileName(WorkRoot / "Special \u00e9") / "..."}, EscapedFiles)
-								)
+							(
+								!Client.f_GetFileStatClientFiles({WorkRoot / "..."}, Files)
+								|| !Client.f_GetFileStatClientFiles({CPerforceClient::fs_EscapeFileName(WorkRoot / "Special \u00e9") / "..."}, EscapedFiles)
+							)
 							{
 								Results.f_Insert({Client.f_GetLastError()});
 								continue;
@@ -1742,7 +1755,21 @@ namespace
 				(
 					Queried
 					, ==
-					, (TCVector<TCVector<CStr>>{{Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {"P4COMMANDCHARSET 'nosuchcharset' is not a charset"}})
+					,
+					(
+						TCVector<TCVector<CStr>>
+						{
+							{Expected}
+							, {Expected}
+							, {Expected}
+							, {Expected}
+							, {Expected}
+							, {Expected}
+							, {Expected}
+							, {Expected}
+							, {"P4COMMANDCHARSET 'nosuchcharset' is not a charset"}
+						}
+					)
 				)
 			;
 

@@ -42,17 +42,17 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Host;
 			CStr m_TrustedCertificateDigest;
-			CStr m_WorkingDirectory;                 // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
+			CStr m_WorkingDirectory;                     // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
 			CStr m_TicketFile;
 			CStr m_EnviroFile;
-			CStr m_Charset;                          // Overrides P4CHARSET, like "none" or "utf8"
+			CStr m_Charset;                              // Overrides P4CHARSET, like "none" or "utf8"
 			NStorage::TCOptional<CStr> m_CommandCharset; // Overrides P4COMMANDCHARSET, as p4's -Q; empty for none
-			CStr m_IgnoreFiles;                      // Overrides P4IGNORE; "unset" for none
-			CStr m_ClientPath;                       // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
-			NStorage::TCOptional<CStr> m_ConfigName; // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
-			fp64 m_Timeout = 0.0;                    // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
+			CStr m_IgnoreFiles;                          // Overrides P4IGNORE; "unset" for none
+			CStr m_ClientPath;                           // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
+			NStorage::TCOptional<CStr> m_ConfigName;     // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
+			fp64 m_Timeout = 0.0;                        // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
 			bool m_bDisableTagging = false;
-			bool m_bIgnorePasswordSetting = false;   // P4PASSWD is not read: only the password given to f_Login and the tickets are used
+			bool m_bIgnorePasswordSetting = false;       // P4PASSWD is not read: only the password given to f_Login and the tickets are used
 		};
 
 		struct CChangeList
@@ -562,8 +562,8 @@ namespace NMib::NPerforce
 		ClientApi *mp_pAPI;
 		Enviro *mp_pEnviro = nullptr; // The API's settings, when the connection's overrides are applied before it reads them
 		bool mp_bUTF8 = false;
-		int mp_CommandCharset = 0; // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
-		int mp_FileNamesCharset = 0; // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
+		int mp_CommandCharset = 0;    // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
+		int mp_FileNamesCharset = 0;  // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
 		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
 
 		CStr mp_ActiveHost;

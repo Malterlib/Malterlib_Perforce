@@ -64,7 +64,7 @@ namespace NMib::NPerforce
 		// The settings files of a directory, for knowing whether it is a Perforce root and tracking what decides that.
 		struct CSettingsFiles
 		{
-			NStr::CStr m_ConfigFile;                       // The directory's P4CONFIG file p4 opens when it is a regular file, else empty
+			NStr::CStr m_ConfigFile;                      // The directory's P4CONFIG file p4 opens when it is a regular file, else empty
 			NContainer::TCSet<NStr::CStr> m_Dependencies; // The enviro file and every name p4 tries for P4CONFIG, resolved as opened
 		};
 
@@ -76,11 +76,11 @@ namespace NMib::NPerforce
 
 			NContainer::TCVector<CSettingValue> m_IgnoreNames; // File names, looked for in every directory above a path, and paths; none for P4IGNORE=unset
 			CSettingValue m_ConfigName;                        // P4CONFIG or empty; as in p4, its files are excluded by a name or relative path, not an absolute one
-			NStr::CStr m_EnviroFile;                        // The enviro file the settings were read with, also while missing, or empty
-			NStr::CStr m_Charset;                           // P4CHARSET, or empty; the charsets decide on Windows how names and paths are encoded
-			NStr::CStr m_CommandCharset;                    // P4COMMANDCHARSET, or empty
-			NStr::CStr m_LearnedCharset;                    // Without P4CHARSET the charset p4 learned for P4PORT, P4_<port>_CHARSET, or empty
-			NStr::CStr m_LearnedCharsetVariable;            // Without P4CHARSET the name of P4_<port>_CHARSET for P4PORT, or empty
+			NStr::CStr m_EnviroFile;                           // The enviro file the settings were read with, also while missing, or empty
+			NStr::CStr m_Charset;                              // P4CHARSET, or empty; the charsets decide on Windows how names and paths are encoded
+			NStr::CStr m_CommandCharset;                       // P4COMMANDCHARSET, or empty
+			NStr::CStr m_LearnedCharset;                       // Without P4CHARSET the charset p4 learned for P4PORT, P4_<port>_CHARSET, or empty
+			NStr::CStr m_LearnedCharsetVariable;               // Without P4CHARSET the name of P4_<port>_CHARSET for P4PORT, or empty
 		};
 
 		CPerforceIgnore(CSettings const &_Settings);
