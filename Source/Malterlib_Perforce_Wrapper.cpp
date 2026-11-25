@@ -68,14 +68,15 @@ namespace NMib::NPerforce
 
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
+		CByteVector *m_pOutputBytes = nullptr; // Borrowed by the command that sets it, null otherwise; takes the output's bytes, NULs included
 		TCVector<CStr> m_Infos;
 		TCFunction<void (CStr const &_Info)> m_fOnInfo;
 		TCFunction<void (CStr const &_Text)> m_fOnText;
 		bool m_bError;
 		CStr m_LastError;
-		TCVector<int> m_ErrorCodes;       // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
-		bool m_bErrorWithoutCode = false; // An error given as text alone, without the codes
-		bool m_bHandlingError = false;    // Within HandleError, whose text OutputError gets
+		TCVector<int> m_ErrorCodes;            // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
+		bool m_bErrorWithoutCode = false;      // An error given as text alone, without the codes
+		bool m_bHandlingError = false;         // Within HandleError, whose text OutputError gets
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 		CStr m_PromtOverride;
 	};
@@ -95,6 +96,12 @@ namespace NMib::NPerforce
 
 	void CPerforceClient::CP4Client::OutputText(char const *_pData, int _Length)
 	{
+		if (m_pOutputBytes)
+		{
+			m_pOutputBytes->f_Insert((uint8 const *)_pData, umint(_Length));
+			return;
+		}
+
 		CStr Temp;
 		Temp.f_AddStr(_pData, _Length);
 		if (m_fOnText)
@@ -213,6 +220,12 @@ namespace NMib::NPerforce
 
 	void CPerforceClient::CP4Client::OutputBinary(char const *_pData, int _Length)
 	{
+		if (m_pOutputBytes)
+		{
+			m_pOutputBytes->f_Insert((uint8 const *)_pData, umint(_Length));
+			return;
+		}
+
 		CStr Temp;
 		Temp.f_AddStr(_pData, _Length);
 		if (m_fOnText)
@@ -1204,6 +1217,28 @@ namespace NMib::NPerforce
 		mp_pClient->m_PromtOverride = Spec;
 
 		fp_Run("protect", Arguments);
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// Each line maps a file type to a path, as 'p4 typemap' has them: 'text+k //depot/....cpp'.
+	bool CPerforceClient::f_SetTypeMap(TCVector<CStr> const &_Lines)
+	{
+		DCheckApi("SetTypeMap");
+
+		CStr Spec = "TypeMap:\n";
+		for (auto &Line : _Lines)
+			Spec += CStr::CFormat("	{}\n") << Line;
+
+		mp_pClient->m_PromtOverride = Spec;
+
+		fp_Run("typemap", {"-i"});
 
 		if (mp_pClient->m_bError)
 		{
@@ -5197,18 +5232,39 @@ namespace NMib::NPerforce
 		return bRet;
 	}
 
+	// The revision's bytes as p4 print gives them, decoded as the text of a file is read.
 	bool CPerforceClient::f_GetTextFileContents(CStr const &_Path, CStr &_Contents)
 	{
-		DCheckApi(CStr::CFormat("GetTextFileContents({})") << _Path);
+		CByteVector Contents;
+		if (!f_GetFileContents(_Path, true, Contents))
+			return false;
 
-		mp_pClient->m_OutputText.f_Clear();
-		mp_pClient->m_OutputTextRaw.f_Clear();
-		fp_Run("print", {"-q", _Path});
+		_Contents = NFile::CFile::fs_ReadStringFromVector(Contents);
 
-		CByteVector Temp;
-		Temp.f_Insert((uint8 *)mp_pClient->m_OutputTextRaw.f_GetStr(), mp_pClient->m_OutputTextRaw.f_GetLen());
+		return true;
+	}
 
-		CStr Result = NFile::CFile::fs_ReadStringFromVector(Temp);
+	// The bytes of a revision as p4 print gives them, which no charset decodes, so they needn't be in the workspace file's charset.
+	// Without _bExpandKeywords, the keywords of a 'text+k' file stay as they are written, '$Id$', where they would otherwise hold
+	// the printed revision's.
+	bool CPerforceClient::f_GetFileContents(CStr const &_Path, bool _bExpandKeywords, CByteVector &o_Contents)
+	{
+		DCheckApi(CStr::CFormat("GetFileContents({})") << _Path);
+
+		CByteVector Contents;
+		mp_pClient->m_pOutputBytes = &Contents;
+		{
+			auto StopCapture = g_OnScopeExit / [&]
+				{
+					mp_pClient->m_pOutputBytes = nullptr;
+				}
+			;
+
+			if (_bExpandKeywords)
+				fp_Run("print", {"-q", _Path});
+			else
+				fp_Run("print", {"-q", "-k", _Path});
+		}
 
 		if (mp_pClient->m_bError)
 		{
@@ -5216,7 +5272,7 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		_Contents = Result;
+		o_Contents = fg_Move(Contents);
 
 		return true;
 	}
@@ -6007,6 +6063,11 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_SetProtections(_Lines));
 	}
 
+	void CPerforceClientThrow::f_SetTypeMap(TCVector<CStr> const &_Lines)
+	{
+		fp_Throw(mp_Client.f_SetTypeMap(_Lines));
+	}
+
 	CStr CPerforceClientThrow::f_GetSecurityLevel()
 	{
 		CStr Ret;
@@ -6177,6 +6238,13 @@ namespace NMib::NPerforce
 		CStr Ret;
 		fp_Throw(mp_Client.f_GetTextFileContents(_Path, Ret));
 		return Ret;
+	}
+
+	CByteVector CPerforceClientThrow::f_GetFileContents(CStr const &_Path, bool _bExpandKeywords)
+	{
+		CByteVector Contents;
+		fp_Throw(mp_Client.f_GetFileContents(_Path, _bExpandKeywords, Contents));
+		return Contents;
 	}
 
 	TCVector<CStr> CPerforceClientThrow::f_GetStreams()

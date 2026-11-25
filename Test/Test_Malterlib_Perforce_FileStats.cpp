@@ -353,6 +353,106 @@ namespace
 
 			co_return {};
 		};
+
+		// A revision printed as its bytes, which no charset decodes, with its keywords expanded or as they are written.
+		DMibTestSuite("Contents") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of a revision's contents: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceContents";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr());
+
+			co_await
+				(
+					g_Dispatch(fg_BlockingActor())
+					/ [Connection]
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_SetTypeMap({"text+k //Streams/Main/Keyword.txt"});
+					}
+					% "Failed to set the type map"
+				)
+			;
+
+			co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"Accented.txt", "caf\u00e9\n"}, {"Keyword.txt", "$Revision$\n"}}
+					, CStr("Add the files")
+				)
+			;
+
+			auto Contents = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection]() -> TCVector<CStr>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+
+						auto fText = [](CByteVector const &_Bytes)
+							{
+								return CStr((ch8 const *)_Bytes.f_GetArray(), _Bytes.f_GetLen());
+							}
+						;
+
+						return
+							{
+								fText(Client.f_GetFileContents("//Streams/Main/Accented.txt"))
+								, fText(Client.f_GetFileContents("//Streams/Main/Keyword.txt"))
+								, fText(Client.f_GetFileContents("//Streams/Main/Keyword.txt", false))
+							}
+						;
+					}
+					% "Failed to print the files"
+				)
+			;
+
+			DMibExpect(Contents, ==, (TCVector<CStr>{"caf\u00e9\n", "$Revision: #1 $\n", "$Revision$\n"}));
+
+			// Bytes that start with NUL, as UTF-32 big endian's signature does, are no string.
+			CByteVector Binary;
+			for (uint8 Byte : {uint8(0), uint8(0), uint8(0xFE), uint8(0xFF), uint8(0), uint8(1), uint8(0)})
+				Binary.f_Insert(Byte);
+
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto WorkConnection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+			auto Printed = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [WorkConnection, WorkRoot, Binary]() -> CByteVector
+					{
+						CPerforceClientThrow Client(WorkConnection);
+						Client.f_Login(CStr());
+						NFile::CFile::fs_CreateDirectory(WorkRoot);
+						NFile::CFile::fs_WriteFile(WorkRoot / "Binary.bin", Binary);
+						Client.f_Add(WorkRoot / "Binary.bin");
+						Client.f_Submit(WorkRoot / "...", "Add a binary file");
+						return Client.f_GetFileContents("//Streams/Main/Binary.bin");
+					}
+					% "Failed to print a binary file"
+				)
+			;
+
+			DMibExpect(Printed, ==, Binary);
+
+			co_return {};
+		};
 	}
 }
 

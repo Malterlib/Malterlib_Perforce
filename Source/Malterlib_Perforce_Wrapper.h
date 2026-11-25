@@ -290,6 +290,7 @@ namespace NMib::NPerforce
 		bool f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword = {});
 		bool f_SetClient(CStr const &_ClientName, CClient const &_Client);
 		bool f_SetProtections(TCVector<CStr> const &_Lines);
+		bool f_SetTypeMap(TCVector<CStr> const &_Lines);
 		bool f_Dropped();
 
 		bool f_IsUTF8() const;
@@ -327,6 +328,7 @@ namespace NMib::NPerforce
 		bool f_GetClientPath(CStr const &_DepotPath, CStr &_ClientPath);
 		bool f_GetWorkspacePath(CStr const &_DepotPath, CStr &_WorkspacePath);
 		bool f_GetTextFileContents(CStr const &_Path, CStr &_Contents);
+		bool f_GetFileContents(CStr const &_Path, bool _bExpandKeywords, CByteVector &o_Contents);
 		bool f_GetStreams(TCVector<CStr> &_Streams);
 		bool f_GetStreamDepots(TCVector<CStr> &_Depots);
 
@@ -631,6 +633,7 @@ namespace NMib::NPerforce
 		void f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword = {});
 		void f_SetClient(CStr const &_ClientName, CPerforceClient::CClient const &_Client);
 		void f_SetProtections(TCVector<CStr> const &_Lines);
+		void f_SetTypeMap(TCVector<CStr> const &_Lines);
 
 		bool f_FileExistsInDepot(CStr const &_File);
 		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
@@ -664,6 +667,7 @@ namespace NMib::NPerforce
 
 		CStr f_GetWorkspacePath(CStr const &_DepotPath);
 		CStr f_GetTextFileContents(CStr const &_Path);
+		CByteVector f_GetFileContents(CStr const &_Path, bool _bExpandKeywords = true);
 		TCVector<CStr> f_GetStreams();
 		TCVector<CStr> f_GetStreamDepots();
 
