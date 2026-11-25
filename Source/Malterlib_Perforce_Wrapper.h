@@ -359,6 +359,7 @@ namespace NMib::NPerforce
 		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
 		bool f_Add(CStr const &_File, bool _bLiteral = false);
 		bool f_Delete(CStr const &_File);
+		bool f_Move(CStr const &_From, CStr const &_To);
 		bool f_OpenForEditOrMakeWritable(CStr const &_File);
 		bool f_TryOpenForEdit(CStr const &_File);
 
@@ -691,6 +692,7 @@ namespace NMib::NPerforce
 		void f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
 		void f_Add(CStr const &_File, bool _bLiteral = false);
 		void f_Delete(CStr const &_File);
+		void f_Move(CStr const &_From, CStr const &_To);
 		void f_OpenForEditOrMakeWritable(CStr const &_File);
 		void f_TryOpenForEdit(CStr const &_File);
 

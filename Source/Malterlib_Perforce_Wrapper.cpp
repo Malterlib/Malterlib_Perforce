@@ -1295,6 +1295,8 @@ namespace NMib::NPerforce
 		return false;
 	}
 
+	// A file the depot has no revision of at the revision _File names, one added after a changelist, '@1234', is no file
+	// there either, as is one deleted or moved away.
 	bool CPerforceClient::f_FileExistsInDepotNotDeleted(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("FileExistsInDepotNotDeleted({})") << _File);
@@ -1304,7 +1306,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			if (mp_pClient->f_HasError(MsgDm::ExFILE))
+			if (mp_pClient->f_HasError(MsgDm::ExFILE) || mp_pClient->f_HasError(MsgDm::ExATCHANGE) || mp_pClient->f_HasError(MsgDm::ExATDATE))
 			{
 				mp_LastError.f_Clear();
 				mp_pClient->m_LastError.f_Clear();
@@ -1313,24 +1315,10 @@ namespace NMib::NPerforce
 			fOnError();
 			return false;
 		}
-		else
-		{
-			int bFound = false;
-			for (umint iInfo = 0; iInfo < mp_pClient->m_Infos.f_GetLen(); ++iInfo)
-			{
-				if (mp_pClient->m_Infos[iInfo].f_CmpNoCase("headAction ", 11) == 0)
-				{
-					if (mp_pClient->m_Infos[iInfo].f_GetLen() > 11)
-					{
-						if (NStr::fg_StrCmpNoCase(mp_pClient->m_Infos[iInfo].f_GetStr() + 11, "delete", 6) == 0)
-							break;
-					}
-					bFound = true;
-					break;
-				}
-			}
-			return bFound;
-		}
+
+		// A file moved away is gone from its path as a deleted one is: 'move/delete'.
+		CStr HeadAction = mp_pClient->f_GetInfo("headAction");
+		return HeadAction && HeadAction != "delete" && HeadAction != "move/delete";
 	}
 
 	bool CPerforceClient::f_FileExistsInChangeList(CStr const &_File)
@@ -5638,6 +5626,20 @@ namespace NMib::NPerforce
 			return true;
 	}
 
+	// Opens _From for a move to _To, which p4 needs opened for edit first.
+	bool CPerforceClient::f_Move(CStr const &_From, CStr const &_To)
+	{
+		DCheckApi(CStr::CFormat("Move({}, {})") << _From << _To);
+		fp_Run("move", {_From, _To});
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_Delete(CStr const &_File)
 	{
 		DCheckApi(CStr::CFormat("Delete({})") << _File);
@@ -6264,6 +6266,11 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_Delete(CStr const &_File)
 	{
 		fp_Throw(mp_Client.f_Delete(_File));
+	}
+
+	void CPerforceClientThrow::f_Move(CStr const &_From, CStr const &_To)
+	{
+		fp_Throw(mp_Client.f_Move(_From, _To));
 	}
 
 	void CPerforceClientThrow::f_OpenForEditOrMakeWritable(CStr const &_File)
