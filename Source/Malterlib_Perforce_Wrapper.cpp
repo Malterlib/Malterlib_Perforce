@@ -5113,12 +5113,9 @@ namespace NMib::NPerforce
 	{
 		DCheckApi(CStr::CFormat("GetTextFileContents({})") << _Path);
 
-		char const *Commands[] = {"-q", nullptr};
-		Commands[1] = (ch8 *)_Path.f_GetStr();
-		mp_pAPI->SetArgv(2, (char * const *)Commands);
 		mp_pClient->m_OutputText.f_Clear();
 		mp_pClient->m_OutputTextRaw.f_Clear();
-		fp_Run("print");
+		fp_Run("print", {"-q", _Path});
 
 		CByteVector Temp;
 		Temp.f_Insert((uint8 *)mp_pClient->m_OutputTextRaw.f_GetStr(), mp_pClient->m_OutputTextRaw.f_GetLen());

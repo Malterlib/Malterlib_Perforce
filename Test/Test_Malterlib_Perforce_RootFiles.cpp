@@ -2271,6 +2271,9 @@ namespace
 							CPerforceClientThrow Client(Connection);
 							Results.f_Insert(Client.f_GetFileStatClientFiles({WorkRoot / "..."}));
 							Results.f_Insert(Client.f_GetFileStatClientFiles({CPerforceClient::fs_EscapeFileName(WorkRoot / "Special \u00e9") / "..."}));
+
+							// A print takes its path in the command charset too.
+							Results.f_Insert(TCVector<CStr>{Client.f_GetTextFileContents(CPerforceClient::fs_EscapeFileName(WorkRoot / "Special \u00e9/New.cpp"))});
 						}
 						return Results;
 					}
@@ -2279,7 +2282,15 @@ namespace
 			;
 
 			CStr Expected = WorkRoot / "Special \u00e9/New.cpp";
-			DMibExpect(Queried, ==, (TCVector<TCVector<CStr>>{{Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}, {Expected}}));
+			TCVector<TCVector<CStr>> ExpectedResults;
+			for (umint iConnection = 0; iConnection < Connections.f_GetLen(); ++iConnection)
+			{
+				ExpectedResults.f_Insert(TCVector<CStr>{Expected});
+				ExpectedResults.f_Insert(TCVector<CStr>{Expected});
+				ExpectedResults.f_Insert(TCVector<CStr>{"First\n"});
+			}
+
+			DMibExpect(Queried, ==, ExpectedResults);
 
 			co_return {};
 		};
