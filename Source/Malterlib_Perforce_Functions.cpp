@@ -103,12 +103,13 @@ CStr CPerforceFunctions::fs_GetCommonPath(CStr const &_First, CStr const &_Secon
 	return _First.f_Left(pParse0 - pParse0Start);
 }
 
+// The stream of the workspace the session uses, also when the settings chose it rather than the connection.
 CStr CPerforceFunctions::f_GetCurrentStream() const
 {
 	CStr CurrentStream;
 	m_pClient->f_GetClient
 		(
-			m_pClient->f_GetClient()
+			m_pClient->f_GetActiveClient()
 			, [&](CStr const &_Key, CStr const &_Value)
 			{
 				if (_Key == "Stream")
