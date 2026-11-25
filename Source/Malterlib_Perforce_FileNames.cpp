@@ -80,7 +80,9 @@ namespace NMib::NPerforce
 
 #ifdef DPlatformFamily_Windows
 	// The path Windows opens for _Path, with Malterlib's separators: . and .. resolved by the names as GetFullPathNameW resolves
-	// them, which stops at a drive's root or a UNC share's root, and a rooted path without a drive on the current drive.
+	// them, which stops at a drive's root or a UNC share's root, and a rooted path without a drive on the current drive. A drive
+	// keeps the spelling _Path gives it, and the current drive is in lower case, as Malterlib spells the current directory, where
+	// GetFullPathNameW spells it as the process's current directory was set.
 	NStr::CStr fg_WindowsFullPath(NStr::CStr const &_Path)
 	{
 		if (_Path.f_IsEmpty())
@@ -100,7 +102,14 @@ namespace NMib::NPerforce
 		FullPath.f_SetAt(nWritten, 0);
 		FullPath.f_TrimSize();
 
-		return NFile::CFile::fs_GetMalterlibPath(NStr::CStr(FullPath));
+		NStr::CStr Result = NFile::CFile::fs_GetMalterlibPath(NStr::CStr(FullPath));
+		if (Result.f_GetLen() >= 2 && Result[1] == ':')
+		{
+			bool bDriveGiven = _Path.f_GetLen() >= 2 && _Path[1] == ':';
+			Result.f_SetAt(0, bDriveGiven ? _Path[0] : NStr::fg_CharLowerCase(Result[0]));
+		}
+
+		return Result;
 	}
 #endif
 

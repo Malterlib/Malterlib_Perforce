@@ -348,6 +348,29 @@ namespace
 						, (TCVector<CStr>{CFile::fs_GetDrive(CFile::fs_GetCurrentDirectory()) + "\\Config\\ignore"})
 					)
 				;
+				{
+					// Also when the process's current directory was set with an upper case drive, which Windows keeps while Malterlib
+					// spells it in lower case.
+					DMibTestPath("UpperCaseCurrentDrive");
+					// The native read gives the directory as Windows keeps it, drive letter included.
+					wchar_t CurrentDirectory[MAX_PATH + 1];
+					DWORD nCurrentDirectory = GetCurrentDirectoryW(MAX_PATH + 1, CurrentDirectory);
+					DMibAssertTrue(nCurrentDirectory > 2 && nCurrentDirectory <= MAX_PATH && CurrentDirectory[1] == L':');
+					CStr OriginalDirectory = CWStr(CurrentDirectory, nCurrentDirectory);
+					auto Restore = g_OnScopeExitWithException / [&]
+						{
+							CFile::fs_SetCurrentDirectory(OriginalDirectory);
+						}
+					;
+					CFile::fs_SetCurrentDirectory(OriginalDirectory.f_Left(1).f_UpperCase() + OriginalDirectory.f_Extract(1));
+					DMibExpect
+						(
+							CPerforceIgnore::fs_ResolveIgnoreNames("\\Config\\ignore", "//Server/Share/Root")
+							, ==
+							, (TCVector<CStr>{CFile::fs_GetDrive(CFile::fs_GetCurrentDirectory()) + "\\Config\\ignore"})
+						)
+					;
+				}
 				// A single name with a drive and forward slashes has no backslash, so it is a bare name to the matcher.
 				DMibExpect(CPerforceIgnore::fs_ResolveIgnoreNames("C:/Config/ignore", "D:/Root"), ==, (TCVector<CStr>{"C:/Config/ignore"}));
 #else
