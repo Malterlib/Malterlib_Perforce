@@ -3,6 +3,7 @@
 
 #include <Mib/Core/Core>
 #include <Mib/Concurrency/AsyncDestroy>
+#include <Mib/Cryptography/UUID>
 #include <Mib/File/File>
 #include <Mib/Test/Exception>
 #include <Mib/Test/Test>
@@ -12,8 +13,15 @@
 #include <Mib/Perforce/Wrapper>
 
 #ifdef DPlatformFamily_Windows
+#	include <Mib/Core/OnScopeExitCatch>
+#	include <Mib/Core/PlatformSpecific/WindowsRegistry>
+#	include <Mib/Core/PlatformSpecific/WindowsString>
+#	include <Mib/Process/ProcessLaunch>
+#	include <Mib/Thread/ThreadObject>
+#	include <Mib/Time/Stopwatch>
 #	include <Windows.h>
 #	include <AclAPI.h>
+#	undef SetPort
 #else
 #	include <fcntl.h>
 #	include <limits.h>
@@ -21,6 +29,16 @@
 #	include <stdlib.h>
 #	include <sys/stat.h>
 #	include <unistd.h>
+#endif
+
+#ifdef DCompiler_MSVC
+#	pragma warning(push,2)
+#endif
+#include "clientapi.h"
+#include "enviro.h"
+#include "strtable.h"
+#ifdef DCompiler_MSVC
+#	pragma warning(pop)
 #endif
 
 namespace
@@ -58,6 +76,54 @@ namespace
 		return Root;
 	}
 
+#ifndef DPlatformFamily_Windows
+	// Files and directories made by the system's functions, which keep a backslash in a name, and removed with the object, the last
+	// made first.
+	struct CNativePaths
+	{
+		~CNativePaths();
+
+		bool f_Write(CStr const &_Path, CStr const &_Contents);
+		bool f_MakeDirectory(CStr const &_Path);
+
+	private:
+		TCVector<CStr> mp_Paths;
+	};
+
+	CNativePaths::~CNativePaths()
+	{
+		for (aint iPath = aint(mp_Paths.f_GetLen()) - 1; iPath >= 0; --iPath)
+			remove(mp_Paths[iPath].f_GetStr());
+	}
+
+	bool CNativePaths::f_Write(CStr const &_Path, CStr const &_Contents)
+	{
+		int File = open(_Path.f_GetStr(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+		if (File < 0)
+			return false;
+
+		auto CloseFile = g_OnScopeExit / [&]
+			{
+				close(File);
+			}
+		;
+
+		mp_Paths.f_Insert(_Path);
+
+		return write(File, _Contents.f_GetStr(), _Contents.f_GetLen()) == ssize_t(_Contents.f_GetLen());
+	}
+
+	bool CNativePaths::f_MakeDirectory(CStr const &_Path)
+	{
+		if (mkdir(_Path.f_GetStr(), 0700) != 0)
+			return false;
+
+		mp_Paths.f_Insert(_Path);
+
+		return true;
+	}
+#endif
+
 #ifdef DPlatformFamily_Windows
 	// A non-ASCII character that the active code page represents, one of several scripts' as code pages represent different ones,
 	// or empty when it represents none of them.
@@ -88,7 +154,7 @@ namespace
 		{
 			CStr Root = fg_MakeTestRoot("TestPerforceRootFiles");
 			// Explicit, so the user's environment and enviro file do not change what is ignored.
-			CPerforceIgnore::CSettings Settings{.m_IgnoreNames = {".p4ignore"}, .m_ConfigName = ".p4config"};
+			CPerforceIgnore::CSettings Settings{.m_IgnoreNames = {".p4ignore"}};
 			CStr Workspace = Root / "Workspace";
 
 			fg_WriteFile(Workspace / ".p4config", "P4CLIENT=Test\n");
@@ -274,20 +340,6 @@ namespace
 				DMibExpectFalse(RuleFileSet.f_FindEqual(Workspace / "Generated/.p4ignore"));
 				DMibExpectFalse(RuleFileSet.f_FindEqual(Workspace / "Source/.p4config"));
 
-				// A P4CONFIG with a path is looked for from the root and above it, and an absolute one is the file itself.
-				TCVector<CStr> PathConfigRuleFiles;
-				CPerforceRootFiles(Workspace, OtherRepositories, CPerforceIgnore::CSettings{.m_IgnoreNames = {".p4ignore"}, .m_ConfigName = "Config/p4config"})
-					.f_ListExcluded(&PathConfigRuleFiles)
-				;
-				TCVector<CStr> AbsoluteConfigRuleFiles;
-				CPerforceRootFiles(Workspace, OtherRepositories, CPerforceIgnore::CSettings{.m_IgnoreNames = {".p4ignore"}, .m_ConfigName = Root / "Shared.p4config"})
-					.f_ListExcluded(&AbsoluteConfigRuleFiles)
-				;
-				DMibExpectTrue(PathConfigRuleFiles.f_Contains(Workspace / "Config/p4config") >= 0);
-				DMibExpectTrue(PathConfigRuleFiles.f_Contains(Root / "Config/p4config") >= 0);
-				DMibExpectTrue(AbsoluteConfigRuleFiles.f_Contains(Root / "Shared.p4config") >= 0);
-				DMibExpectFalse(AbsoluteConfigRuleFiles.f_Contains(Workspace / (Root / "Shared.p4config")) >= 0);
-
 				// A root spelled with a separator ending it lists and contains the same files.
 				CPerforceRootFiles SeparatorRootFiles(Workspace + "/", OtherRepositories, Settings);
 				DMibExpect(SeparatorRootFiles.f_List(), ==, RootFiles.f_List());
@@ -390,7 +442,7 @@ namespace
 				DMibExpect(CPerforceIgnore::fs_ResolveIgnoreNames(";unset", Workspace), ==, TCVector<CStr>{"unset"});
 
 				fg_WriteFile(Workspace / "Config/ignore", "Keep.log\n");
-				CPerforceIgnore Ignore(CPerforceIgnore::CSettings{.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames("Config/ignore", Workspace), .m_ConfigName = ".p4config"});
+				CPerforceIgnore Ignore(CPerforceIgnore::CSettings{.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames("Config/ignore", Workspace)});
 				DMibExpectTrue(Ignore.f_IsIgnored(Workspace / "Keep.log", false));
 
 				// A directory with the list's separators in its name keeps a path resolved under it whole.
@@ -404,7 +456,7 @@ namespace
 				fg_WriteFile(SeparatorRoot / "Config/ignore", "Keep.log\n");
 				auto SeparatorNames = CPerforceIgnore::fs_ResolveIgnoreNames("Config/ignore;.p4ignore", SeparatorRoot);
 				DMibExpect(SeparatorNames, ==, (TCVector<CStr>{SeparatorIgnoreFile, ".p4ignore"}));
-				CPerforceIgnore SeparatorIgnore(CPerforceIgnore::CSettings{.m_IgnoreNames = SeparatorNames, .m_ConfigName = ".p4config"});
+				CPerforceIgnore SeparatorIgnore(CPerforceIgnore::CSettings{.m_IgnoreNames = SeparatorNames});
 				DMibExpectTrue(SeparatorIgnore.f_IsIgnored(SeparatorRoot / "Keep.log", false));
 				DMibExpectFalse(SeparatorIgnore.f_IsIgnored(SeparatorRoot / "A.cpp", false));
 
@@ -420,7 +472,7 @@ namespace
 				// A bare name with a drive and a root is that file for every directory, also among the rule files.
 				CStr DriveIgnoreFile = Root / "Drive.ignore";
 				fg_WriteFile(DriveIgnoreFile, "Keep.log\n");
-				CPerforceIgnore::CSettings DriveSettings{.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames(DriveIgnoreFile, Workspace), .m_ConfigName = ".p4config"};
+				CPerforceIgnore::CSettings DriveSettings{.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames(DriveIgnoreFile, Workspace)};
 				DMibExpectTrue(CPerforceIgnore(DriveSettings).f_IsIgnored(Workspace / "Keep.log", false));
 				TCVector<CStr> DriveRuleFiles;
 				CPerforceRootFiles(Workspace, {}, DriveSettings).f_ListExcluded(&DriveRuleFiles);
@@ -462,58 +514,27 @@ namespace
 				CStr Backslash = Root / "Backslash";
 				CFile::fs_CreateDirectory(Backslash);
 				// Malterlib's file functions take a backslash for a separator, so these files are made and removed by the system's.
-				TCVector<CStr> NativePaths;
-				auto RemoveNative = g_OnScopeExit / [&]
-					{
-						for (aint iPath = aint(NativePaths.f_GetLen()) - 1; iPath >= 0; --iPath)
-							remove(NativePaths[iPath].f_GetStr());
-					}
-				;
-				// The helpers have no expectations of their own, which would repeat their test paths.
-				auto fWriteNative = [&](CStr const &_Path, CStr const &_Contents)
-					{
-						int File = open(_Path.f_GetStr(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
-						if (File < 0)
-							return false;
-
-						NativePaths.f_Insert(_Path);
-						bool bWritten = write(File, _Contents.f_GetStr(), _Contents.f_GetLen()) == ssize_t(_Contents.f_GetLen());
-						close(File);
-
-						return bWritten;
-					}
-				;
-				auto fMakeNativeDirectory = [&](CStr const &_Path)
-					{
-						if (mkdir(_Path.f_GetStr(), 0700) != 0)
-							return false;
-
-						NativePaths.f_Insert(_Path);
-
-						return true;
-					}
-				;
-
-				DMibAssertTrue(fWriteNative(Backslash / "Local\\ignore", "A.cpp\n"));
-				DMibAssertTrue(fMakeNativeDirectory(Backslash / "Rules\\Local"));
-				DMibAssertTrue(fWriteNative(Backslash / "Rules\\Local/ignore", "B.cpp\n"));
+				CNativePaths Native;
+				DMibAssertTrue(Native.f_Write(Backslash / "Local\\ignore", "A.cpp\n"));
+				DMibAssertTrue(Native.f_MakeDirectory(Backslash / "Rules\\Local"));
+				DMibAssertTrue(Native.f_Write(Backslash / "Rules\\Local/ignore", "B.cpp\n"));
 				auto BareNames = CPerforceIgnore::fs_ResolveIgnoreNames("Local\\ignore", Backslash);
 				auto PathNames = CPerforceIgnore::fs_ResolveIgnoreNames("Rules\\Local/ignore", Backslash);
 				DMibExpect(PathNames, ==, TCVector<CStr>{Backslash + "/Rules\\Local/ignore"});
 				DMibExpectTrue(CPerforceIgnore(CPerforceIgnore::CSettings{.m_IgnoreNames = BareNames}).f_IsIgnored(Backslash / "A.cpp", false));
 				DMibExpectTrue(CPerforceIgnore(CPerforceIgnore::CSettings{.m_IgnoreNames = PathNames}).f_IsIgnored(Backslash / "B.cpp", false));
 
-				// P4ENVIRO, P4CONFIG and $configdir keep them too.
+				// P4ENVIRO, the .p4config files and $configdir keep them too.
 				CStr ConfigDirectory = Backslash / "Config\\Directory";
-				DMibAssertTrue(fMakeNativeDirectory(ConfigDirectory));
-				DMibAssertTrue(fWriteNative(Backslash / "Local\\enviro", "P4CONFIG=Local\\p4config\n"));
-				DMibAssertTrue(fWriteNative(ConfigDirectory / "Local\\p4config", "P4IGNORE=$configdir/Config.ignore\n"));
-				auto ConfigSettings = CPerforceIgnore::fs_GetSettings(ConfigDirectory, {{"P4ENVIRO", Backslash / "Local\\enviro"}});
+				DMibAssertTrue(Native.f_MakeDirectory(ConfigDirectory));
+				DMibAssertTrue(Native.f_Write(Backslash / "Local\\enviro", "P4CLIENT=Local\n"));
+				DMibAssertTrue(Native.f_Write(ConfigDirectory + "/.p4config", "P4IGNORE=$configdir/Config.ignore\n"));
+				auto ConfigSettings = CPerforceIgnore::fs_GetSettings(ConfigDirectory, {{"P4ENVIRO", Backslash / "Local\\enviro"}}, {});
 				DMibExpect
 					(
-						(TCVector<CStr>{ConfigSettings.m_EnviroFile, ConfigSettings.m_ConfigName.f_GetDescription(), ConfigSettings.f_GetConfigFile(ConfigDirectory)})
+						(TCVector<CStr>{ConfigSettings.m_EnviroFile, ConfigSettings.f_GetConfigFile(ConfigDirectory)})
 						, ==
-						, (TCVector<CStr>{Backslash + "/Local\\enviro", "Local\\p4config", ConfigDirectory + "/Local\\p4config"})
+						, (TCVector<CStr>{Backslash + "/Local\\enviro", ConfigDirectory + "/.p4config"})
 					)
 				;
 				// A settings file's value is its bytes.
@@ -529,20 +550,14 @@ namespace
 				CStr RuleRoot = Root / "BackslashRules";
 				fg_WriteFile(RuleRoot / "A.cpp", "");
 				TCVector<CStr> RuleFiles;
-				CPerforceRootFiles(RuleRoot, {}, CPerforceIgnore::CSettings{.m_IgnoreNames = PathNames, .m_ConfigName = "Local\\p4config", .m_EnviroFile = Backslash + "/Local\\enviro"})
-					.f_ListExcluded(&RuleFiles)
-				;
+				CPerforceRootFiles(RuleRoot, {}, CPerforceIgnore::CSettings{.m_IgnoreNames = PathNames, .m_EnviroFile = Backslash + "/Local\\enviro"}).f_ListExcluded(&RuleFiles);
 				TCVector<CStr> MissingRuleFiles;
-				for (auto &RuleFile : {Backslash + "/Rules\\Local/ignore", RuleRoot + "/Local\\p4config", Root + "/Local\\p4config", Backslash + "/Local\\enviro"})
+				for (auto &RuleFile : {Backslash + "/Rules\\Local/ignore", RuleRoot + "/.p4config", Root + "/.p4config", Backslash + "/Local\\enviro"})
 				{
 					if (RuleFiles.f_Contains(RuleFile) < 0)
 						MissingRuleFiles.f_Insert(RuleFile);
 				}
 				DMibExpect(MissingRuleFiles, ==, TCVector<CStr>{});
-
-				// The leading . and .. of a P4CONFIG are taken from the directory by name, as p4 joins them, and the rest is kept.
-				DMibExpect(CPerforceIgnore::CSettings{.m_ConfigName = "../Shared.p4config"}.f_GetConfigFile(Backslash), ==, Root + "/Shared.p4config");
-				DMibExpect(CPerforceIgnore::CSettings{.m_ConfigName = "./Config/../p4config"}.f_GetConfigFile(Backslash), ==, Backslash + "/Config/../p4config");
 			}
 
 			{
@@ -567,40 +582,36 @@ namespace
 				CPerforceIgnore::CSettings LinkedSettings
 					{
 						.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames("Config/../ignore;Config/../Missing.ignore;Missing/../ignore", Linked)
-						, .m_ConfigName = "Config/../linked.p4config"
 					}
 				;
 				TCVector<CStr> LinkedRuleFiles;
 				CPerforceRootFiles(Linked, {}, LinkedSettings).f_ListExcluded(&LinkedRuleFiles);
 				TCVector<CStr> Tracked;
-				for (CStr const &File : {Shared + "/ignore", Shared + "/Missing.ignore", Linked + "/Missing", Shared + "/linked.p4config", Linked + "/Config/../ignore"})
+				for (CStr const &File : {Shared + "/ignore", Shared + "/Missing.ignore", Linked + "/Missing", Linked + "/Config/../ignore"})
 				{
 					if (LinkedRuleFiles.f_Contains(File) >= 0)
 						Tracked.f_Insert(File);
 				}
-				DMibExpect(Tracked, ==, (TCVector<CStr>{Shared + "/ignore", Shared + "/Missing.ignore", Linked + "/Missing", Shared + "/linked.p4config"}));
+				DMibExpect(Tracked, ==, (TCVector<CStr>{Shared + "/ignore", Shared + "/Missing.ignore", Linked + "/Missing"}));
 
 				{
-					// A directory's settings files, by which BuildSystem knows a Perforce root before any walk: the P4CONFIG file p4
-					// opens through the link, which is only in the link's target, and the files tracked for it and the enviro file,
-					// resolved the same way, with the directory holding the link.
+					// A directory's settings files, by which BuildSystem knows a Perforce root before any walk: the enviro file p4
+					// opens through the link, which is only in the link's target, resolved the same way, with the directory holding
+					// the link as the resolver spells it, without links, and the directory's .p4config.
 					DMibTestPath("SettingsFiles");
-					fg_WriteFile(Root / "Shared/linked.p4config", "P4CLIENT=Linked\n");
 					fg_WriteFile(Root / "Shared/linked.p4enviro", "");
 					char ResolvedLinkedPath[PATH_MAX];
 					DMibAssertTrue(realpath(Linked.f_GetStr(), ResolvedLinkedPath) != nullptr);
 					CStr LinkDirectory = ResolvedLinkedPath;
-					auto SettingsFiles = CPerforceIgnore::fs_GetSettings(Linked, {{"P4CONFIG", "Config/../linked.p4config"}, {"P4ENVIRO", Linked + "/Config/../linked.p4enviro"}})
-						.f_GetSettingsFiles(Linked)
-					;
-					DMibExpect(SettingsFiles.m_ConfigFile, ==, Linked + "/Config/../linked.p4config");
+					auto SettingsFiles = CPerforceIgnore::fs_GetSettings(Linked, {{"P4ENVIRO", Linked + "/Config/../linked.p4enviro"}}, {}).f_GetSettingsFiles(Linked);
+					DMibExpect(SettingsFiles.m_ConfigFile, ==, "");
 					TCVector<CStr> Dependencies;
-					for (CStr const &File : {Shared + "/linked.p4config", Shared + "/linked.p4enviro", LinkDirectory, Linked + "/linked.p4config"})
+					for (CStr const &File : {Shared + "/linked.p4enviro", LinkDirectory, Linked + "/.p4config"})
 					{
 						if (SettingsFiles.m_Dependencies.f_FindEqual(File))
 							Dependencies.f_Insert(File);
 					}
-					DMibExpect(Dependencies, ==, (TCVector<CStr>{Shared + "/linked.p4config", Shared + "/linked.p4enviro", LinkDirectory}));
+					DMibExpect(Dependencies, ==, (TCVector<CStr>{Shared + "/linked.p4enviro", LinkDirectory, Linked + "/.p4config"}));
 				}
 
 				// Retargeting a link before the .. changes the file opened, so the directories holding the links are tracked too,
@@ -1109,7 +1120,7 @@ namespace
 			{
 				DMibTestPath("CustomIgnoreFileName");
 				fg_WriteFile(Workspace / "p4ignore.txt", "A.cpp\n");
-				CPerforceIgnore Ignore(CPerforceIgnore::CSettings{.m_IgnoreNames = {"p4ignore.txt"}, .m_ConfigName = ".p4config"});
+				CPerforceIgnore Ignore(CPerforceIgnore::CSettings{.m_IgnoreNames = {"p4ignore.txt"}});
 				DMibExpectTrue(Ignore.f_IsIgnored(Workspace / "A.cpp", false));
 				DMibExpectFalse(Ignore.f_IsIgnored(Workspace / "Debug.log", false));
 			}
@@ -1125,6 +1136,7 @@ namespace
 			CFile::fs_CreateDirectory(Plain);
 			fg_WriteFile(Home / ".p4enviro", "P4CONFIG=.p4config\nP4IGNORE=Enviro.ignore\n");
 			fg_WriteFile(Home / "Other.enviro", "P4IGNORE=Other.ignore\n");
+			fg_WriteFile(Home / "Config.enviro", "P4CONFIG=Hidden.p4config\nP4IGNORE=Hidden.ignore\n");
 			fg_WriteFile(Outer / ".p4config", "P4CLIENT=Outer\nP4IGNORE=Outer.ignore\n");
 			fg_WriteFile(Inner / ".p4config", "P4IGNORE=$configdir/Inner.ignore  \nP4IGNORE=Second.ignore\n");
 			// p4 reads the bytes as they are: the byte order mark is part of the first name.
@@ -1138,8 +1150,8 @@ namespace
 			CFile::fs_CreateDirectory(LinkedFifo);
 			DMibAssert(mkfifo((Root / "Config.fifo").f_GetStr(), 0600), ==, 0);
 			DMibAssert(symlink((Root / "Config.fifo").f_GetStr(), (LinkedFifo / ".p4config").f_GetStr()), ==, 0);
-			auto LinkedFifoSettings = CPerforceIgnore::fs_GetSettings(LinkedFifo, {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", (Root / "Config.fifo").f_GetStr()}});
-			DMibExpect(LinkedFifoSettings.m_ConfigName, ==, ".p4config");
+			auto LinkedFifoSettings = CPerforceIgnore::fs_GetSettings(LinkedFifo, {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", (Root / "Config.fifo").f_GetStr()}}, {});
+			DMibExpect(LinkedFifoSettings.f_GetSettingsFiles(LinkedFifo).m_ConfigFile, ==, "");
 #endif
 
 			auto fNative = [](CStr const &_Path)
@@ -1157,9 +1169,9 @@ namespace
 				{
 					auto Environment = _Environment;
 					Environment[HomeVariable] = Home;
-					auto Settings = CPerforceIgnore::fs_GetSettings(_Directory, Environment);
+					auto Settings = CPerforceIgnore::fs_GetSettings(_Directory, Environment, {});
 
-					return {fg_JoinDescriptions(Settings.m_IgnoreNames), Settings.m_ConfigName.f_GetDescription(), Settings.m_EnviroFile};
+					return {fg_JoinDescriptions(Settings.m_IgnoreNames), Settings.m_EnviroFile};
 				}
 			;
 
@@ -1168,13 +1180,11 @@ namespace
 			// p4 has no default enviro file on Windows.
 			CStr DefaultEnviro;
 			CStr EnviroIgnore = Default;
-			CStr EnviroConfig;
 			// The environment ignores case on Windows.
 			CStr LowerCaseEnvironmentIgnore = "Env.ignore";
 #else
 			CStr DefaultEnviro = Home / ".p4enviro";
 			CStr EnviroIgnore = "Enviro.ignore";
-			CStr EnviroConfig = ".p4config";
 			CStr LowerCaseEnvironmentIgnore = EnviroIgnore;
 #endif
 #if defined(DPlatformFamily_Windows) || defined(DPlatformFamily_macOS)
@@ -1187,22 +1197,23 @@ namespace
 			TCVector<TCVector<CStr>> Expected =
 				{
 					// The nearest P4CONFIG file outranks those above it, and its first line of a variable counts.
-					{fNative(Inner) + "/Inner.ignore", ".p4config", DefaultEnviro}
-					, {"Outer.ignore", ".p4config", DefaultEnviro}
+					{fNative(Inner) + "/Inner.ignore", DefaultEnviro}
+					, {"Outer.ignore", DefaultEnviro}
 					// A P4CONFIG file outranks the environment, which outranks the enviro file.
-					, {"Outer.ignore", ".p4config", DefaultEnviro}
-					, {"Env.ignore", ".p4config", DefaultEnviro}
-					// A variable the environment doesn't set comes from the enviro file, and one set empty is unset.
-					, {EnviroIgnore, EnviroConfig, DefaultEnviro}
-					, {Default, EnviroConfig, DefaultEnviro}
-					, {EnviroIgnore, "", DefaultEnviro}
+					, {"Outer.ignore", DefaultEnviro}
+					, {"Env.ignore", DefaultEnviro}
+					// A variable the environment doesn't set comes from the enviro file, and one set empty is unset. The P4CONFIG
+					// files are .p4config, whatever P4CONFIG is.
+					, {EnviroIgnore, DefaultEnviro}
+					, {Default, DefaultEnviro}
+					, {fNative(Inner) + "/Inner.ignore", Home / "Config.enviro"}
 					// P4ENVIRO and $home are the environment's.
-					, {"Other.ignore", "", Home / "Other.enviro"}
-					, {EnviroIgnore, EnviroConfig, DefaultEnviro}
-					, {Home + fNative("/Home.ignore"), EnviroConfig, DefaultEnviro}
-					, {EnviroIgnore, ".p4config", DefaultEnviro}
-					, {LowerCaseIgnore, ".p4config", DefaultEnviro}
-					, {LowerCaseEnvironmentIgnore, EnviroConfig, DefaultEnviro}
+					, {"Other.ignore", Home / "Other.enviro"}
+					, {EnviroIgnore, DefaultEnviro}
+					, {Home + fNative("/Home.ignore"), DefaultEnviro}
+					, {EnviroIgnore, DefaultEnviro}
+					, {LowerCaseIgnore, DefaultEnviro}
+					, {LowerCaseEnvironmentIgnore, DefaultEnviro}
 				}
 			;
 			TCVector<TCVector<CStr>> Settings =
@@ -1213,7 +1224,7 @@ namespace
 					, fSettings(Plain, {{"P4CONFIG", ".p4config"}, {"P4IGNORE", "Env.ignore"}})
 					, fSettings(Plain, {})
 					, fSettings(Plain, {{"P4IGNORE", ""}})
-					, fSettings(Inner, {{"P4CONFIG", ""}})
+					, fSettings(Inner, {{"P4CONFIG", ""}, {"P4ENVIRO", "$home/Config.enviro"}})
 					, fSettings(Plain, {{"P4ENVIRO", "$home/Other.enviro"}})
 					, fSettings(Plain, {{"P4ENVIRO", ""}})
 					, fSettings(Plain, {{"P4IGNORE", fNative("$home/Home.ignore")}})
@@ -1225,13 +1236,13 @@ namespace
 			DMibExpect(Settings, ==, Expected);
 
 			// $home is the home directory without the separator ending it.
-			auto TrailingHome = CPerforceIgnore::fs_GetSettings(Plain, {{HomeVariable, Home + "/"}, {"P4IGNORE", "$home.ignore"}});
-			DMibExpect(TrailingHome.m_IgnoreNames, ==, TCVector<CStr>{Home + ".ignore"});
+			auto TrailingHome = CPerforceIgnore::fs_GetSettings(Plain, {{HomeVariable, Home + "/"}, {"P4IGNORE", "$home.ignore"}}, {});
+			DMibExpect(fg_JoinDescriptions(TrailingHome.m_IgnoreNames), ==, Home + ".ignore");
 
 #ifndef DPlatformFamily_Windows
 			// The default enviro file of a relative home is opened from the directory, as a relative P4ENVIRO is, not from the
 			// process's current directory.
-			auto RelativeHome = CPerforceIgnore::fs_GetSettings(Root, {{HomeVariable, "Home"}});
+			auto RelativeHome = CPerforceIgnore::fs_GetSettings(Root, {{HomeVariable, "Home"}}, {});
 			DMibExpect((TCVector<CStr>{RelativeHome.m_EnviroFile, fg_JoinDescriptions(RelativeHome.m_IgnoreNames)}), ==, (TCVector<CStr>{Root / "Home/.p4enviro", "Enviro.ignore"}));
 #endif
 
@@ -1241,7 +1252,7 @@ namespace
 			if (GetACP() == 1252)
 			{
 				fg_WriteFile(Root / "Enviro \u6f22/p4enviro", "P4IGNORE=Outside.ignore\n");
-				auto OutsideSettings = CPerforceIgnore::fs_GetSettings(Plain, {{"P4ENVIRO", Root / "Enviro \u6f22/p4enviro"}});
+				auto OutsideSettings = CPerforceIgnore::fs_GetSettings(Plain, {{"P4ENVIRO", Root / "Enviro \u6f22/p4enviro"}}, {});
 				DMibExpect
 					(
 						(TCVector<CStr>{OutsideSettings.m_EnviroFile, fg_JoinDescriptions(OutsideSettings.m_IgnoreNames)})
@@ -1252,33 +1263,9 @@ namespace
 			}
 #endif
 
-#ifdef DPlatformFamily_Windows
-			if (GetACP() == 1252)
-			{
-				// With UTF-8 file names p4 opens a P4CONFIG by its UTF-8 name and, when that fails, by the code page's, so both are
-				// tracked before either exists, and the one that exists makes the directory a Perforce root.
-				DMibTestPath("TwoConfigSpellings");
-				CStr TwoSpellings = Root / "TwoSpellings";
-				CFile::fs_CreateDirectory(TwoSpellings);
-				auto fSettingsFiles = [&]
-					{
-						return CPerforceIgnore::fs_GetSettings(TwoSpellings, {{"P4CONFIG", "caf\u00e9.cfg"}, {"P4CHARSET", "utf8"}}).f_GetSettingsFiles(TwoSpellings);
-					}
-				;
-				CStr UTF8Spelling = TwoSpellings / "caf\u00e9.cfg";
-				CStr CodePageSpelling = TwoSpellings / "caf\u00c3\u00a9.cfg";
-				auto Missing = fSettingsFiles();
-				DMibExpect(Missing.m_ConfigFile, ==, "");
-				DMibExpectTrue(Missing.m_Dependencies.f_FindEqual(UTF8Spelling));
-				DMibExpectTrue(Missing.m_Dependencies.f_FindEqual(CodePageSpelling));
-				fg_WriteFile(CodePageSpelling, "P4CLIENT=Fallback\n");
-				DMibExpect(fSettingsFiles().m_ConfigFile, ==, CodePageSpelling);
-			}
-#endif
-
 			// P4CHARSET and P4COMMANDCHARSET are read like the other settings: a P4CONFIG file outranks the environment.
 			fg_WriteFile(Root / "Charset/.p4config", "P4CHARSET=cp850\n");
-			auto CharsetSettings = CPerforceIgnore::fs_GetSettings(Root / "Charset", {{"P4CONFIG", ".p4config"}, {"P4CHARSET", "winansi"}, {"P4COMMANDCHARSET", "cp1251"}});
+			auto CharsetSettings = CPerforceIgnore::fs_GetSettings(Root / "Charset", {{"P4CONFIG", ".p4config"}, {"P4CHARSET", "winansi"}, {"P4COMMANDCHARSET", "cp1251"}}, {});
 			DMibExpect((TCVector<CStr>{CharsetSettings.m_Charset, CharsetSettings.m_CommandCharset}), ==, (TCVector<CStr>{"cp850", "cp1251"}));
 
 			// Without P4CHARSET the charset p4 learned for the port the settings give, here a P4CONFIG file's, is read from the
@@ -1288,6 +1275,7 @@ namespace
 				(
 					Root / "Learned"
 					, {{"P4CONFIG", ".p4config"}, {"P4PORT", "other:1666"}, {"P4_ssl:server@1666_CHARSET", "utf8"}, {"P4_other:1666_CHARSET", "cp850"}}
+					, {}
 				)
 			;
 			DMibExpect((TCVector<CStr>{LearnedSettings.m_LearnedCharset, LearnedSettings.m_LearnedCharsetVariable}), ==, (TCVector<CStr>{"utf8", "P4_ssl:server@1666_CHARSET"}));
@@ -1329,7 +1317,7 @@ namespace
 					;
 					fWriteBytes(Root / "NonASCIIPort/.p4config", CAnsiStr("P4PORT=") + Port + "\n");
 					fWriteBytes(Root / "NonASCIIPort.p4enviro", CAnsiStr("P4_") + Port + "_CHARSET=utf8\n");
-					auto PortSettings = CPerforceIgnore::fs_GetSettings(Root / "NonASCIIPort", {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", Root / "NonASCIIPort.p4enviro"}});
+					auto PortSettings = CPerforceIgnore::fs_GetSettings(Root / "NonASCIIPort", {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", Root / "NonASCIIPort.p4enviro"}}, {});
 #ifdef DPlatformFamily_Windows
 					CStr Variable = "P4_rsh:C:\\D\u00e9pot\\p4d.exe_CHARSET";
 #else
@@ -1339,45 +1327,30 @@ namespace
 				}
 			}
 
-			// A P4CONFIG's .. leads to the directory's parent, as p4 climbs, also from a directory spelled with a separator ending it.
-			fg_WriteFile(Outer / "Up.p4config", "P4IGNORE=Up.ignore\n");
-			fg_WriteFile(Inner / "Up.p4config", "P4IGNORE=Inner.ignore\n");
-			TCVector<TCVector<CStr>> UpSettings;
-			for (CStr const &Directory : {Inner, Inner + "/"})
-			{
-				auto Settings = CPerforceIgnore::fs_GetSettings(Directory, {{"P4CONFIG", "../Up.p4config"}});
-				UpSettings.f_Insert(TCVector<CStr>{fg_JoinDescriptions(Settings.m_IgnoreNames), Settings.f_GetConfigFile(Directory)});
-			}
-			DMibExpect(UpSettings, ==, (TCVector<TCVector<CStr>>{{"Up.ignore", Outer / "Up.p4config"}, {"Up.ignore", Outer / "Up.p4config"}}));
-
 #ifdef DPlatformFamily_Windows
-			// The P4CONFIG files of a UNC path end at its share's root, above which p4 doesn't climb. The share doesn't exist, so
+			// The .p4config files of a UNC path end at its share's root, above which p4 doesn't climb. The share doesn't exist, so
 			// the root can't be listed, while its rule files are given.
 			{
 				CPerforceIgnore::CSettings UNCSettings;
-				UNCSettings.m_ConfigName = ".p4config";
 				CStr Share = "//127.0.0.1/MalterlibNoSuchShare";
 				TCVector<CStr> RuleFiles;
 				auto Excluded = CPerforceRootFiles(Share / "Project", {}, UNCSettings).f_ListExcluded(&RuleFiles);
 				DMibExpect(Excluded, ==, TCVector<CStr>{"*"});
-				DMibExpect(RuleFiles, ==, (TCVector<CStr>{Share / ".p4config", Share / "Project/.p4config"}));
+				for (auto &RuleFile : {Share / ".p4config", Share / "Project/.p4config"})
+				{
+					DMibTestPath(RuleFile);
+					DMibExpectTrue(RuleFiles.f_Contains(RuleFile) >= 0);
+				}
 
 				// Under a UNC root, a bare ignore name that is a UNC path with forward slashes is that share's file, as the
-				// matcher's SetLocal makes it, and a drive-rooted P4CONFIG is on the current drive, where p4 runs.
-				CPerforceIgnore::CSettings RootedSettings
-					{
-						.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames(Share / "Rules/ignore", Share / "Project")
-						, .m_ConfigName = "\\Rules\\.p4config"
-					}
-				;
-				CStr CurrentDrive = CFile::fs_GetDrive(CFile::fs_GetCurrentDirectory());
-				DMibExpect(RootedSettings.f_GetConfigFile(Share / "Project"), ==, CurrentDrive + "/Rules/.p4config");
+				// matcher's SetLocal makes it.
+				CPerforceIgnore::CSettings RootedSettings{.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames(Share / "Rules/ignore", Share / "Project")};
 				TCVector<CStr> RootedRuleFiles;
 				CPerforceRootFiles(Share / "Project", {}, RootedSettings).f_ListExcluded(&RootedRuleFiles);
-				DMibExpect(RootedRuleFiles, ==, (TCVector<CStr>{Share / "Rules/ignore", CurrentDrive + "/Rules/.p4config"}));
+				DMibExpectTrue(RootedRuleFiles.f_Contains(Share / "Rules/ignore") >= 0);
 
 				// A .. at a UNC share's root stays at the root, as Windows opens the path, for P4IGNORE, whose names have p4's
-				// separators, P4CONFIG and P4ENVIRO.
+				// separators, and P4ENVIRO.
 				DMibTestPath("ShareRootParent");
 				CStr ShareParent = "\\\\127.0.0.1\\MalterlibNoSuchShare\\..";
 				DMibExpect
@@ -1386,14 +1359,633 @@ namespace
 							TCVector<CStr>
 							{
 								fg_JoinDescriptions(CPerforceIgnore::fs_ResolveIgnoreNames(ShareParent + "\\ignore", Share / "Project"))
-								, CPerforceIgnore::CSettings{.m_ConfigName = ShareParent + "\\p4config"}.f_GetConfigFile(Share / "Project")
-								, CPerforceIgnore::fs_GetSettings(Share / "Project", {{"P4CONFIG", "noconfig"}, {"P4ENVIRO", ShareParent + "\\enviro"}}).m_EnviroFile
+								, CPerforceIgnore::fs_GetSettings(Share / "Project", {{"P4ENVIRO", ShareParent + "\\enviro"}}, {}).m_EnviroFile
 							}
 						)
 						, ==
-						, (TCVector<CStr>{"\\\\127.0.0.1\\MalterlibNoSuchShare\\ignore", Share / "p4config", Share / "enviro"})
+						, (TCVector<CStr>{"\\\\127.0.0.1\\MalterlibNoSuchShare\\ignore", Share / "enviro"})
 					)
 				;
+			}
+#endif
+		};
+
+		DMibTestSuite("Registry")
+		{
+			CStr Root = fg_MakeTestRoot("TestPerforceRegistry");
+			CStr Home = Root / "Home";
+			CStr Workspace = Root / "Workspace";
+			CStr Configured = Root / "Configured";
+			CFile::fs_CreateDirectory(Workspace);
+			fg_WriteFile(Home / "Enviro.enviro", "P4IGNORE=Enviro.ignore\n");
+			fg_WriteFile(Configured / ".p4config", "P4IGNORE=Config.ignore\n");
+
+			using CRegistryValue = CPerforceIgnore::CRegistryValue;
+			using CRegistrySettings = CPerforceIgnore::CRegistrySettings;
+
+			auto fNative = [](CStr const &_Path)
+				{
+#ifdef DPlatformFamily_Windows
+					return _Path.f_ReplaceChar('/', '\\');
+#else
+					return _Path;
+#endif
+				}
+			;
+
+			// A missing enviro file, whose settings would outrank the registry's.
+			CStr HomeVariable = CPerforceIgnore::fs_GetEnvironmentVariables().f_GetLast();
+			TCMap<CStr, CStr> NoEnviro = {{HomeVariable, Home}, {"P4ENVIRO", Home / "Missing.enviro"}};
+			auto fEnvironment = [&](TCMap<CStr, CStr> const &_Variables)
+				{
+					auto Environment = NoEnviro;
+					for (auto iVariable = _Variables.f_GetIterator(); iVariable; ++iVariable)
+						Environment[iVariable.f_GetKey()] = *iVariable;
+					return Environment;
+				}
+			;
+			auto fTextRegistry = [](TCMap<CStr, CStr> const &_User, TCMap<CStr, CStr> const &_Machine)
+				{
+					CRegistrySettings Registry;
+					for (auto iValue = _User.f_GetIterator(); iValue; ++iValue)
+						Registry.m_User[iValue.f_GetKey()] = CRegistryValue::fs_FromText(*iValue);
+					for (auto iValue = _Machine.f_GetIterator(); iValue; ++iValue)
+						Registry.m_Machine[iValue.f_GetKey()] = CRegistryValue::fs_FromText(*iValue);
+					return Registry;
+				}
+			;
+			auto fIgnore = [&](CStr const &_Directory, TCMap<CStr, CStr> const &_Variables, CRegistrySettings const &_Registry)
+				{
+					return fg_JoinDescriptions(CPerforceIgnore::fs_GetSettings(_Directory, fEnvironment(_Variables), _Registry).m_IgnoreNames);
+				}
+			;
+			CStr Default = ".p4ignore;p4ignore.txt;{};{}"_f << fNative(Home / ".p4ignore") << fNative(Home / "p4ignore.txt");
+
+			{
+				// HKEY_CURRENT_USER's key outranks HKEY_LOCAL_MACHINE's, and both rank below the enviro file, the environment, also a
+				// variable set empty there, and the .p4config files. A registry value without data is unset and hides
+				// HKEY_LOCAL_MACHINE's, while one of empty text sets P4IGNORE to no files.
+				DMibTestPath("Precedence");
+				auto Both = fTextRegistry({{"P4IGNORE", "User.ignore"}}, {{"P4IGNORE", "Machine.ignore"}});
+				auto NoData = fTextRegistry({}, {{"P4IGNORE", "Machine.ignore"}});
+				NoData.m_User["P4IGNORE"] = CRegistryValue{.m_Data = {}};
+				DMibExpect
+					(
+						(
+							TCVector<CStr>
+							{
+								fIgnore(Workspace, {}, Both)
+								, fIgnore(Workspace, {}, fTextRegistry({}, {{"P4IGNORE", "Machine.ignore"}}))
+								, fIgnore(Workspace, {{"P4ENVIRO", Home / "Enviro.enviro"}}, Both)
+								, fIgnore(Workspace, {{"P4IGNORE", "Env.ignore"}}, Both)
+								, fIgnore(Workspace, {{"P4IGNORE", ""}}, Both)
+								, fIgnore(Configured, {}, Both)
+								, fIgnore(Workspace, {}, NoData)
+								, fIgnore(Workspace, {}, fTextRegistry({{"P4IGNORE", ""}}, {{"P4IGNORE", "Machine.ignore"}}))
+							}
+						)
+						, ==
+						, (TCVector<CStr>{"User.ignore", "Machine.ignore", "Enviro.ignore", "Env.ignore", Default, "Config.ignore", Default, ""})
+					)
+				;
+				DMibExpect(CPerforceIgnore::fs_GetSettings(Configured, NoEnviro, Both).f_GetSettingsFiles(Configured).m_ConfigFile, ==, Configured / ".p4config");
+			}
+
+			{
+				// P4ENVIRO comes from the registry too, with $home replaced, unless the environment sets it, also empty.
+				DMibTestPath("EnviroFile");
+				auto Registry = fTextRegistry({{"P4ENVIRO", "$home/Enviro.enviro"}}, {});
+				auto FromRegistry = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}}, Registry);
+				auto Hidden = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}, {"P4ENVIRO", ""}}, Registry);
+#ifdef DPlatformFamily_Windows
+				CStr HiddenEnviro;
+#else
+				CStr HiddenEnviro = Home / ".p4enviro";
+#endif
+				DMibExpect
+					(
+						(TCVector<CStr>{FromRegistry.m_EnviroFile, fg_JoinDescriptions(FromRegistry.m_IgnoreNames), Hidden.m_EnviroFile})
+						, ==
+						, (TCVector<CStr>{Home / "Enviro.enviro", "Enviro.ignore", HiddenEnviro})
+					)
+				;
+			}
+
+			{
+				// The charset p4 learned is looked up regardless of case, while a P4CHARSET of empty text is no charset, which leaves
+				// out the learned one, and a P4PORT of empty text an empty port. Without data they are unset.
+				DMibTestPath("Charsets");
+				auto fCharsets = [&](CRegistrySettings const &_Registry) -> TCVector<CStr>
+					{
+						auto Settings = CPerforceIgnore::fs_GetSettings(Workspace, NoEnviro, _Registry);
+						return {Settings.m_Charset, Settings.m_LearnedCharset, Settings.m_LearnedCharsetVariable};
+					}
+				;
+				auto NoDataCharset = fTextRegistry({{"P4_PERFORCE:1666_CHARSET", "utf8"}}, {});
+				NoDataCharset.m_User["P4CHARSET"] = CRegistryValue{.m_Data = {}};
+				DMibExpect
+					(
+						(
+							TCVector<TCVector<CStr>>
+							{
+								fCharsets(fTextRegistry({{"P4PORT", "registry:1666"}}, {{"P4_REGISTRY:1666_CHARSET", "utf8"}}))
+								, fCharsets(fTextRegistry({{"P4CHARSET", ""}, {"P4_PERFORCE:1666_CHARSET", "utf8"}}, {}))
+								, fCharsets(NoDataCharset)
+								, fCharsets(fTextRegistry({{"P4PORT", ""}}, {}))
+							}
+						)
+						, ==
+						,
+						(
+							TCVector<TCVector<CStr>>
+							{
+								{"", "utf8", "P4_registry:1666_CHARSET"}
+								, {"", "", ""}
+								, {"", "utf8", "P4_perforce:1666_CHARSET"}
+								, {"", "", "P4__CHARSET"}
+							}
+						)
+					)
+				;
+			}
+
+			{
+				// p4 reads a value whatever its type: with a Unicode charset as UTF-16, and else as the code page's API gives it,
+				// which is the bytes of a type that isn't a string, up to the first NUL. UTF-16 that p4 can't convert, as with an
+				// unpaired surrogate, it reads through the code page. A surrogate pair is the character it encodes.
+				DMibTestPath("Encoding");
+				CRegistrySettings Binary;
+				Binary.m_User["P4IGNORE"] = CRegistryValue{.m_Data = CRegistryValue::fs_FromText("Wide.ignore").m_Data, .m_Type = 3};
+				CRegistrySettings Unpaired;
+				Unpaired.m_User["P4IGNORE"] = CRegistryValue{.m_Data = {'A', 0, 0x00, 0xD8, 'B', 0, 0, 0}};
+				CRegistrySettings Paired;
+				Paired.m_User["P4IGNORE"] = CRegistryValue{.m_Data = {'A', 0, 0x3D, 0xD8, 0x00, 0xDE, 'B', 0, 0, 0}};
+				auto fFirstIgnore = [&](TCMap<CStr, CStr> const &_Variables, CRegistrySettings const &_Registry) -> TCVector<CStr>
+					{
+						auto Names = CPerforceIgnore::fs_GetSettings(Workspace, fEnvironment(_Variables), _Registry).m_IgnoreNames;
+						if (Names.f_IsEmpty())
+							return {};
+						return {Names[0].f_GetDescription(), Names[0].m_bBytes ? "Bytes" : "Text"};
+					}
+				;
+#ifdef DPlatformFamily_Windows
+				TCVector<CStr> UntranslatedBinary = {"W", "Bytes"};
+				TCVector<CStr> UntranslatedUnpaired = {"A?B", "Bytes"};
+#else
+				TCVector<CStr> UntranslatedBinary = {"Wide.ignore", "Text"};
+				TCVector<CStr> UntranslatedUnpaired = {"A?B", "Bytes"};
+#endif
+				DMibExpect
+					(
+						(
+							TCVector<TCVector<CStr>>
+							{
+								fFirstIgnore({}, Binary)
+								, fFirstIgnore({{"P4CHARSET", "utf8"}}, Binary)
+								, fFirstIgnore({}, Unpaired)
+								, fFirstIgnore({{"P4CHARSET", "utf8"}}, Unpaired)
+								, fFirstIgnore({{"P4CHARSET", "utf8"}}, Paired)
+							}
+						)
+						, ==
+						,
+						(
+							TCVector<TCVector<CStr>>
+							{
+								UntranslatedBinary
+								, {"Wide.ignore", "Text"}
+								, UntranslatedUnpaired
+								, {"A?B", "Bytes"}
+								, {"A\U0001F600B", "Text"}
+							}
+						)
+					)
+				;
+
+#ifdef DPlatformFamily_Windows
+				// P4ENVIRO is read through the code page, so a name with a character outside it names no file p4 opens.
+				if (GetACP() == 1252)
+				{
+					DMibTestPath("CodePage");
+					auto Registry = fTextRegistry({{"P4ENVIRO", Root / "Enviro 漢/p4enviro"}}, {});
+					DMibExpect(CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}}, Registry).m_EnviroFile, ==, Root / "Enviro ?/p4enviro");
+				}
+#endif
+			}
+
+			{
+				// The values generation tracks: a value unset, without data, of empty text and of another type differ.
+				DMibTestPath("Descriptions");
+				CRegistrySettings Registry;
+				Registry.m_User["P4ENVIRO"] = CRegistryValue::fs_FromText("Config\\Name");
+				Registry.m_User["P4IGNORE"] = CRegistryValue{.m_Data = {}};
+				Registry.m_User["P4PORT"] = CRegistryValue::fs_FromText("");
+				Registry.m_Machine["P4PORT"] = CRegistryValue{.m_Data = {0x01, 0xFF}, .m_Type = 3};
+				DMibExpect
+					(
+						(
+							TCVector<CStr>
+							{
+								Registry.f_GetDescription("p4enviro")
+								, Registry.f_GetDescription("P4IGNORE")
+								, Registry.f_GetDescription("P4PORT")
+								, Registry.f_GetDescription("P4CHARSET")
+							}
+						)
+						, ==
+						,
+						(
+							TCVector<CStr>
+							{
+								"HKEY_CURRENT_USER: type 1 Config\\\\Name\\0, HKEY_LOCAL_MACHINE: unset"
+								, "HKEY_CURRENT_USER: type 1 , HKEY_LOCAL_MACHINE: unset"
+								, "HKEY_CURRENT_USER: type 1 \\0, HKEY_LOCAL_MACHINE: type 3 01ff"
+								, "HKEY_CURRENT_USER: unset, HKEY_LOCAL_MACHINE: unset"
+							}
+						)
+					)
+				;
+			}
+
+			{
+				// Generation compares the values exactly: a REG_SZ of the byte 0x41 and one of the UTF-16 text "41" are described
+				// alike, while they are different settings.
+				DMibTestPath("States");
+				CRegistrySettings Byte;
+				Byte.m_User["P4ENVIRO"] = CRegistryValue{.m_Data = {0x41}};
+				CRegistrySettings Text;
+				Text.m_User["P4ENVIRO"] = CRegistryValue{.m_Data = {'4', 0, '1', 0}};
+				DMibExpect(Byte.f_GetDescription("P4ENVIRO"), ==, Text.f_GetDescription("P4ENVIRO"));
+				DMibExpect
+					(
+						(TCVector<CStr>{Byte.f_GetState("P4ENVIRO"), Text.f_GetState("P4ENVIRO"), CRegistrySettings().f_GetState("P4ENVIRO")})
+						, ==
+						,
+						(
+							TCVector<CStr>
+							{
+								"HKEY_CURRENT_USER: type 1 data 41, HKEY_LOCAL_MACHINE: unset"
+								, "HKEY_CURRENT_USER: type 1 data 34003100, HKEY_LOCAL_MACHINE: unset"
+								, "HKEY_CURRENT_USER: unset, HKEY_LOCAL_MACHINE: unset"
+							}
+						)
+					)
+				;
+			}
+
+#ifdef DPlatformFamily_Windows
+			if (GetACP() == 1252)
+			{
+				// With the code page p4 parses the bytes its conversion gives, which turns a full-width semicolon into a separator, in
+				// the environment and the registry alike.
+				DMibTestPath("CodePageSeparator");
+				CStr Names = "One.ignore；Two.ignore";
+				auto fNames = [&](TCMap<CStr, CStr> const &_Variables, CRegistrySettings const &_Registry)
+					{
+						TCVector<CStr> Descriptions;
+						for (auto &Name : CPerforceIgnore::fs_GetSettings(Workspace, fEnvironment(_Variables), _Registry).m_IgnoreNames)
+							Descriptions.f_Insert(Name.f_GetDescription());
+						return Descriptions;
+					}
+				;
+				DMibExpect
+					(
+						(TCVector<TCVector<CStr>>{fNames({{"P4IGNORE", Names}}, {}), fNames({}, fTextRegistry({{"P4IGNORE", Names}}, {}))})
+						, ==
+						, (TCVector<TCVector<CStr>>{{"One.ignore", "Two.ignore"}, {"One.ignore", "Two.ignore"}})
+					)
+				;
+			}
+
+			if (GetACP() == 1252)
+			{
+				// p4 reads P4ENVIRO from the environment through the code page too, whose best-fit conversion of a full-width colon
+				// after the drive makes the path an absolute one.
+				DMibTestPath("EnviroCodePage");
+				fg_WriteFile(Root / "Colon/p4enviro", "P4IGNORE=Colon.ignore\n");
+				CStr Path = Root / "Colon/p4enviro";
+				CStr FullWidthPath = Path.f_Left(1) + "\uff1a" + Path.f_Extract(2);
+				auto Settings = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}, {"P4ENVIRO", FullWidthPath}}, {});
+				DMibExpect((TCVector<CStr>{Settings.m_EnviroFile, fg_JoinDescriptions(Settings.m_IgnoreNames)}), ==, (TCVector<CStr>{Path, "Colon.ignore"}));
+			}
+
+#endif
+
+			{
+				// The API reads the settings from the environment given in place of the process's, here without PATH.
+				DMibTestPath("APIEnvironment");
+				StrBufDict EnvironmentDict;
+				EnvironmentDict.SetVar(StrRef("P4MALTERLIBTESTSETTING"), StrRef("Given"));
+				Enviro Environment;
+				Environment.SetEnvironment(&EnvironmentDict);
+				char const *pValue = Environment.Get("P4MALTERLIBTESTSETTING");
+				DMibExpect(CStr(pValue ? pValue : ""), ==, "Given");
+				DMibExpectTrue(Environment.Get("PATH") == nullptr);
+			}
+
+			{
+				// A copy has an environment of its own: the original reads a setting it had not read yet after the copy is destroyed.
+				DMibTestPath("APIEnvironmentCopy");
+				StrBufDict EnvironmentDict;
+				EnvironmentDict.SetVar(StrRef("P4MALTERLIBTESTSETTING"), StrRef("Given"));
+				EnvironmentDict.SetVar(StrRef("P4MALTERLIBTESTCOPIED"), StrRef("Copied"));
+				Enviro Environment;
+				Environment.SetEnvironment(&EnvironmentDict);
+
+				{
+					Enviro Copy(Environment);
+					char const *pValue = Copy.Get("P4MALTERLIBTESTSETTING");
+					DMibExpect(CStr(pValue ? pValue : ""), ==, "Given");
+				}
+
+				char const *pValue = Environment.Get("P4MALTERLIBTESTCOPIED");
+				DMibExpect(CStr(pValue ? pValue : ""), ==, "Copied");
+			}
+
+			{
+				// An environment given again replaces the enviro file the one before named, as its P4ENVIRO named it.
+				DMibTestPath("APIEnvironmentReplaced");
+				fg_WriteFile(Root / "Replaced/First.enviro", "P4MALTERLIBTESTENVIRO=First\n");
+				fg_WriteFile(Root / "Replaced/Second.enviro", "P4MALTERLIBTESTENVIRO=Second\n");
+				Enviro Environment;
+				auto fRead = [&](CStr const &_EnviroFile)
+					{
+						StrBufDict EnvironmentDict;
+						EnvironmentDict.SetVar(StrRef("P4ENVIRO"), StrRef(_EnviroFile.f_GetStr()));
+						Environment.SetEnvironment(&EnvironmentDict);
+						char const *pValue = Environment.Get("P4MALTERLIBTESTENVIRO");
+						return CStr(pValue ? pValue : "");
+					}
+				;
+				DMibExpect((TCVector<CStr>{fRead(Root / "Replaced/First.enviro"), fRead(Root / "Replaced/Second.enviro")}), ==, (TCVector<CStr>{"First", "Second"}));
+			}
+
+#ifdef DPlatformFamily_Windows
+			{
+				// The values are read from the key P4TEST_REGISTRY_PATH_T4_TEST names, a scratch key of the test's, by their names
+				// in upper case, only those of the settings, and with their types. A missing key reads as empty and is not created.
+				DMibTestPath("ReadRegistry");
+				CStr KeyPath
+					= "Software\\MalterlibTestPerforceRegistry-{}"_f
+					<< NCryptography::CUniversallyUniqueIdentifier(NCryptography::EUniversallyUniqueIdentifierGenerate_Random)
+					.f_GetAsString(NCryptography::EUniversallyUniqueIdentifierFormat_AlphaNum)
+				;
+				NMib::NPlatform::CWin32_Registry UserRegistry(NMib::NPlatform::CWin32_Registry::ERegRoot_CurrentUser);
+				auto Cleanup = g_OnScopeExitCatch / [&]
+					{
+						if (UserRegistry.f_KeyExists(KeyPath))
+							UserRegistry.f_DeleteKey(KeyPath);
+					}
+				;
+
+				UserRegistry.f_Write(KeyPath, "p4enviro", CStr("Registry.enviro"));
+				UserRegistry.f_Write(KeyPath, "P4PORT", uint32(1666));
+				UserRegistry.f_Write(KeyPath, "P4IGNORE", CByteVector{'A', 0});
+				UserRegistry.f_Write(KeyPath, "P4_registry:1666_CHARSET", CStr("utf8"));
+				UserRegistry.f_Write(KeyPath, "P4USER", CStr("someone"));
+
+				auto Registry = CPerforceIgnore::fs_ReadRegistry({{"p4test_registry_path_t4_test", KeyPath}});
+				CRegistrySettings Expected;
+				Expected.m_User["P4ENVIRO"] = CRegistryValue::fs_FromText("Registry.enviro");
+				Expected.m_User["P4PORT"] = CRegistryValue{.m_Data = {0x82, 0x06, 0, 0}, .m_Type = REG_DWORD};
+				Expected.m_User["P4IGNORE"] = CRegistryValue{.m_Data = {'A', 0}, .m_Type = REG_BINARY};
+				Expected.m_User["P4_REGISTRY:1666_CHARSET"] = CRegistryValue::fs_FromText("utf8");
+				auto fDescriptions = [](CRegistrySettings const &_Registry)
+					{
+						TCVector<CStr> Descriptions;
+						for (auto *pValues : {&_Registry.m_User, &_Registry.m_Machine})
+						{
+							for (auto iValue = pValues->f_GetIterator(); iValue; ++iValue)
+								Descriptions.f_Insert("{} = {}"_f << iValue.f_GetKey() << iValue->f_GetDescription());
+							Descriptions.f_Insert("");
+						}
+						return Descriptions;
+					}
+				;
+				DMibExpect(fDescriptions(Registry), ==, fDescriptions(Expected));
+				DMibExpect(CPerforceIgnore::fs_GetSettings(Configured, {{HomeVariable, Home}}, Registry).m_EnviroFile, ==, Configured / "Registry.enviro");
+
+				CStr MissingKeyPath = KeyPath + "\\Missing";
+				auto Missing = CPerforceIgnore::fs_ReadRegistry({{"P4TEST_REGISTRY_PATH_T4_TEST", MissingKeyPath}});
+				DMibExpect(fDescriptions(Missing), ==, (TCVector<CStr>{"", ""}));
+				DMibExpectFalse(UserRegistry.f_KeyExists(MissingKeyPath));
+			}
+
+			{
+				// CWin32_Registry, which fs_ReadRegistry reads with: values of every type as they are stored, the 32-bit view, and keys
+				// opened for writing too, which can't be opened where they can't be written and aren't created when missing.
+				DMibTestPath("RegistryHelper");
+				using CWin32Registry = NMib::NPlatform::CWin32_Registry;
+				CStr KeyPath
+					= "Software\\MalterlibTestRegistryHelper-{}"_f
+					<< NCryptography::CUniversallyUniqueIdentifier(NCryptography::EUniversallyUniqueIdentifierGenerate_Random)
+					.f_GetAsString(NCryptography::EUniversallyUniqueIdentifierFormat_AlphaNum)
+				;
+				CWin32Registry UserRegistry(CWin32Registry::ERegRoot_CurrentUser);
+				auto Cleanup = g_OnScopeExitCatch / [&]
+					{
+						if (UserRegistry.f_KeyExists(KeyPath))
+							UserRegistry.f_DeleteKey(KeyPath);
+					}
+				;
+
+				UserRegistry.f_Write(KeyPath, "Number", uint32(0x01020304));
+				UserRegistry.f_Write(KeyPath, "Text", CStr("A"));
+				UserRegistry.f_Write(KeyPath, "Multi", TCVector<CStr>{"A", "B"});
+				UserRegistry.f_Write(KeyPath, "Binary", CByteVector{1, 2});
+
+				auto fRaw = [](CWin32Registry &_Registry, CStr const &_SubKey, CStr const &_Name) -> CStr
+					{
+						CWin32Registry::CRawValue Value;
+						if (!_Registry.f_ReadRaw(_SubKey, _Name, Value))
+							return "missing";
+
+						CStr Description = "{}:"_f << Value.m_Type;
+						for (uint8 Byte : Value.m_Data)
+							Description += CStr("{nfh,sj2,sf0}"_f << Byte);
+						return Description;
+					}
+				;
+				CWin32Registry Win32ReadWrite(CWin32Registry::ERegRoot_Win32_CurrentUser, KeyPath, CWin32Registry::EAccess::mc_ReadWrite);
+				TCVector<CStr> Names;
+				Win32ReadWrite.f_EnumValues("", Names);
+				Names.f_Sort();
+				DMibExpect(Names, ==, (TCVector<CStr>{"Binary", "Multi", "Number", "Text"}));
+				DMibExpect
+					(
+						(
+							TCVector<CStr>
+							{
+								fRaw(UserRegistry, KeyPath, "Number")
+								, fRaw(UserRegistry, KeyPath, "Text")
+								, fRaw(UserRegistry, KeyPath, "Multi")
+								, fRaw(Win32ReadWrite, "", "Binary")
+								, fRaw(UserRegistry, KeyPath, "Missing")
+								, fRaw(UserRegistry, KeyPath + "\\Missing", "Text")
+							}
+						)
+						, ==
+						, (TCVector<CStr>{"4:04030201", "1:41000000", "7:41000000420000000000", "3:0102", "missing", "missing"})
+					)
+				;
+
+				CStr MissingKeyPath = KeyPath + "\\Missing";
+				TCVector<CStr> MissingNames;
+				CWin32Registry(CWin32Registry::ERegRoot_CurrentUser, MissingKeyPath, CWin32Registry::EAccess::mc_ReadWrite).f_EnumValues("", MissingNames);
+				DMibExpectTrue(MissingNames.f_IsEmpty());
+				DMibExpectFalse(UserRegistry.f_KeyExists(MissingKeyPath));
+
+#	ifdef DArchitecture_x64
+				// The 32-bit view has the 32-bit programs' directory where the 64-bit one has the 64-bit programs'.
+				CStr ProgramsKey = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion";
+				DMibExpect
+					(
+						CWin32Registry(CWin32Registry::ERegRoot_Win32_LocalMachine, ProgramsKey).f_Read_Str("", "ProgramFilesDir")
+						, ==
+						, CWin32Registry(CWin32Registry::ERegRoot_Win64_LocalMachine, ProgramsKey).f_Read_Str("", "ProgramFilesDir") + " (x86)"
+					)
+				;
+#	endif
+
+				// A key users can read but only administrators can write reads as empty when opened for writing too.
+				CStr SystemKey = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+				TCVector<CStr> ReadNames;
+				CWin32Registry(CWin32Registry::ERegRoot_LocalMachine, SystemKey).f_EnumValues("", ReadNames);
+				TCVector<CStr> ReadWriteNames;
+				CWin32Registry(CWin32Registry::ERegRoot_LocalMachine, SystemKey, CWin32Registry::EAccess::mc_ReadWrite).f_EnumValues("", ReadWriteNames);
+				DMibExpectFalse(ReadNames.f_IsEmpty());
+				auto Elevation = NProcess::CProcessLaunch::fs_GetElevation();
+				if (Elevation == NProcess::EProcessElevation_IsElevated || Elevation == NProcess::EProcessElevation_IsRoot)
+					DMibConOut("{}\n", "Skipping the test of a registry key opened for writing that can't be written: the test runs elevated");
+				else
+					DMibExpectTrue(ReadWriteNames.f_IsEmpty());
+			}
+
+			{
+				// The helper reads, enumerates and deletes keys in the view of its root, which is a different key for a path
+				// WOW64 redirects, as below HKEY_CURRENT_USER's Software\Classes\CLSID, and the embedded API reads its settings in
+				// the view the reader does: the 32-bit one where it is built for x64, as Perforce's x64 p4 is.
+				DMibTestPath("Views");
+				using CWin32Registry = NMib::NPlatform::CWin32_Registry;
+				CStr KeyPath
+					= "Software\\Classes\\CLSID\\{}"_f
+					<< NCryptography::CUniversallyUniqueIdentifier(NCryptography::EUniversallyUniqueIdentifierGenerate_Random)
+					.f_GetAsString(NCryptography::EUniversallyUniqueIdentifierFormat_Registry)
+				;
+				CWin32Registry Registry32(CWin32Registry::ERegRoot_Win32_CurrentUser);
+				CWin32Registry Registry64(CWin32Registry::ERegRoot_Win64_CurrentUser);
+				auto Cleanup = g_OnScopeExitCatch / [&]
+					{
+						for (auto *pRegistry : {&Registry32, &Registry64})
+						{
+							if (pRegistry->f_KeyExists(KeyPath))
+								pRegistry->f_DeleteKey(KeyPath);
+						}
+					}
+				;
+
+				Registry32.f_Write(KeyPath, "P4IGNORE", CStr("View32"));
+				Registry32.f_Write(KeyPath, "P4MALTERLIBTESTVIEW", CStr("View32"));
+				Registry32.f_Write(KeyPath + "\\Sub32", "Value", CStr("32"));
+				Registry64.f_Write(KeyPath, "P4IGNORE", CStr("View64"));
+				Registry64.f_Write(KeyPath, "P4MALTERLIBTESTVIEW", CStr("View64"));
+
+				TCVector<CStr> Keys32;
+				Registry32.f_EnumKeys(KeyPath, Keys32);
+				DMibExpect(Keys32, ==, TCVector<CStr>{"Sub32"});
+				TCVector<CStr> Keys64;
+				Registry64.f_EnumKeys(KeyPath, Keys64);
+				DMibExpectTrue(Keys64.f_IsEmpty());
+
+#	ifdef DArchitecture_x64
+				CStr ReaderView = "View32";
+#	else
+				CStr ReaderView = "View64";
+#	endif
+				auto Read = CPerforceIgnore::fs_ReadRegistry({{"P4TEST_REGISTRY_PATH_T4_TEST", KeyPath}});
+				auto *pIgnore = Read.m_User.f_FindEqual("P4IGNORE");
+				DMibAssertTrue(pIgnore);
+				DMibExpect(pIgnore->f_GetDescription(), ==, "type 1 " + ReaderView + "\\0");
+
+				// The API takes the path from the environment it reads, here one given in place of the process's.
+				{
+					StrBufDict EnvironmentDict;
+					EnvironmentDict.SetVar(StrRef("P4TEST_REGISTRY_PATH_T4_TEST"), StrRef(KeyPath.f_GetStr()));
+					Enviro Environment;
+					Environment.SetEnvironment(&EnvironmentDict);
+					char const *pValue = Environment.Get("P4MALTERLIBTESTVIEW");
+					DMibExpect(CStr(pValue ? pValue : ""), ==, ReaderView);
+				}
+
+				Registry32.f_DeleteKey(KeyPath);
+				DMibExpectFalse(Registry32.f_KeyExists(KeyPath));
+				DMibExpect(Registry64.f_Read_Str(KeyPath, "P4IGNORE", "missing"), ==, "View64");
+			}
+
+			{
+				// A raw read returns the data it reads, also of a value that grows from nothing between its queries of the size and
+				// the data.
+				DMibTestPath("RawReadOfGrowingValue");
+				using CWin32Registry = NMib::NPlatform::CWin32_Registry;
+				CStr KeyPath
+					= "Software\\MalterlibTestRegistryRace-{}"_f
+					<< NCryptography::CUniversallyUniqueIdentifier(NCryptography::EUniversallyUniqueIdentifierGenerate_Random)
+					.f_GetAsString(NCryptography::EUniversallyUniqueIdentifierFormat_AlphaNum)
+				;
+				CWin32Registry UserRegistry(CWin32Registry::ERegRoot_CurrentUser);
+				auto Cleanup = g_OnScopeExitCatch / [&]
+					{
+						if (UserRegistry.f_KeyExists(KeyPath))
+							UserRegistry.f_DeleteKey(KeyPath);
+					}
+				;
+
+				CByteVector Full;
+				Full.f_SetLen(64);
+				for (auto &Byte : Full)
+					Byte = 0xAB;
+				UserRegistry.f_Write(KeyPath, "Racy", CByteVector());
+
+				NAtomic::TCAtomic<bool> bDone = false;
+				auto pWriter = NThread::CThreadObject::fs_StartThread
+					(
+						[&](NThread::CThreadObject *_pThread) -> aint
+						{
+							CWin32Registry WriterRegistry(CWin32Registry::ERegRoot_CurrentUser);
+							bool bFull = false;
+							while (!bDone.f_Load())
+							{
+								bFull = !bFull;
+								WriterRegistry.f_Write(KeyPath, "Racy", bFull ? Full : CByteVector());
+							}
+							return 0;
+						}
+						, "Registry writer"
+					)
+				;
+				auto StopWriter = g_OnScopeExit / [&]
+					{
+						bDone = true;
+						pWriter->f_Stop(true);
+					}
+				;
+
+				umint nTorn = 0;
+				NTime::CStopwatch Stopwatch(true);
+				while (Stopwatch.f_GetTime() < 2.0)
+				{
+					CWin32Registry::CRawValue Value;
+					if (UserRegistry.f_ReadRaw(KeyPath, "Racy", Value) && !Value.m_Data.f_IsEmpty() && Value.m_Data != Full)
+						++nTorn;
+				}
+				DMibExpect(nTorn, ==, umint(0));
+			}
+#else
+			{
+				// Outside Windows p4 has no registry.
+				DMibTestPath("NoRegistry");
+				auto Registry = CPerforceIgnore::fs_ReadRegistry({{"P4TEST_REGISTRY_PATH_T4_TEST", "Software\\Perforce\\Environment"}});
+				DMibExpectTrue(Registry.m_User.f_IsEmpty() && Registry.m_Machine.f_IsEmpty());
 			}
 #endif
 		};

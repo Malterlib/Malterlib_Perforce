@@ -5,6 +5,8 @@
 #include "Malterlib_Perforce_FileNames.h"
 
 #include <Mib/File/File>
+#include <Mib/Storage/Optional>
+#include <Mib/Stream/Streams/Vector>
 #include <Mib/String/Appender>
 
 #undef SetPort
@@ -19,7 +21,10 @@
 #ifdef DCompiler_MSVC
 #	pragma warning(pop)
 #endif
-#ifndef DPlatformFamily_Windows
+#ifdef DPlatformFamily_Windows
+#	include <Mib/Core/PlatformSpecific/WindowsRegistry>
+#	include <Mib/Core/PlatformSpecific/WindowsString>
+#else
 #	include <errno.h>
 #	include <fcntl.h>
 #	include <limits.h>
@@ -40,7 +45,6 @@ namespace NMib::NPerforce
 		TCMap<CStr, NStorage::TCUniquePointer<Ignore>> m_Matchers; // Per directory, under m_Lock
 		StrArray m_IgnoreFiles;                                    // In m_Charsets.m_FileSystem
 		CStr m_IgnoreName;                                         // The P4IGNORE value the matchers take for m_IgnoreFiles
-		CAnsiStr m_ConfigName;                                     // In m_Charsets.m_FileSystem
 		CPerforceCharsets m_Charsets;
 	};
 
@@ -214,7 +218,7 @@ namespace NMib::NPerforce
 #endif
 		}
 
-		// The file p4's SetLocal makes of _Local in the directory _Directory, as p4 joins P4CONFIG to the directories it looks in
+		// The file p4's SetLocal makes of _Local in the directory _Directory, as p4 joins a P4CONFIG name to the directories it looks in
 		// and the matcher a bare ignore file name: a rooted name is the file itself, and the leading . and .. of a relative one are
 		// taken from the directory by name, by fg_ParentDirectory as p4 climbs. Outside Windows the rest is joined unchanged and the
 		// file system resolves it. On Windows, as PathNT::SetLocal, the drive is the name's, none for a UNC name with backslashes,
@@ -565,9 +569,12 @@ namespace NMib::NPerforce
 	{
 #ifdef DPlatformFamily_Windows
 		constexpr ch8 const *gc_pHomeVariable = "USERPROFILE";
+		constexpr ch8 const *gc_pRegistryPathVariable = "P4TEST_REGISTRY_PATH_T4_TEST"; // Replaces the path of p4's registry keys
 #else
 		constexpr ch8 const *gc_pHomeVariable = "HOME";
 #endif
+		// The name of the P4CONFIG files read, whatever P4CONFIG is, the same bytes in every encoding.
+		constexpr ch8 const *gc_pConfigName = ".p4config";
 
 		// A setting's name in a P4CONFIG or enviro file, its bytes as text (fg_BytesAsText), as p4 compares it: on Windows and macOS,
 		// where p4 folds case, regardless of the case of ASCII letters, the only ones p4's comparison folds (StrPtr::SCompare).
@@ -587,11 +594,12 @@ namespace NMib::NPerforce
 #endif
 		}
 
-		// A variable's name in the environment as p4 looks it up: regardless of case on Windows, whose environment ignores case.
+		// A variable's name in the environment as p4 looks it up: regardless of case on Windows, whose environment ignores case, also
+		// of letters outside ASCII.
 		CStr fg_EnvironmentName(CStr const &_Name)
 		{
 #ifdef DPlatformFamily_Windows
-			return _Name.f_UpperCase();
+			return NStr::NPlatform::fg_WindowsUpperCaseName(_Name);
 #else
 			return _Name;
 #endif
@@ -649,6 +657,170 @@ namespace NMib::NPerforce
 				return {};
 			return Charsets;
 		}
+
+		// A name of the registry, which ignores the case of names, also of letters outside ASCII.
+		CStr fg_RegistryName(CStr const &_Name)
+		{
+#ifdef DPlatformFamily_Windows
+			return NStr::NPlatform::fg_WindowsUpperCaseName(_Name);
+#else
+			return _Name.f_UpperCase();
+#endif
+		}
+
+		// The code points of UTF-16 data in the little endian Windows stores it in, an unpaired surrogate as -1. A last odd byte is
+		// no unit.
+		TCVector<int32> fg_UTF16CodePoints(CByteVector const &_Data)
+		{
+			TCVector<int32> CodePoints;
+			umint nUnits = _Data.f_GetLen() / 2;
+			auto fUnit = [&](umint _iUnit) -> uint32
+				{
+					uint16 Unit = 0;
+					NMemory::fg_MemCopy(&Unit, _Data.f_GetArray() + _iUnit * 2, sizeof(Unit));
+					return fg_ByteSwapLE(Unit);
+				}
+			;
+			for (umint iUnit = 0; iUnit < nUnits; ++iUnit)
+			{
+				uint32 Unit = fUnit(iUnit);
+				if (Unit >= 0xD800 && Unit < 0xDC00 && iUnit + 1 < nUnits && fUnit(iUnit + 1) >= 0xDC00 && fUnit(iUnit + 1) < 0xE000)
+				{
+					ch16 const Pair[] = {ch16(Unit), ch16(fUnit(iUnit + 1))};
+					CodePoints.f_Insert(int32(*NStr::CStrIteratorUTF16(Pair, 2)));
+					++iUnit;
+				}
+				else if (Unit >= 0xD800 && Unit < 0xE000)
+					CodePoints.f_Insert(-1);
+				else
+					CodePoints.f_Insert(int32(Unit));
+			}
+			return CodePoints;
+		}
+
+		// A registry value's data as UTF-16 text up to its first NUL, with '?' for an unpaired surrogate, as the code page's
+		// conversion gives it. False when there is one, which p4's conversion from UTF-16 rejects.
+		bool fg_RegistryText(CByteVector const &_Data, CStr &o_Text)
+		{
+			bool bValid = true;
+			CStr::CAppender Appender(o_Text);
+			for (int32 CodePoint : fg_UTF16CodePoints(_Data))
+			{
+				if (CodePoint == 0)
+					break;
+
+				if (CodePoint < 0)
+				{
+					bValid = false;
+					Appender.f_AddChar('?');
+				}
+				else
+					Appender.f_AddUnicodeChar(ch32(CodePoint));
+			}
+			return bValid;
+		}
+
+		// Text as the code page's API gives it, like RegQueryValueExA and GetEnvironmentVariableA: with the best-fit conversion of
+		// WideCharToMultiByte, which can turn a character into a separator, so p4 parses the converted bytes, not the text.
+		CPerforceIgnore::CSettingValue fg_CodePageValue(CStr const &_Text)
+		{
+			return CPerforceIgnore::CSettingValue::fs_FromBytes(fg_EncodePerforceString(_Text, EPerforceEncoding_CodePage));
+		}
+
+		// A registry value as p4 reads it in its file names' encoding, up to the first NUL: with UTF-8 names, a Unicode charset's,
+		// the data as UTF-16 (GetRegValueW), and else, or when p4 can't convert that, as RegQueryValueExA gives it (GetRegValue):
+		// a string's characters in the code page (fg_CodePageValue) and any other type's bytes as they are.
+		CPerforceIgnore::CSettingValue fg_RegistrySettingValue(CPerforceIgnore::CRegistryValue const &_Value, EPerforceEncoding _Encoding)
+		{
+			CStr Text;
+			bool bValid = fg_RegistryText(_Value.m_Data, Text);
+			if (_Encoding == EPerforceEncoding_UTF8 && bValid)
+				return Text;
+
+			if (_Value.f_IsString())
+				return fg_CodePageValue(Text);
+
+			auto pData = (ch8 const *)_Value.m_Data.f_GetArray();
+			return CPerforceIgnore::CSettingValue::fs_FromBytes(CAnsiStr(pData, NStr::fg_StrLen(pData, _Value.m_Data.f_GetLen())));
+		}
+	}
+
+	auto CPerforceIgnore::CRegistryValue::fs_FromText(CStr const &_Text) -> CRegistryValue
+	{
+		CWStr Units = _Text;
+		NStream::TCBinaryStreamMemory<> Stream;
+		NStream::fg_FeedEndianArrayToStream(Stream, Units.f_GetStr(), Units.f_GetLen() + 1, EEndian_Little);
+
+		CRegistryValue Value;
+		Value.m_Data = Stream.f_MoveVector();
+		return Value;
+	}
+
+	// REG_SZ, REG_EXPAND_SZ and REG_MULTI_SZ, which p4 reads like a REG_SZ, without expanding or splitting them.
+	bool CPerforceIgnore::CRegistryValue::f_IsString() const
+	{
+		return m_Type == 1 || m_Type == 2 || m_Type == 7;
+	}
+
+	// The type and the data: the characters of a string of valid UTF-16, with a NUL as \0 and a backslash as \\, else the bytes
+	// in hexadecimal.
+	CStr CPerforceIgnore::CRegistryValue::f_GetDescription() const
+	{
+		auto CodePoints = fg_UTF16CodePoints(m_Data);
+		bool bText = f_IsString() && m_Data.f_GetLen() % 2 == 0 && CodePoints.f_Contains(-1) < 0;
+
+		CStr Description;
+		{
+			CStr::CAppender Appender(Description);
+			Appender += CStr("type {} "_f << m_Type);
+			if (bText)
+			{
+				for (int32 CodePoint : CodePoints)
+				{
+					if (CodePoint == 0)
+						Appender += "\\0";
+					else if (CodePoint == '\\')
+						Appender += "\\\\";
+					else
+						Appender.f_AddUnicodeChar(ch32(CodePoint));
+				}
+			}
+			else
+				Appender += CStr("{}"_f << CStrFormatBinaryWrapper(m_Data.f_GetArray(), m_Data.f_GetLen()));
+		}
+		return Description;
+	}
+
+	// The values of a setting in each key, for showing: different values can be described alike (f_GetState).
+	CStr CPerforceIgnore::CRegistrySettings::f_GetDescription(CStr const &_Name) const
+	{
+		auto fDescription = [&](TCMap<CStr, CRegistryValue> const &_Values) -> CStr
+			{
+				auto *pValue = _Values.f_FindEqual(fg_RegistryName(_Name));
+				return pValue ? pValue->f_GetDescription() : CStr("unset");
+			}
+		;
+		return "HKEY_CURRENT_USER: {}, HKEY_LOCAL_MACHINE: {}"_f << fDescription(m_User) << fDescription(m_Machine);
+	}
+
+	// The values of a setting in each key exactly, each one's type and bytes in hexadecimal, for knowing when one changes.
+	CStr CPerforceIgnore::CRegistrySettings::f_GetState(CStr const &_Name) const
+	{
+		auto fState = [&](TCMap<CStr, CRegistryValue> const &_Values) -> CStr
+			{
+				auto *pValue = _Values.f_FindEqual(fg_RegistryName(_Name));
+				if (!pValue)
+					return "unset";
+
+				CStr State;
+				{
+					CStr::CAppender Appender(State);
+					Appender += CStr("type {} data {}"_f << pValue->m_Type << CStrFormatBinaryWrapper(pValue->m_Data.f_GetArray(), pValue->m_Data.f_GetLen()));
+				}
+				return State;
+			}
+		;
+		return "HKEY_CURRENT_USER: {}, HKEY_LOCAL_MACHINE: {}"_f << fState(m_User) << fState(m_Machine);
 	}
 
 	// A location that doesn't exist excludes the path it has, below its nearest existing ancestor.
@@ -758,15 +930,12 @@ namespace NMib::NPerforce
 		return Names.f_IsEmpty() ? CStr() : Names[0];
 	}
 
-	// The P4CONFIG file in the directory p4 opens, whether it exists or not, or empty without P4CONFIG or when p4 makes a path of
-	// it that names no file: of the names p4 tries, the first that exists, else the first.
+	// The .p4config file in the directory, as it is opened, whether it exists or not: of the names p4 tries, the first that exists,
+	// else the first.
 	CStr CPerforceIgnore::CSettings::f_GetConfigFile(CStr const &_Directory) const
 	{
-		if (m_ConfigName.f_IsEmpty())
-			return {};
-
 		EPerforceEncoding Encoding = fg_SettingsCharsets(*this).m_FileSystem;
-		TCVector<CStr> Names = fg_FileNames(fg_LocalFileBytes(fg_EncodePerforceString(_Directory, Encoding), fg_ValueBytes(m_ConfigName, Encoding)), Encoding);
+		TCVector<CStr> Names = fg_FileNames(fg_LocalFileBytes(fg_EncodePerforceString(_Directory, Encoding), gc_pConfigName), Encoding);
 		for (auto &Name : Names)
 		{
 			if (fg_GetPathType(Name) != EPathType_Missing)
@@ -775,35 +944,36 @@ namespace NMib::NPerforce
 		return Names.f_IsEmpty() ? CStr() : Names[0];
 	}
 
-	// The P4CONFIG file of p4 run in the directory, when it opens one, and the files that decide the settings, whether they exist
-	// or not: the enviro file and every name p4 tries for P4CONFIG in the directory and each one above it, where its charset
-	// settings can be, each resolved as the open resolves it, with the directories whose entries decide that
-	// (fg_AddRuleFileDependencies). The paths are the system's as p4 opens them, so outside Windows a symbolic link followed by
-	// .. leads from the link's target.
+	// The .p4config file of the directory, when it is a regular file, and the files that decide the settings, whether they exist
+	// or not: the enviro file, and each .p4config tried in the directory and each one above it, where its charset settings can be,
+	// also in the encoding of file names the untranslated reading of the charsets takes. The paths are the system's as p4 opens
+	// them. A .p4config is tracked by its path, whose creation, removal and replacement, by a symbolic link too, change what the
+	// path gives, and not by its directory, whose entries change with every file created in it.
 	auto CPerforceIgnore::CSettings::f_GetSettingsFiles(CStr const &_Directory) const -> CSettingsFiles
 	{
 		CSettingsFiles Files;
 		if (m_EnviroFile)
 			fg_AddRuleFileDependencies(m_EnviroFile, Files.m_Dependencies);
 
-		if (m_ConfigName.f_IsEmpty())
-			return Files;
-
 		if (CStr ConfigFile = f_GetConfigFile(_Directory); ConfigFile && fg_GetPathType(ConfigFile) == EPathType_File)
 			Files.m_ConfigFile = ConfigFile;
 
-		EPerforceEncoding Encoding = fg_SettingsCharsets(*this).m_FileSystem;
-		CAnsiStr ConfigName = fg_ValueBytes(m_ConfigName, Encoding);
-		for (CStr Directory = _Directory; Directory;)
-		{
-			for (auto &Name : fg_FileNames(fg_LocalFileBytes(fg_EncodePerforceString(Directory, Encoding), ConfigName), Encoding))
-				fg_AddRuleFileDependencies(Name, Files.m_Dependencies);
+		auto fAddConfigFiles = [&](EPerforceEncoding _Encoding)
+			{
+				for (CStr Directory = _Directory; Directory;)
+				{
+					for (auto &Name : fg_FileNames(fg_LocalFileBytes(fg_EncodePerforceString(Directory, _Encoding), gc_pConfigName), _Encoding))
+						Files.m_Dependencies[Name];
 
-			CStr Parent = fg_ParentDirectory(Directory);
-			if (Parent == Directory)
-				break;
-			Directory = Parent;
-		}
+					CStr Parent = fg_ParentDirectory(Directory);
+					if (Parent == Directory)
+						break;
+					Directory = Parent;
+				}
+			}
+		;
+		fAddConfigFiles(fg_SettingsCharsets(*this).m_FileSystem);
+		fAddConfigFiles(CPerforceCharsets().m_FileSystem);
 
 		return Files;
 	}
@@ -875,11 +1045,46 @@ namespace NMib::NPerforce
 		}
 	}
 
-	// The variables of the environment fs_GetSettings reads by name. It also reads the charset p4 learned for the port the settings
-	// give, P4_<port>_CHARSET (CSettings::m_LearnedCharsetVariable), whose name fs_IsLearnedCharsetVariable tells.
+	// The variables of the environment fs_GetSettings and fs_ReadRegistry read by name, the home directory's last. They also read the
+	// charset p4 learned for the port the settings give, P4_<port>_CHARSET (CSettings::m_LearnedCharsetVariable), whose name
+	// fs_IsLearnedCharsetVariable tells.
 	TCVector<CStr> CPerforceIgnore::fs_GetEnvironmentVariables()
 	{
-		return {"P4CONFIG", "P4IGNORE", "P4ENVIRO", "P4CHARSET", "P4COMMANDCHARSET", "P4PORT", gc_pHomeVariable};
+		TCVector<CStr> Variables = fs_GetRegistryVariables();
+#ifdef DPlatformFamily_Windows
+		Variables.f_Insert(gc_pRegistryPathVariable);
+#endif
+		Variables.f_Insert(gc_pHomeVariable);
+		return Variables;
+	}
+
+	// The settings fs_GetSettings reads by name from the registry too, which also has the charsets p4 learned.
+	TCVector<CStr> CPerforceIgnore::fs_GetRegistryVariables()
+	{
+		return {"P4IGNORE", "P4ENVIRO", "P4CHARSET", "P4COMMANDCHARSET", "P4PORT"};
+	}
+
+	// The process's environment, as Malterlib has it, for reading the settings as p4 run by the process does.
+	TCMap<CStr, CStr> CPerforceIgnore::fs_GetProcessEnvironment()
+	{
+		return TCMap<CStr, CStr>(fg_GetSys()->f_Environment());
+	}
+
+	// Whether p4 reads a P4CONFIG or enviro file by these bytes, in the file names' encoding of the settings' charset, for the
+	// filter of the API's settings: only a regular file, as fs_GetSettings reads, since reading a FIFO without a writer blocks.
+	int CPerforceIgnore::fs_FilterSettingsFile(char const *_pPath, int _Charset)
+	{
+#ifdef DPlatformFamily_Windows
+		// The file the API opens: the first of the names it tries that exists.
+		for (auto &Name : fg_FileNames(CAnsiStr(_pPath), fg_FileNameEncoding(_Charset)))
+		{
+			if (EPathType Type = fg_GetPathType(Name); Type != EPathType_Missing)
+				return Type == EPathType_File;
+		}
+		return 0;
+#else
+		return fg_GetPathType(CStr(_pPath)) == EPathType_File;
+#endif
 	}
 
 	// Whether a variable of the environment is the charset p4 learned for some port, P4_<port>_CHARSET, named as p4 looks it up.
@@ -889,20 +1094,73 @@ namespace NMib::NPerforce
 		return Name.f_GetLen() > 11 && Name.f_StartsWith("P4_") && Name.f_EndsWith("_CHARSET");
 	}
 
-	// The settings p4 run in the directory uses, read from _Environment in place of the process's environment, the P4CONFIG files
-	// and the enviro file, without the Windows registry. As in p4, a P4CONFIG file outranks the environment, which outranks the
-	// enviro file, a variable set empty is unset and hides what ranks below it, and $home is the environment's home directory.
-	// The names of the files are taken regardless of case on Windows and macOS, and those of the environment on Windows. P4ENVIRO
-	// is the environment's, and P4CONFIG is not read from a P4CONFIG file. Without P4IGNORE the ignore files are p4's default:
-	// .p4ignore and p4ignore.txt above a path and in the home directory.
+	// The registry's values of the settings fs_GetSettings reads (fs_GetRegistryVariables and the learned charsets), as p4 reads
+	// them from software\perforce\environment, or the path P4TEST_REGISTRY_PATH_T4_TEST gives, an empty one the root: in a key
+	// opened for writing too, in the 32-bit view where p4 is built for x64, so a process that can't write HKEY_LOCAL_MACHINE's reads
+	// none of it.
+	auto CPerforceIgnore::fs_ReadRegistry(TCMap<CStr, CStr> const &_Environment) -> CRegistrySettings
+	{
+		CRegistrySettings Registry;
+#ifdef DPlatformFamily_Windows
+		using CWin32Registry = NMib::NPlatform::CWin32_Registry;
+
+		CStr KeyPath = "software\\perforce\\environment";
+		for (auto iVariable = _Environment.f_GetIterator(); iVariable; ++iVariable)
+		{
+			if (fg_EnvironmentName(iVariable.f_GetKey()) == gc_pRegistryPathVariable)
+			{
+				KeyPath = *iVariable;
+				break;
+			}
+		}
+
+		TCSet<CStr> Variables;
+		for (auto &Variable : fs_GetRegistryVariables())
+			Variables[Variable];
+
+		auto fReadKey = [&](CWin32Registry::ERegRoot _Root, TCMap<CStr, CRegistryValue> &o_Values)
+			{
+				CWin32Registry Key(_Root, KeyPath, CWin32Registry::EAccess::mc_ReadWrite);
+				TCVector<CStr> Names;
+				Key.f_EnumValues("", Names);
+				for (auto &RegistryName : Names)
+				{
+					CStr Name = fg_RegistryName(RegistryName);
+					if (!Variables.f_FindEqual(Name) && !fs_IsLearnedCharsetVariable(Name))
+						continue;
+
+					CWin32Registry::CRawValue Value;
+					if (Key.f_ReadRaw("", RegistryName, Value))
+						o_Values[Name] = CRegistryValue{.m_Data = fg_Move(Value.m_Data), .m_Type = Value.m_Type};
+				}
+			}
+		;
+#	ifdef DArchitecture_x64
+		fReadKey(CWin32Registry::ERegRoot_Win32_CurrentUser, Registry.m_User);
+		fReadKey(CWin32Registry::ERegRoot_Win32_LocalMachine, Registry.m_Machine);
+#	else
+		fReadKey(CWin32Registry::ERegRoot_CurrentUser, Registry.m_User);
+		fReadKey(CWin32Registry::ERegRoot_LocalMachine, Registry.m_Machine);
+#	endif
+#endif
+		return Registry;
+	}
+
+	// The settings p4 run in the directory uses, read from _Environment in place of the process's environment, the P4CONFIG files,
+	// the enviro file and _Registry (fs_ReadRegistry). As in p4, a P4CONFIG file outranks the environment, which outranks the enviro
+	// file, then HKEY_CURRENT_USER's key, then HKEY_LOCAL_MACHINE's. A value set empty is unset and hides what ranks below it, except
+	// a registry value of empty text, which p4 takes as set. P4ENVIRO is the environment's or the registry's, $home the environment's
+	// home directory, and without P4IGNORE the ignore files are p4's default, .p4ignore and p4ignore.txt above a path and in the home
+	// directory. The names of the files are taken regardless of case on Windows and macOS, and those of the environment and the
+	// registry on Windows.
 	//
-	// The values are read as p4 has them, in its file names' encoding (fg_PerforceCharsets): a settings file's bytes as they are,
-	// and the environment's values encoded in it, as p4 reads its environment, and they are decoded to UTF-8 from it, only to
-	// make Malterlib's paths of them. As in p4, which selects the charsets before its translation changes that encoding, the
-	// charset settings (P4CHARSET, P4COMMANDCHARSET, P4PORT and P4_<port>_CHARSET) are read untranslated, with the P4CONFIG
-	// files found by P4CONFIG in that encoding (clientPrepareEnv's own Enviro, Client::GetCharset), and the others with the
-	// translation's (Client::SetTrans' Enviro::SetCharSet and Config).
-	auto CPerforceIgnore::fs_GetSettings(CStr const &_Directory, TCMap<CStr, CStr> const &_Environment) -> CSettings
+	// The P4CONFIG files are the .p4config files, whatever P4CONFIG is, so no setting outside the project chooses which of its files
+	// give settings.
+	//
+	// The values are read as p4 has them, in its file names' encoding (fg_PerforceCharsets), and decoded to UTF-8 only for Malterlib's
+	// paths. As p4 selects the charsets before its translation changes that encoding, P4ENVIRO and the charset settings are read
+	// untranslated, with the P4CONFIG files found in that encoding, and the others with the translation's.
+	auto CPerforceIgnore::fs_GetSettings(CStr const &_Directory, TCMap<CStr, CStr> const &_Environment, CRegistrySettings const &_Registry) -> CSettings
 	{
 		CSettings Settings;
 
@@ -920,13 +1178,65 @@ namespace NMib::NPerforce
 		if (Home.f_EndsWith("/") || Home.f_EndsWith("\\"))
 			Home = Home.f_Left(Home.f_GetLen() - 1);
 
+		// A value with $home the home directory's as p4 has it in the encoding, as p4's Enviro::GetItem replaces it.
+		auto fReplaceHome = [&](CSettingValue const &_Value, EPerforceEncoding _Encoding) -> CSettingValue
+			{
+				if (_Value.m_bBytes)
+					return CSettingValue::fs_FromBytes(_Value.m_Bytes.f_Replace("$home", fg_EncodePerforceString(Home, _Encoding)));
+
+				return _Value.m_Text.f_Replace("$home", Home);
+			}
+		;
+
+		// The registry's value, HKEY_CURRENT_USER's before HKEY_LOCAL_MACHINE's. A value without data is unset, as p4's value then
+		// has no length, while it hides HKEY_LOCAL_MACHINE's.
+		auto fRegistry = [&](EPerforceEncoding _Encoding, CStr const &_Name) -> NStorage::TCOptional<CSettingValue>
+			{
+				CStr Name = fg_RegistryName(_Name);
+				for (auto *pValues : {&_Registry.m_User, &_Registry.m_Machine})
+				{
+					auto *pValue = pValues->f_FindEqual(Name);
+					if (!pValue)
+						continue;
+
+					if (pValue->m_Data.f_IsEmpty())
+						return {};
+
+					return fReplaceHome(fg_RegistrySettingValue(*pValue, _Encoding), _Encoding);
+				}
+
+				return {};
+			}
+		;
+
 		// The enviro file's default is the home directory's .p4enviro, which p4 has on Windows only when P4ENVIRO names it. p4
 		// reads P4ENVIRO before any translation, so the file is the one its untranslated spelling names, on Windows the code
-		// page's (Enviro::GetEnv's GetEnvironmentVariableA), which the later translated reads open as well.
+		// page's (Enviro::GetEnv's GetEnvironmentVariableA, GetRegValue), which the later translated reads open as well.
 		CPerforceCharsets Untranslated;
 		EPerforceEncoding UntranslatedEncoding = Untranslated.m_FileSystem;
-		if (auto *pEnviroFile = Environment.f_FindEqual("P4ENVIRO"); pEnviroFile && *pEnviroFile)
-			Settings.m_EnviroFile = fg_OpenedPath(pEnviroFile->f_Replace("$home", Home), _Directory);
+		NStorage::TCOptional<CSettingValue> EnviroFile;
+		if (auto *pEnviroFile = Environment.f_FindEqual("P4ENVIRO"))
+		{
+			if (*pEnviroFile)
+			{
+				// p4 reads it through the code page, with the best-fit conversion that can make its syntax of other characters.
+				if (UntranslatedEncoding == EPerforceEncoding_CodePage)
+					EnviroFile = fReplaceHome(fg_CodePageValue(*pEnviroFile), UntranslatedEncoding);
+				else
+					EnviroFile = CSettingValue(pEnviroFile->f_Replace("$home", Home));
+			}
+		}
+		else
+			EnviroFile = fRegistry(UntranslatedEncoding, "P4ENVIRO");
+
+		if (EnviroFile)
+		{
+			if (!EnviroFile->f_IsEmpty())
+			{
+				CStr Path = EnviroFile->m_bBytes ? fg_DecodePerforceString(EnviroFile->m_Bytes, UntranslatedEncoding) : EnviroFile->m_Text;
+				Settings.m_EnviroFile = fg_OpenedPath(Path, _Directory);
+			}
+		}
 #ifndef DPlatformFamily_Windows
 		else if (pHome && *pHome)
 			Settings.m_EnviroFile = fg_OpenedPath(*pHome + "/.p4enviro", _Directory);
@@ -938,48 +1248,53 @@ namespace NMib::NPerforce
 		if (Settings.m_EnviroFile)
 			fg_ReadSettingsFile(Settings.m_EnviroFile, {}, EnviroSettings);
 
-		// A value: a settings file's bytes, or the environment's text, with $home the home directory's as p4 has it in the
-		// encoding, as p4's Enviro::GetItem replaces it.
-		// A name is the bytes as text (fg_BytesAsText) in the settings files and text in the environment, the same for ASCII names.
-		auto fGetNamed = [&](EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_FileName, CStr const &_EnvironmentName) -> CSettingValue
+		// A setting, unset where p4 has no value for it: a settings file's bytes, or the environment's or the registry's text.
+		// A name is the bytes as text (fg_BytesAsText) in the settings files and text in the environment and the registry, the same
+		// for ASCII names.
+		auto fGetNamed = [&]
+			(EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_FileName, CStr const &_EnvironmentName) -> NStorage::TCOptional<CSettingValue>
 			{
 				CStr SettingName = fg_SettingName(_FileName);
 				CAnsiStr const *pBytes = _pConfigSettings ? _pConfigSettings->f_FindEqual(SettingName) : nullptr;
 				if (!pBytes)
 				{
 					if (auto *pText = Environment.f_FindEqual(fg_EnvironmentName(_EnvironmentName)))
-						return pText->f_Replace("$home", Home);
+					{
+						if (pText->f_IsEmpty())
+							return {};
+
+						return fReplaceHome(_Encoding == EPerforceEncoding_CodePage ? fg_CodePageValue(*pText) : CSettingValue(*pText), _Encoding);
+					}
 					pBytes = EnviroSettings.f_FindEqual(SettingName);
 				}
 				if (!pBytes)
+					return fRegistry(_Encoding, _EnvironmentName);
+
+				if (pBytes->f_IsEmpty())
 					return {};
 
-				return CSettingValue::fs_FromBytes(pBytes->f_Replace("$home", fg_EncodePerforceString(Home, _Encoding)));
+				return fReplaceHome(CSettingValue::fs_FromBytes(*pBytes), _Encoding);
 			}
 		;
-		auto fGet = [&](EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_Name) -> CSettingValue
+		auto fGet = [&](EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_Name) -> NStorage::TCOptional<CSettingValue>
 			{
 				return fGetNamed(_Encoding, _pConfigSettings, _Name, _Name);
 			}
 		;
 		auto fGetBytes = [&](EPerforceEncoding _Encoding, TCMap<CStr, CAnsiStr> const *_pConfigSettings, CStr const &_Name) -> CAnsiStr
 			{
-				return fg_ValueBytes(fGet(_Encoding, _pConfigSettings, _Name), _Encoding);
+				auto Value = fGet(_Encoding, _pConfigSettings, _Name);
+				return Value ? fg_ValueBytes(*Value, _Encoding) : CAnsiStr();
 			}
 		;
-
-		// The P4CONFIG files of the directory and those above it, the nearest first, up to where p4 stops climbing: on Windows a
-		// UNC share's root too. P4CONFIG names them in the encoding, and each is the first of the names p4 tries that exists.
+		// The .p4config files of the directory and those above it, the nearest first, up to where p4 stops climbing: on Windows a
+		// UNC share's root too, with the directories in the encoding. Each is the first of the names p4 tries that exists.
 		auto fConfigSettings = [&](EPerforceEncoding _Encoding) -> TCMap<CStr, CAnsiStr>
 			{
 				TCMap<CStr, CAnsiStr> ConfigSettings;
-				CAnsiStr ConfigName = fGetBytes(_Encoding, nullptr, "P4CONFIG");
-				if (!ConfigName)
-					return ConfigSettings;
-
 				for (CStr Directory = _Directory; Directory;)
 				{
-					CAnsiStr ConfigFile = fg_LocalFileBytes(fg_EncodePerforceString(Directory, _Encoding), ConfigName);
+					CAnsiStr ConfigFile = fg_LocalFileBytes(fg_EncodePerforceString(Directory, _Encoding), gc_pConfigName);
 					for (auto &Name : fg_FileNames(ConfigFile, _Encoding))
 					{
 						if (fg_GetPathType(Name) == EPathType_Missing)
@@ -1000,19 +1315,15 @@ namespace NMib::NPerforce
 
 		// The charset settings are names, which compare as the bytes they are.
 		TCMap<CStr, CAnsiStr> UntranslatedConfigSettings = fConfigSettings(UntranslatedEncoding);
-		auto fCharsetSetting = [&](CStr const &_Name)
-			{
-				return fg_BytesAsText(fGetBytes(UntranslatedEncoding, &UntranslatedConfigSettings, _Name));
-			}
-		;
-		Settings.m_Charset = fCharsetSetting("P4CHARSET");
-		Settings.m_CommandCharset = fCharsetSetting("P4COMMANDCHARSET");
-		if (!Settings.m_Charset)
+		auto Charset = fGet(UntranslatedEncoding, &UntranslatedConfigSettings, "P4CHARSET");
+		if (Charset)
+			Settings.m_Charset = fg_BytesAsText(fg_ValueBytes(*Charset, UntranslatedEncoding));
+		Settings.m_CommandCharset = fg_BytesAsText(fGetBytes(UntranslatedEncoding, &UntranslatedConfigSettings, "P4COMMANDCHARSET"));
+		if (!Charset)
 		{
 			// The variable's name is P4PORT's bytes, which the environment has as p4 reads it untranslated.
-			CAnsiStr Port = fGetBytes(UntranslatedEncoding, &UntranslatedConfigSettings, "P4PORT");
-			if (!Port)
-				Port = "perforce:1666";
+			auto PortValue = fGet(UntranslatedEncoding, &UntranslatedConfigSettings, "P4PORT");
+			CAnsiStr Port = PortValue ? fg_ValueBytes(*PortValue, UntranslatedEncoding) : CAnsiStr("perforce:1666");
 			CAnsiStr NameBytes;
 			{
 				CAnsiStr::CAppender Appender(NameBytes);
@@ -1021,19 +1332,15 @@ namespace NMib::NPerforce
 				Appender += "_CHARSET";
 			}
 			Settings.m_LearnedCharsetVariable = fg_DecodePerforceString(NameBytes, UntranslatedEncoding);
-			Settings.m_LearnedCharset = fg_BytesAsText
-				(
-					fg_ValueBytes(fGetNamed(UntranslatedEncoding, &UntranslatedConfigSettings, fg_BytesAsText(NameBytes), Settings.m_LearnedCharsetVariable), UntranslatedEncoding)
-				)
-			;
+			if (auto LearnedCharset = fGetNamed(UntranslatedEncoding, &UntranslatedConfigSettings, fg_BytesAsText(NameBytes), Settings.m_LearnedCharsetVariable))
+				Settings.m_LearnedCharset = fg_BytesAsText(fg_ValueBytes(*LearnedCharset, UntranslatedEncoding));
 		}
 
 		EPerforceEncoding Encoding = fg_SettingsCharsets(Settings).m_FileSystem;
 		TCMap<CStr, CAnsiStr> ConfigSettings = Encoding == UntranslatedEncoding ? UntranslatedConfigSettings : fConfigSettings(Encoding);
 
-		Settings.m_ConfigName = fGet(Encoding, nullptr, "P4CONFIG");
-		if (CSettingValue IgnoreNames = fGet(Encoding, &ConfigSettings, "P4IGNORE"); !IgnoreNames.f_IsEmpty())
-			Settings.m_IgnoreNames = fg_ResolveIgnoreNames(IgnoreNames, _Directory, Encoding);
+		if (auto IgnoreNames = fGet(Encoding, &ConfigSettings, "P4IGNORE"))
+			Settings.m_IgnoreNames = fg_ResolveIgnoreNames(*IgnoreNames, _Directory, Encoding);
 		else if (pHome)
 			Settings.m_IgnoreNames = fs_ResolveIgnoreNames(".p4ignore;p4ignore.txt;{}/.p4ignore;{}/p4ignore.txt"_f << Home << Home, _Directory);
 		else
@@ -1071,7 +1378,6 @@ namespace NMib::NPerforce
 		}
 		if (Internal.m_IgnoreName.f_IsEmpty())
 			Internal.m_IgnoreName = "\n";
-		Internal.m_ConfigName = fg_ValueBytes(_Settings.m_ConfigName, Internal.m_Charsets.m_FileSystem);
 	}
 
 	CPerforceIgnore::~CPerforceIgnore() = default;
@@ -1084,7 +1390,7 @@ namespace NMib::NPerforce
 		CAnsiStr Path = fg_EncodePerforceString(fg_PerforcePath(_Path), Internal.m_Charsets.m_FileSystem);
 		StrRef PathRef(Path.f_GetStr());
 		StrRef IgnoreName(Internal.m_IgnoreName.f_GetStr());
-		char const *pConfigName = Internal.m_ConfigName.f_IsEmpty() ? nullptr : Internal.m_ConfigName.f_GetStr();
+		char const *pConfigName = gc_pConfigName;
 
 		DMibLock(Internal.m_Lock);
 #ifdef DPlatformFamily_Windows
@@ -1172,9 +1478,8 @@ namespace NMib::NPerforce
 	// listing decides, as a directory can be listed without the rights of reading it as a file.
 	void CPerforceRootFiles::CInternal::f_Walk(TCVector<CStr> *o_pFiles, TCVector<CStr> *o_pExcluded, TCSet<CStr> *o_pRuleFiles)
 	{
-		// The ignore files of bare names, looked for in every directory above a path, the P4CONFIG files of p4 run in the root and
-		// the enviro file, whether they exist or not. A P4CONFIG with a path is looked for from each directory too, unless it is
-		// absolute. A path that names no file is left out.
+		// The ignore files of bare names, looked for in every directory above a path, the .p4config files of the root and the enviro
+		// file, whether they exist or not. A path that names no file is left out.
 		// A file p4 opens by bytes is any of the names p4 tries, so each is tracked.
 		EPerforceEncoding Encoding = fg_SettingsCharsets(m_Settings).m_FileSystem;
 		auto fAddRuleFile = [&](CAnsiStr const &_Bytes)

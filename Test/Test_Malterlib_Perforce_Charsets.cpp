@@ -529,7 +529,7 @@ namespace
 								for (auto iVariable = Variables.f_GetIterator(); iVariable; ++iVariable)
 									Environment[iVariable.f_GetKey()] = CStr(iVariable->f_GetStr(), iVariable->f_GetLen());
 								CStr WorkspacePath = Workspace;
-								auto IgnoreSettings = CPerforceIgnore::fs_GetSettings(WorkspacePath, Environment);
+								auto IgnoreSettings = CPerforceIgnore::fs_GetSettings(WorkspacePath, Environment, {});
 								TCVector<CStr> RuleFiles;
 								CPerforceRootFiles(WorkspacePath, {}, IgnoreSettings).f_ListExcluded(&RuleFiles);
 								TCSet<CStr> Tags;

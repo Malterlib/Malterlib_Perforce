@@ -304,6 +304,128 @@ namespace
 #endif
 		};
 
+		// The client of a root found by its settings connects with them: with the environment they were read with in place of the
+		// process's, which names another server here, and without reading a P4CONFIG or enviro file that isn't a regular file,
+		// as a FIFO, which the settings don't read either and which would block the client.
+		DMibTestSuite("ResolvedSettings") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce resolved settings test: p4d was not found in PATH");
+				co_return {};
+			}
+
+#ifdef DPlatformFamily_Windows
+			uint64 ProcessID = GetCurrentProcessId();
+#else
+			uint64 ProcessID = uint64(getpid());
+#endif
+			CStr RunName = "{}_{}"_f << ProcessID << g_AmbientRun.f_FetchAdd(1);
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceResolvedSettings" / RunName;
+			CStr Workspace = Root / "Outer/Workspace";
+			NFile::CFile::fs_CreateDirectory(Workspace);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root / "Server", CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			CStr Port = co_await Server(&CPerforceTestServer::f_GetPort);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr());
+
+			NFile::CFile::fs_WriteStringToFile(Workspace / ".p4config", "P4USER=tester\nP4CLIENT=PerforceTestServer_NoClient\nP4HOST=PerforceTestServer\nP4CHARSET=none\n", false);
+			TCMap<CStr, CStr> Environment = {{"P4PORT", Port}, {"P4TICKETS", Connection.m_TicketFile}, {"P4ENVIRO", Root / "p4enviro"}};
+
+			// The process's environment names a server that doesn't answer. A port that was unset is unset again, which the framework
+			// has no function for: setting it empty would hide what ranks below it.
+			CStr PreviousPort;
+			bool bHadPort = NSys::fg_Process_GetEnvironmentVariable_NonProtected(CStr("P4PORT"), PreviousPort);
+			NSys::fg_Process_SetEnvironmentVariable_Unsafe(CStr("P4PORT"), CStr("127.0.0.1:1"));
+			auto RestorePort = g_OnScopeExit / [&]
+				{
+					if (bHadPort)
+						NSys::fg_Process_SetEnvironmentVariable_Unsafe(CStr("P4PORT"), PreviousPort);
+					else
+					{
+#ifdef DPlatformFamily_Windows
+						SetEnvironmentVariableW(L"P4PORT", nullptr);
+#else
+						unsetenv("P4PORT");
+#endif
+					}
+				}
+			;
+
+			TCVector<CStr> Readers;
+#ifndef DPlatformFamily_Windows
+			// Any open of the FIFO for reading is recorded, also a brief nonblocking one: the watchdog's open for writing waits for a
+			// reader, and a waiting reader gets the end of the file when the watchdog closes it. Its own reader lets it go at the end.
+			// The test goes on once the watchdog is about to wait, and a moment after, for it to be waiting.
+			CStr Fifo = Root / "Outer/.p4config";
+			DMibAssert(mkfifo(Fifo.f_GetStr(), 0600), ==, 0);
+			NAtomic::TCAtomic<bool> bDone = false;
+			NAtomic::TCAtomic<bool> bWaiting = false;
+			auto pWatchdog = NThread::CThreadObject::fs_StartThread
+				(
+					[&](NThread::CThreadObject *_pThread) -> aint
+					{
+						while (true)
+						{
+							bWaiting = true;
+							int File = open(Fifo.f_GetStr(), O_WRONLY | O_CLOEXEC);
+							bool bStopping = bDone.f_Load();
+							if (File >= 0)
+							{
+								if (!bStopping)
+									Readers.f_Insert(Fifo);
+								close(File);
+							}
+							if (bStopping)
+								break;
+						}
+						return 0;
+					}
+					, "Perforce resolved settings FIFO watchdog"
+				)
+			;
+			auto StopWatchdog = g_OnScopeExit / [&]
+				{
+					bDone = true;
+					int Reader = open(Fifo.f_GetStr(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+					pWatchdog->f_Stop(true);
+					if (Reader >= 0)
+						close(Reader);
+				}
+			;
+			while (!bWaiting.f_Load())
+				NSys::fg_Thread_Sleep(0.001f);
+			NSys::fg_Thread_Sleep(0.1f);
+#endif
+
+			auto Result = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Workspace, Environment]() -> CStr
+					{
+						auto pClient = CPerforceClientThrow::fs_GetFromP4Config(Workspace / "A.cpp", Environment, {});
+						if (!pClient)
+							return "No Perforce root";
+
+						pClient->f_NoThrow().f_Info();
+						return pClient->f_NoThrow().f_GetLastInfo("userName");
+					}
+				)
+				.f_Wrap()
+			;
+			DMibExpect(Result ? *Result : Result.f_GetExceptionStr(), ==, "tester");
+
+#ifndef DPlatformFamily_Windows
+			// The watchdog is joined before its readers are read.
+			StopWatchdog();
+#endif
+			DMibExpect(Readers, ==, TCVector<CStr>{});
+
+			co_return {};
+		};
+
 		DMibTestSuite("TestServer") -> TCFuture<void>
 		{
 			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())

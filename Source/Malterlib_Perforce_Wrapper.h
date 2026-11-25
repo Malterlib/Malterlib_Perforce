@@ -4,6 +4,9 @@
 #pragma once
 
 #include <Mib/Container/Registry>
+#include <Mib/Storage/UniquePointer>
+
+#include "Malterlib_Perforce_Ignore.h"
 
 class ClientApi; // NOLINT(malterlib-type-naming): the name in the Perforce API
 class Enviro; // NOLINT(malterlib-type-naming): the name in the Perforce API
@@ -42,17 +45,18 @@ namespace NMib::NPerforce
 			CStr m_Client;
 			CStr m_Host;
 			CStr m_TrustedCertificateDigest;
-			CStr m_WorkingDirectory;                     // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
+			CStr m_WorkingDirectory;                               // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
 			CStr m_TicketFile;
 			CStr m_EnviroFile;
-			CStr m_Charset;                              // Overrides P4CHARSET, like "none" or "utf8"
-			NStorage::TCOptional<CStr> m_CommandCharset; // Overrides P4COMMANDCHARSET, as p4's -Q; empty for none
-			CStr m_IgnoreFiles;                          // Overrides P4IGNORE; "unset" for none
-			CStr m_ClientPath;                           // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
-			NStorage::TCOptional<CStr> m_ConfigName;     // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
-			fp64 m_Timeout = 0.0;                        // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
+			CStr m_Charset;                                        // Overrides P4CHARSET, like "none" or "utf8"
+			NStorage::TCOptional<CStr> m_CommandCharset;           // Overrides P4COMMANDCHARSET, as p4's -Q; empty for none
+			CStr m_IgnoreFiles;                                    // Overrides P4IGNORE; "unset" for none
+			CStr m_ClientPath;                                     // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
+			NStorage::TCOptional<CStr> m_ConfigName;               // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
+			NStorage::TCOptional<TCMap<CStr, CStr>> m_Environment; // The environment the settings are read from in place of the process's
+			fp64 m_Timeout = 0.0;                                  // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
 			bool m_bDisableTagging = false;
-			bool m_bIgnorePasswordSetting = false;       // P4PASSWD is not read: only the password given to f_Login and the tickets are used
+			bool m_bIgnorePasswordSetting = false;                 // P4PASSWD is not read: only the password given to f_Login and the tickets are used
 		};
 
 		struct CChangeList
@@ -535,7 +539,9 @@ namespace NMib::NPerforce
 		static CStr fs_ActionToStr(EAction _Action);
 
 		static bool fs_HasP4Config(CStr const &_Path);
+		static bool fs_HasP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry);
 		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory);
+		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory, CPerforceIgnore::CSettings const &_Settings, TCMap<CStr, CStr> const &_Environment);
 
 	private:
 		struct CP4Client;
@@ -818,6 +824,9 @@ namespace NMib::NPerforce
 		void f_DeleteBranch(CStr const &_Name);
 
 		static bool fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client);
+		static auto fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry)
+			-> NStorage::TCUniquePointer<CPerforceClientThrow>
+		;
 
 	private:
 		void fp_Throw(bool _bResult) const;

@@ -61,11 +61,38 @@ namespace NMib::NPerforce
 			bool m_bBytes = false;
 		};
 
+		// A value of p4's registry key as Windows stores it, which p4 reads whatever its type.
+		struct CRegistryValue
+		{
+			auto operator <=> (CRegistryValue const &_Right) const noexcept = default;
+
+			static CRegistryValue fs_FromText(NStr::CStr const &_Text);
+
+			bool f_IsString() const;
+			NStr::CStr f_GetDescription() const;
+
+			NContainer::CByteVector m_Data;
+			uint32 m_Type = 1; // REG_SZ; REG_SZ, REG_EXPAND_SZ and REG_MULTI_SZ are UTF-16, which Windows converts for the code page
+		};
+
+		// The settings p4 reads from the Windows registry, below HKEY_CURRENT_USER and HKEY_LOCAL_MACHINE, by their names in upper
+		// case, as the registry ignores the case of names.
+		struct CRegistrySettings
+		{
+			auto operator <=> (CRegistrySettings const &_Right) const noexcept = default;
+
+			NStr::CStr f_GetDescription(NStr::CStr const &_Name) const;
+			NStr::CStr f_GetState(NStr::CStr const &_Name) const;
+
+			NContainer::TCMap<NStr::CStr, CRegistryValue> m_User;    // HKEY_CURRENT_USER's
+			NContainer::TCMap<NStr::CStr, CRegistryValue> m_Machine; // HKEY_LOCAL_MACHINE's, which p4 reads only when it can write the key
+		};
+
 		// The settings files of a directory, for knowing whether it is a Perforce root and tracking what decides that.
 		struct CSettingsFiles
 		{
-			NStr::CStr m_ConfigFile;                      // The directory's P4CONFIG file p4 opens when it is a regular file, else empty
-			NContainer::TCSet<NStr::CStr> m_Dependencies; // The enviro file and every name p4 tries for P4CONFIG, resolved as opened
+			NStr::CStr m_ConfigFile;                      // The directory's .p4config file when it is a regular file that gives settings, else empty
+			NContainer::TCSet<NStr::CStr> m_Dependencies; // The enviro file, and every .p4config tried
 		};
 
 		struct CSettings
@@ -75,7 +102,6 @@ namespace NMib::NPerforce
 			NStr::CStr f_GetText(CSettingValue const &_Value) const;
 
 			NContainer::TCVector<CSettingValue> m_IgnoreNames; // File names, looked for in every directory above a path, and paths; none for P4IGNORE=unset
-			CSettingValue m_ConfigName;                        // P4CONFIG or empty; as in p4, its files are excluded by a name or relative path, not an absolute one
 			NStr::CStr m_EnviroFile;                           // The enviro file the settings were read with, also while missing, or empty
 			NStr::CStr m_Charset;                              // P4CHARSET, or empty; the charsets decide on Windows how names and paths are encoded
 			NStr::CStr m_CommandCharset;                       // P4COMMANDCHARSET, or empty
@@ -90,8 +116,12 @@ namespace NMib::NPerforce
 		CPerforceIgnore &operator = (CPerforceIgnore const &_Other) = delete;
 
 		static NContainer::TCVector<NStr::CStr> fs_GetEnvironmentVariables();
+		static NContainer::TCVector<NStr::CStr> fs_GetRegistryVariables();
+		static NContainer::TCMap<NStr::CStr, NStr::CStr> fs_GetProcessEnvironment();
+		static int fs_FilterSettingsFile(char const *_pPath, int _Charset);
 		static bool fs_IsLearnedCharsetVariable(NStr::CStr const &_Name);
-		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
+		static CRegistrySettings fs_ReadRegistry(NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
+		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment, CRegistrySettings const &_Registry);
 		static NContainer::TCVector<CSettingValue> fs_ResolveIgnoreNames(NStr::CStr const &_IgnoreNames, NStr::CStr const &_Directory);
 
 		bool f_IsIgnored(NStr::CStr const &_Path, bool _bDirectory) const;
