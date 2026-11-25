@@ -562,6 +562,7 @@ namespace NMib::NPerforce
 				mp_bUTF8 = mp_bUTF8 || (Charsets.m_bTranslated && Charsets.m_Command == UTF8Charset);
 			if (Charsets.m_bTranslated)
 			{
+				mp_ContentCharset = Charsets.m_Content;
 				fp_SetTrans(Charsets.m_Command, Charsets.m_Content, WorkingDirectory);
 				fp_SetFileNames(WorkingDirectory);
 				if (_Info.m_Server != "")
@@ -576,6 +577,8 @@ namespace NMib::NPerforce
 			// translation's reload of them (enviro.cc's SetCharSet), so it reads no P4CONFIG files the connection overrides.
 			if (mp_pAPI->IsUnicode() && mp_pAPI->GetTrans() != mp_CommandCharset)
 			{
+				if (!Charsets.m_bTranslated)
+					mp_ContentCharset = mp_pAPI->GetTrans();
 				mp_CommandCharset = mp_pAPI->GetTrans();
 				mp_FileNamesCharset = mp_CommandCharset;
 				for (auto UTF8Charset : {CharSetApi::UTF_8, CharSetApi::UTF_8_BOM, CharSetApi::UTF_8_UNCHECKED, CharSetApi::UTF_8_UNCHECKED_BOM})
@@ -896,7 +899,8 @@ namespace NMib::NPerforce
 			{
 				mp_pAPI->SetCharset("utf8");
 				mp_bUTF8 = true;
-				fp_SetTrans(CharSetApi::UTF_8, CharSetApi::UTF_8, WorkingDirectory);
+				// The contents stay in the charset the settings select, which the workspace's files are in, as p4 keeps it.
+				fp_SetTrans(CharSetApi::UTF_8, mp_ContentCharset != CharSetApi::NOCONV ? mp_ContentCharset : int(CharSetApi::UTF_8), WorkingDirectory);
 				fp_SetFileNames(WorkingDirectory);
 				fp_SetIdentity();
 				continue;

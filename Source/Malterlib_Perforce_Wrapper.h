@@ -595,6 +595,7 @@ namespace NMib::NPerforce
 		bool mp_bUTF8 = false;
 		int mp_CommandCharset = 0;    // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
 		int mp_FileNamesCharset = 0;  // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
+		int mp_ContentCharset = 0;    // The charset the settings select for the contents of files, which a login turning to UTF-8 keeps, NOCONV for none
 		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
 
 		CStr mp_ActiveHost;
