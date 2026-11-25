@@ -20,6 +20,10 @@ Import "../../External/p4source/p4.MHeader"
 		MalterlibNoShortcuts false
 		AddIncludePaths_p4api true
 	}
+	Compile
+	{
+		SearchPath += "../../External/p4source/diff"->MakeAbsolute() // p4 diff's differences are taken from the API's own diff
+	}
 	%Group "Perforce"
 	{
 		%Group "Include"

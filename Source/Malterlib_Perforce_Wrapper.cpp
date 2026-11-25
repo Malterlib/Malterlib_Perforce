@@ -18,6 +18,7 @@
 #include "clientapi.h"
 #include "i18napi.h"
 #include "charcvt.h"
+#include "diff.h"
 #include "enviro.h"
 #include "hostenv.h"
 #include "errornum.h"
@@ -68,15 +69,16 @@ namespace NMib::NPerforce
 
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
-		CByteVector *m_pOutputBytes = nullptr; // Borrowed by the command that sets it, null otherwise; takes the output's bytes, NULs included
+		CByteVector *m_pOutputBytes = nullptr;          // Borrowed by the command that sets it, null otherwise; takes the output's bytes, NULs included
+		TCFunction<void (CFileDiff &&_Diff)> m_fOnDiff; // Takes what p4's own diff gives in place of P4DIFF
 		TCVector<CStr> m_Infos;
 		TCFunction<void (CStr const &_Info)> m_fOnInfo;
 		TCFunction<void (CStr const &_Text)> m_fOnText;
 		bool m_bError;
 		CStr m_LastError;
-		TCVector<int> m_ErrorCodes;            // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
-		bool m_bErrorWithoutCode = false;      // An error given as text alone, without the codes
-		bool m_bHandlingError = false;         // Within HandleError, whose text OutputError gets
+		TCVector<int> m_ErrorCodes;                     // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
+		bool m_bErrorWithoutCode = false;               // An error given as text alone, without the codes
+		bool m_bHandlingError = false;                  // Within HandleError, whose text OutputError gets
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 		CStr m_PromtOverride;
 	};
@@ -284,10 +286,129 @@ namespace NMib::NPerforce
 		return ClientUser::Edit(_pFile, _pError);
 	}
 
+	namespace
+	{
+		// The line ends a read through a file of the type turns into LF, as FileSys::Create takes its line type.
+		auto fg_ComparedLineEnds(FileSysType _Type) -> CPerforceClient::EComparedLineEnds
+		{
+			LineType Type = LineTypeLocal;
+			switch (int(_Type & FST_L_MASK))
+			{
+			case FST_L_LF: Type = LineTypeRaw; break;
+			case FST_L_CR: Type = LineTypeCr; break;
+			case FST_L_CRLF: Type = LineTypeCrLf; break;
+			case FST_L_LFCRLF: Type = LineTypeLfcrlf; break;
+			}
+
+			switch (Type)
+			{
+			case LineTypeCr: return CPerforceClient::EComparedLineEnds::mc_CR;
+			case LineTypeCrLf: return CPerforceClient::EComparedLineEnds::mc_CRLF;
+			case LineTypeLfcrlf: return CPerforceClient::EComparedLineEnds::mc_LFCRLF;
+			default: return CPerforceClient::EComparedLineEnds::mc_None;
+			}
+		}
+	}
+
+	// With m_fOnDiff, the API's own diff gives the ranges of the differences to it, as -du0 heads its hunks, instead of their text on
+	// standard output. The files are compared as ClientUser::Diff compares them without a P4DIFF: a Unicode file in another charset
+	// than UTF-8 and the output's converted to UTF-8 in p4's own temporary files, with the line ends the client's LineEnd names read
+	// as LF, and other files as their bytes, which LF bytes alone end the lines of. The workspace file is the one compared, so a
+	// caller reading it afterwards checks that it is unchanged.
 	void CPerforceClient::CP4Client::Diff(FileSys *_pFile1, FileSys *_pFile2, int _DoPage, char *_pDiffFlags, Error *_pError)
 	{
-		// DConOut("P4: Diff" DNewLine, 0);
-		return ClientUser::Diff(_pFile1, _pFile2, _DoPage, _pDiffFlags, _pError);
+		if (!m_fOnDiff)
+			return ClientUser::Diff(_pFile1, _pFile2, _DoPage, _pDiffFlags, _pError);
+
+		CFileDiff Diff;
+		Diff.m_File = fg_DecodePerforceString(CAnsiStr(_pFile2->Name()), fg_FileNameEncoding(m_pClient->mp_FileNamesCharset));
+		if (!_pFile1->IsTextual() || !_pFile2->IsTextual())
+		{
+			Diff.m_bBinary = true;
+			m_fOnDiff(fg_Move(Diff));
+			return;
+		}
+
+		// Read by files of their own: one the diff's sequence still has open, opened again by it, would have its descriptor replaced,
+		// which then never closes.
+		FileSys *pFile1 = File(FST_BINARY);
+		FileSys *pFile2 = File(FST_BINARY);
+		auto DeleteFiles = g_OnScopeExit / [&]
+			{
+				delete pFile1;
+				delete pFile2;
+			}
+		;
+
+		// The output's charset is the files' where the client sets none, as ClientUser::Diff decides.
+		int ContentCharset = _pFile1->GetContentCharSetPriv();
+		int OutputCharset = outputCharset;
+		if (_pFile1->IsUnicode() && !OutputCharset && ContentCharset == _pFile2->GetContentCharSetPriv())
+			OutputCharset = ContentCharset;
+
+		if (_pFile1->IsUnicode() && ContentCharset != OutputCharset && ContentCharset != CharSetApi::UTF_8)
+		{
+			pFile1->SetDeleteOnClose();
+			pFile1->MakeGlobalTemp();
+			pFile2->SetDeleteOnClose();
+			pFile2->MakeGlobalTemp();
+
+			CharSetCvt *pConverter = CharSetCvt::FindCvt(CharSetApi::CharSet(ContentCharset), CharSetApi::UTF_8);
+			auto DeleteConverter = g_OnScopeExit / [&]
+				{
+					delete pConverter;
+				}
+			;
+
+			_pFile1->Translator(pConverter);
+			_pFile1->Copy(pFile1, FPM_RW, _pError);
+			if (!_pError->Test())
+			{
+				if (pConverter)
+					pConverter->ResetErr();
+
+				FileSys *pWorkspace = File(_pFile2->GetType());
+				auto DeleteWorkspace = g_OnScopeExit / [&]
+					{
+						delete pWorkspace;
+					}
+				;
+				pWorkspace->SetCharSetPriv(_pFile2->GetCharSetPriv());
+				pWorkspace->SetContentCharSetPriv(_pFile2->GetContentCharSetPriv());
+				pWorkspace->Set(*_pFile2->Path());
+				pWorkspace->Translator(pConverter);
+				pWorkspace->Copy(pFile2, FPM_RW, _pError);
+			}
+
+			Diff.m_ComparedLineEnds = fg_ComparedLineEnds(_pFile2->GetType());
+			Diff.m_bConverted = true;
+		}
+		else
+		{
+			pFile1->Set(*_pFile1->Path());
+			pFile2->Set(*_pFile2->Path());
+		}
+
+		if (_pError->Test())
+			return;
+
+		DiffFlags Flags(_pDiffFlags);
+		::Diff Differ;
+		Differ.SetInput(pFile1, pFile2, Flags, _pError);
+		if (_pError->Test())
+			return;
+
+		Differ.DiffRanges
+			(
+				[](void *_pContext, LineNo _iOldFirst, LineNo _nOld, LineNo _iNewFirst, LineNo _nNew)
+				{
+					((CFileDiff *)_pContext)->m_Ranges.f_Insert(CDiffRange{umint(_iOldFirst), umint(_nOld), umint(_iNewFirst), umint(_nNew)});
+				}
+				, &Diff
+			)
+		;
+
+		m_fOnDiff(fg_Move(Diff));
 	}
 
 	void CPerforceClient::CP4Client::Merge(FileSys *_pBase, FileSys *_pLeg1, FileSys *_pLeg2, FileSys *_pResult, Error *_pError)
@@ -874,6 +995,8 @@ namespace NMib::NPerforce
 			WorkingDirectory = mp_ConnectionInfo.m_WorkingDirectory;
 		if (WorkingDirectory.f_IsEmpty())
 			WorkingDirectory = NFile::CFile::fs_GetCurrentDirectory();
+		mp_LoginDirectory = WorkingDirectory;
+		mp_pNonTaggedClient.f_Clear();
 
 		// A session that the connection or its settings made UTF-8 stays so until a non-Unicode server refuses it: on Windows the
 		// settings under a path outside the code page are only found with UTF-8 file names, and the API caches the user and client
@@ -3273,17 +3396,39 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	// The untagged session is this one's, in its working directory and with the server, user, workspace and host its settings chose,
+	// so a specification in the workspace's syntax is of the same workspace. It is made for the session's latest login.
+	bool CPerforceClient::fp_GetNonTaggedClient()
+	{
+		DCheckApi("GetNonTaggedClient");
+
+		if (mp_pNonTaggedClient)
+			return true;
+
+		auto ConnectionInfo = f_GetConnectionInfo();
+		ConnectionInfo.m_bDisableTagging = true;
+		ConnectionInfo.m_Server = f_GetActiveServer();
+		ConnectionInfo.m_User = f_GetActiveUser();
+		ConnectionInfo.m_Client = f_GetActiveClient();
+		ConnectionInfo.m_Host = f_GetActiveHost();
+		mp_pNonTaggedClient = fg_Construct(ConnectionInfo);
+		if (!mp_pNonTaggedClient->f_Login(CStr(), mp_LoginDirectory))
+		{
+			mp_LastError = mp_pNonTaggedClient->f_GetLastError();
+			mp_pNonTaggedClient.f_Clear();
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &o_Patch)
 	{
 		DCheckApi(CStr::CFormat("CreatePatch({})") << _Branch);
 
-		if (!mp_pNonTaggedClient)
-		{
-			auto ConnectionInfo = f_GetConnectionInfo();
-			ConnectionInfo.m_bDisableTagging = true;
-			mp_pNonTaggedClient = fg_Construct(ConnectionInfo);
-			mp_pNonTaggedClient->f_Login(CStr());
-		}
+		if (!fp_GetNonTaggedClient())
+			return false;
 
 		if (!mp_pNonTaggedClient->fp_CreatePatchNonTagged(_Branch, _bFullContext, o_Patch))
 		{
@@ -5281,6 +5426,184 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	// The differences of the opened files from the revisions p4 diff compares them with: a file moved to another path with its
+	// source, one a sync has scheduled a resolve for with the revision its changes are based on. Each file p4 diff compares gives
+	// a result, also one without differences.
+	bool CPerforceClient::f_DiffOpenedFiles(TCVector<CStr> const &_Files, TCVector<CFileDiff> &o_Diffs)
+	{
+		DCheckApi("DiffOpenedFiles");
+
+		o_Diffs.f_Clear();
+		if (_Files.f_IsEmpty())
+			return true;
+
+		mp_pClient->m_fOnDiff = [&](CFileDiff &&_Diff)
+			{
+				o_Diffs.f_Insert(fg_Move(_Diff));
+			}
+		;
+
+		auto StopDiffs = g_OnScopeExit / [&]
+			{
+				mp_pClient->m_fOnDiff.f_Clear();
+			}
+		;
+
+		TCVector<CStr> Arguments = {"-du0"};
+		Arguments.f_Insert(_Files);
+		fp_Run("diff", Arguments);
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// The differences between two depot revisions, as p4 diff2 gives them, which only an untagged session does. Revisions of two
+	// types p4 diff2 only reports as differing, unless _bAnyTypes compares them as text whatever their types, as -t does: also two
+	// text types, such as text and utf8.
+	bool CPerforceClient::f_DiffRevisions(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes)
+	{
+		DCheckApi(CStr::CFormat("DiffRevisions({}, {})") << _File1 << _File2);
+
+		if (!fp_GetNonTaggedClient())
+			return false;
+
+		if (!mp_pNonTaggedClient->fp_DiffRevisionsNonTagged(_File1, _File2, o_Diff, _bAnyTypes))
+		{
+			mp_LastError = mp_pNonTaggedClient->f_GetLastError();
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
+	// The header of each pair of files is "==== <file>#<rev> (<type>) - <file>#<rev> (<type>) ==== <status>", "<none>" in place of
+	// a file that isn't there, and the differences follow it as text.
+	bool CPerforceClient::fp_DiffRevisionsNonTagged(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes)
+	{
+		DCheckApi(CStr::CFormat("DiffRevisions({}, {})") << _File1 << _File2);
+
+		o_Diff = {};
+		mp_pClient->m_fOnInfo = [&](CStr const &_Info)
+			{
+				if (!_Info.f_StartsWith("==== "))
+					return;
+
+				CStr Header = _Info.f_RemovePrefix("==== ");
+				aint iEnd = Header.f_FindReverse(" ====");
+				if (iEnd < 0)
+					return;
+
+				o_Diff.m_Status = Header.f_Extract(iEnd + 5).f_Trim();
+				CStr Files = Header.f_Left(iEnd);
+
+				// A revision and its type, "//depot/file#1 (text)", or "<none>".
+				auto fSplit = [](CStr const &_Side, CStr &o_File, CStr &o_Type)
+					{
+						o_File = _Side;
+						o_Type.f_Clear();
+						if (!_Side.f_EndsWith(")"))
+							return;
+
+						aint iType = _Side.f_FindReverse(" (");
+						if (iType < 0)
+							return;
+
+						o_File = _Side.f_Left(iType);
+						o_Type = _Side.f_Extract(iType + 2).f_RemoveSuffix(")");
+					}
+				;
+
+				// A depot path spells a '#' as %23, so the first one marks the first's revision, and its type follows it: the
+				// " - " behind that type separates them, whatever the path holds.
+				aint iSeparator = -1;
+				if (Files.f_StartsWith("<none> - "))
+					iSeparator = 6;
+				else if (aint iRevision = Files.f_FindChar('#'); iRevision >= 0)
+				{
+					CStr Behind = Files.f_Extract(iRevision);
+					aint iType = Behind.f_Find(" (");
+					aint iTypeEnd = iType >= 0 ? Behind.f_Extract(iType).f_FindChar(')') : -1;
+					if (iTypeEnd >= 0 && Behind.f_Extract(iType + iTypeEnd + 1).f_StartsWith(" - "))
+						iSeparator = iRevision + iType + iTypeEnd + 1;
+				}
+
+				if (iSeparator < 0)
+					return;
+
+				CStr File1;
+				fSplit(Files.f_Left(iSeparator), File1, o_Diff.m_Type1);
+				fSplit(Files.f_Extract(iSeparator + 3), o_Diff.m_File, o_Diff.m_Type2);
+			}
+		;
+
+		CByteVector Diff;
+		mp_pClient->m_pOutputBytes = &Diff;
+		auto StopOutput = g_OnScopeExit / [&]
+			{
+				mp_pClient->m_fOnInfo.f_Clear();
+				mp_pClient->m_pOutputBytes = nullptr;
+			}
+		;
+
+		if (_bAnyTypes)
+			fp_Run("diff2", {"-t", "-du0", _File1, _File2});
+		else
+			fp_Run("diff2", {"-du0", _File1, _File2});
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+
+		// The text is a unified diff without context, whose hunks' headers, '@@ -<first>[,<count>] +<first>[,<count>] @@', give the
+		// ranges: a range without a count has one line. The records are LF-delimited, of text that can hold NULs, which only end the
+		// records split from a hunk's lines: those never start with '@'.
+		auto fRange = [](CStr const &_Range, umint &o_iFirst, umint &o_nLines)
+			{
+				CStr Count = _Range;
+				CStr First = NStr::fg_GetStrSepNoTrim(Count, ",");
+				if (First == _Range)
+					Count = "1";
+				// Digits alone, few enough that the decimal parse can't overflow.
+				if (!First.f_IsNumeric() || !Count.f_IsNumeric() || First.f_GetLen() > 18 || Count.f_GetLen() > 18)
+					return false;
+
+				o_iFirst = NStr::fg_StrToIntBase10(First.f_GetStr(), umint(0));
+				o_nLines = NStr::fg_StrToIntBase10(Count.f_GetStr(), umint(0));
+				return true;
+			}
+		;
+
+		CStr DiffText(NStr::CAllowNUL(), (ch8 const *)Diff.f_GetArray(), Diff.f_GetLen());
+		for (auto const &Line : DiffText.f_Split("\n"))
+		{
+			if (!Line.f_StartsWith("@@ -"))
+				continue;
+
+			CStr Rest = Line.f_RemovePrefix("@@ -");
+			CStr Old = NStr::fg_GetStrSepNoTrim(Rest, " +");
+			CStr New = NStr::fg_GetStrSepNoTrim(Rest, " ");
+			CDiffRange Range;
+			if (!fRange(Old, Range.m_iOldFirst, Range.m_nOld) || !fRange(New, Range.m_iNewFirst, Range.m_nNew))
+			{
+				mp_LastError = "The differences p4 diff2 gave have a hunk without ranges of lines: {}"_f << Line;
+				fOnError();
+				return false;
+			}
+
+			o_Diff.m_Ranges.f_Insert(Range);
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_JobExists(CStr const &_Job)
 	{
 		DCheckApi(CStr::CFormat("JobExists({})") << _Job);
@@ -6249,6 +6572,20 @@ namespace NMib::NPerforce
 		CByteVector Contents;
 		fp_Throw(mp_Client.f_GetFileContents(_Path, _bExpandKeywords, Contents));
 		return Contents;
+	}
+
+	TCVector<CPerforceClient::CFileDiff> CPerforceClientThrow::f_DiffOpenedFiles(TCVector<CStr> const &_Files)
+	{
+		TCVector<CPerforceClient::CFileDiff> Diffs;
+		fp_Throw(mp_Client.f_DiffOpenedFiles(_Files, Diffs));
+		return Diffs;
+	}
+
+	CPerforceClient::CFileDiff CPerforceClientThrow::f_DiffRevisions(CStr const &_File1, CStr const &_File2, bool _bAnyTypes)
+	{
+		CPerforceClient::CFileDiff Diff;
+		fp_Throw(mp_Client.f_DiffRevisions(_File1, _File2, Diff, _bAnyTypes));
+		return Diff;
 	}
 
 	TCVector<CStr> CPerforceClientThrow::f_GetStreams()

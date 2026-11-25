@@ -197,6 +197,37 @@ namespace NMib::NPerforce
 			bool m_bInheritParentView = true;
 		};
 
+		// The line ends that the read of a workspace file turned into the LFs that end the lines of the text p4 diff compared.
+		enum class EComparedLineEnds
+		{
+			mc_None     // The bytes as they are: an LF ends a line, also that of a CRLF, and a lone CR ends none
+			, mc_CR     // LineEnd mac: every CR was read as an LF, so a CRLF ends two lines
+			, mc_CRLF   // LineEnd win, or local on Windows: a CRLF was read as an LF, and a lone CR ends no line
+			, mc_LFCRLF // LineEnd share: a CRLF and a lone CR were each read as an LF
+		};
+
+		// The lines a chunk of differences replaces, as a unified diff without context heads its hunk: the first line on either side,
+		// one-based, which is the line in front of which the chunk stands where the side has no lines, and the number of lines.
+		struct CDiffRange
+		{
+			umint m_iOldFirst = 0;
+			umint m_nOld = 0;
+			umint m_iNewFirst = 0;
+			umint m_nNew = 0;
+		};
+
+		struct CFileDiff
+		{
+			CStr m_File;                                                       // The workspace file p4 diff compares, or the second depot file and revision p4 diff2 compares
+			CStr m_Status;                                                     // From p4 diff2: identical, content, types, left only or right only
+			CStr m_Type1;                                                      // From p4 diff2: the type of the first revision, empty where there is none
+			CStr m_Type2;                                                      // From p4 diff2: the type of the second revision, empty where there is none
+			TCVector<CDiffRange> m_Ranges;                                     // The chunks of differences, in order
+			EComparedLineEnds m_ComparedLineEnds = EComparedLineEnds::mc_None; // From p4 diff: the line ends the read of the workspace file turned into LFs
+			bool m_bConverted = false;                                         // From p4 diff: the workspace file was compared converted to UTF-8, else as its bytes
+			bool m_bBinary = false;                                            // Compared as binary, which gives no differences
+		};
+
 		struct CFileStats
 		{
 			CFileStats();
@@ -329,6 +360,8 @@ namespace NMib::NPerforce
 		bool f_GetWorkspacePath(CStr const &_DepotPath, CStr &_WorkspacePath);
 		bool f_GetTextFileContents(CStr const &_Path, CStr &_Contents);
 		bool f_GetFileContents(CStr const &_Path, bool _bExpandKeywords, CByteVector &o_Contents);
+		bool f_DiffOpenedFiles(TCVector<CStr> const &_Files, TCVector<CFileDiff> &o_Diffs);
+		bool f_DiffRevisions(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes = false);
 		bool f_GetStreams(TCVector<CStr> &_Streams);
 		bool f_GetStreamDepots(TCVector<CStr> &_Depots);
 
@@ -581,7 +614,9 @@ namespace NMib::NPerforce
 		void fp_SetIdentity();
 
 		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
+		bool fp_GetNonTaggedClient();
 		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
+		bool fp_DiffRevisionsNonTagged(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes);
 		bool fp_FileStats(TCVector<CStr> const &_Options, CStr const &_File, CFileStats &_Stats);
 
 		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
@@ -598,6 +633,7 @@ namespace NMib::NPerforce
 		int mp_ContentCharset = 0;    // The charset the settings select for the contents of files, which a login turning to UTF-8 keeps, NOCONV for none
 		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
 
+		CStr mp_LoginDirectory; // The directory the session logged in in, whose settings it has
 		CStr mp_ActiveHost;
 		CStr mp_ActiveClient;
 		CStr mp_ActiveUser;
@@ -669,6 +705,8 @@ namespace NMib::NPerforce
 		CStr f_GetWorkspacePath(CStr const &_DepotPath);
 		CStr f_GetTextFileContents(CStr const &_Path);
 		CByteVector f_GetFileContents(CStr const &_Path, bool _bExpandKeywords = true);
+		TCVector<CPerforceClient::CFileDiff> f_DiffOpenedFiles(TCVector<CStr> const &_Files);
+		CPerforceClient::CFileDiff f_DiffRevisions(CStr const &_File1, CStr const &_File2, bool _bAnyTypes = false);
 		TCVector<CStr> f_GetStreams();
 		TCVector<CStr> f_GetStreamDepots();
 
