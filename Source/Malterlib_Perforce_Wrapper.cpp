@@ -360,6 +360,94 @@ namespace NMib::NPerforce
 			return CPerforceClient::EAction_Unknown;
 	}
 
+	// The resolves -Or gives an opened file, by their index, of which fg_SetResolveBase takes one.
+	struct CScheduledResolves
+	{
+		struct CResolve
+		{
+			CStr m_BaseFile;
+			CStr m_FromFile;
+			uint32 m_BaseRev = 0;
+			CStr m_Type;
+			CStr m_Action; // unresolved for a resolve still to do, else how it was resolved, as merge from or moved from
+		};
+
+		TCMap<uint32, CResolve> m_Resolves;
+	};
+
+	// Reads a field of p4 fstat's tagged output into o_Stats, a resolve's into o_Resolves.
+	void fg_ReadFileStatsField(CStr const &_Command, CStr const &_Data, CPerforceClient::CFileStats &o_Stats, CScheduledResolves &o_Resolves)
+	{
+		auto fResolve = [&](CStr const &_Name) -> CScheduledResolves::CResolve *
+			{
+				if (!_Command.f_StartsWith(_Name))
+					return nullptr;
+
+				CStr Index = _Command.f_RemovePrefix(_Name);
+				if (!Index.f_IsNumeric())
+					return nullptr;
+
+				return &o_Resolves.m_Resolves[Index.f_ToInt(uint32(0))];
+			}
+		;
+
+		if (_Command == "depotFile")
+			o_Stats.m_DepotFile = _Data;
+		else if (_Command == "clientFile")
+			o_Stats.m_ClientFile = _Data;
+		else if (_Command == "isMapped")
+			o_Stats.m_bIsMapped = _Data != "";
+		else if (_Command == "headAction")
+			o_Stats.m_HeadAction = fg_ConvertAction(_Data);
+		else if (_Command == "headType")
+			o_Stats.m_HeadType = _Data;
+		else if (_Command == "headTime")
+			o_Stats.m_HeadTime = _Data;
+		else if (_Command == "headRev")
+			o_Stats.m_HeadRev = _Data.f_ToInt(uint32(0));
+		else if (_Command == "headChange")
+			o_Stats.m_HeadChange = _Data.f_ToInt(uint32(0));
+		else if (_Command == "headModTime")
+			o_Stats.m_HeadModTime = _Data.f_ToInt(uint64(0));
+		else if (_Command == "haveRev")
+			o_Stats.m_HaveRev = _Data.f_ToInt(uint32(0));
+		else if (_Command == "action")
+			o_Stats.m_Action = _Data;
+		else if (_Command == "type")
+			o_Stats.m_Type = _Data;
+		else if (auto *pBaseFile = fResolve("resolveBaseFile"))
+			pBaseFile->m_BaseFile = _Data;
+		else if (auto *pFromFile = fResolve("resolveFromFile"))
+			pFromFile->m_FromFile = _Data;
+		else if (auto *pBaseRev = fResolve("resolveBaseRev"))
+			pBaseRev->m_BaseRev = _Data.f_ToInt(uint32(0));
+		else if (auto *pType = fResolve("resolveType"))
+			pType->m_Type = _Data;
+		else if (auto *pAction = fResolve("resolveAction"))
+			pAction->m_Action = _Data;
+		else if (_Command == "movedFile")
+			o_Stats.m_MovedFile = _Data;
+	}
+
+	// The resolve still to do that the changes of an opened file are based on, which p4 diff compares with: the content resolve from
+	// the file itself, which a sync schedules, wherever -Or lists it among the resolves from other files and of other kinds, as of the
+	// file's type. A resolve from another file isn't, also one whose base is a revision of the file, as an integration of a branch
+	// back into the file it was branched from has. -Or also lists the resolves done until the file is submitted, after which p4 diff
+	// compares with the revision the workspace has, as it does for a file with none.
+	void fg_SetResolveBase(CScheduledResolves const &_Resolves, CPerforceClient::CFileStats &o_Stats)
+	{
+		for (auto const &Resolve : _Resolves.m_Resolves)
+		{
+			bool bFromFile = Resolve.m_FromFile == o_Stats.m_DepotFile && Resolve.m_BaseFile == o_Stats.m_DepotFile;
+			if (Resolve.m_Action == "unresolved" && Resolve.m_Type == "content" && bFromFile)
+			{
+				o_Stats.m_ResolveBaseFile = Resolve.m_BaseFile;
+				o_Stats.m_ResolveBaseRev = Resolve.m_BaseRev;
+				return;
+			}
+		}
+	}
+
 	CPerforceClient::CPerforceClient(CPerforceClient::CConnectionInfo const &_Info)
 	{
 		mp_bUTF8 = false;
@@ -3476,45 +3564,57 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	// '-Or' adds the resolves scheduled for an opened file.
 	bool CPerforceClient::f_FileStats(CStr const &_File, CFileStats &_Stats)
 	{
+		return fp_FileStats({"-Or"}, _File, _Stats);
+	}
+
+	// The stats of the file as it is opened, of the depot file the workspace opened where an overlay mapping, '+//Depot/...', maps
+	// several to the path.
+	bool CPerforceClient::f_OpenedFileStats(CStr const &_File, CFileStats &_Stats)
+	{
+		return fp_FileStats({"-Or", "-Ro"}, _File, _Stats);
+	}
+
+	// The stats of the revision the workspace has of the file, of the depot file it synced where an overlay mapping maps several to the
+	// path. A file the workspace has no revision of, never synced, synced to #none or outside its view, has empty stats.
+	bool CPerforceClient::f_HaveFileStats(CStr const &_File, CFileStats &_Stats)
+	{
+		if (fp_FileStats({}, _File + "#have", _Stats))
+			return true;
+
+		if (!mp_pClient->f_HasOnlyErrors({&MsgDm::ExHAVE, &MsgDm::ExATHAVE, &MsgDm::ExFILE, &MsgDm::ExVIEW}))
+			return false;
+
+		_Stats = CFileStats();
+		return true;
+	}
+
+	bool CPerforceClient::fp_FileStats(TCVector<CStr> const &_Options, CStr const &_File, CFileStats &_Stats)
+	{
+		// The fields fstat doesn't report for this file are empty, also in an object a lookup of another file filled.
+		_Stats = CFileStats();
+
 		DCheckApi(CStr::CFormat("FileStats({})") << _File);
 
-		TCVector<CStr> Arguments;
-
+		TCVector<CStr> Arguments = _Options;
 		Arguments.f_Insert("-m");
 		Arguments.f_Insert("1");
 		Arguments.f_Insert(_File);
 
 		fp_Run("fstat", Arguments);
 
+		CScheduledResolves Resolves;
 		for (CStr const &CurInfo : mp_pClient->m_Infos)
 		{
 			CStr Command;
 			CStr Data;
 			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(CurInfo);
 
-			if (Command == "depotFile")
-				_Stats.m_DepotFile = Data;
-			else if (Command == "clientFile")
-				_Stats.m_ClientFile = Data;
-			else if (Command == "isMapped")
-				_Stats.m_bIsMapped = Data != "";
-			else if (Command == "headAction")
-				_Stats.m_HeadAction = fg_ConvertAction(Data);
-			else if (Command == "headType")
-				_Stats.m_HeadType = Data;
-			else if (Command == "headTime")
-				_Stats.m_HeadTime = Data;
-			else if (Command == "headRev")
-				_Stats.m_HeadRev = Data.f_ToInt(uint32(0));
-			else if (Command == "headChange")
-				_Stats.m_HeadChange = Data.f_ToInt(uint32(0));
-			else if (Command == "headModTime")
-				_Stats.m_HeadModTime = Data.f_ToInt(uint64(0));
-			else if (Command == "haveRev")
-				_Stats.m_HaveRev = Data.f_ToInt(uint32(0));
+			fg_ReadFileStatsField(Command, Data, _Stats, Resolves);
 		}
+		fg_SetResolveBase(Resolves, _Stats);
 
 		if (mp_pClient->m_bError)
 		{
@@ -6642,6 +6742,20 @@ namespace NMib::NPerforce
 	{
 		CPerforceClient::CFileStats Ret;
 		fp_Throw(mp_Client.f_FileStats(_File, Ret));
+		return Ret;
+	}
+
+	CPerforceClient::CFileStats CPerforceClientThrow::f_OpenedFileStats(CStr const &_File)
+	{
+		CPerforceClient::CFileStats Ret;
+		fp_Throw(mp_Client.f_OpenedFileStats(_File, Ret));
+		return Ret;
+	}
+
+	CPerforceClient::CFileStats CPerforceClientThrow::f_HaveFileStats(CStr const &_File)
+	{
+		CPerforceClient::CFileStats Ret;
+		fp_Throw(mp_Client.f_HaveFileStats(_File, Ret));
 		return Ret;
 	}
 

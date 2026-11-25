@@ -211,6 +211,11 @@ namespace NMib::NPerforce
 			uint32 m_HeadChange = 0;
 			uint64 m_HeadModTime = 0;
 			uint32 m_HaveRev = 0;
+			CStr m_Action;          // What the workspace has the file opened for, like 'edit', 'add' or 'move/delete'; empty where it is not opened
+			CStr m_Type;            // The type the file is opened as
+			CStr m_ResolveBaseFile; // Where a content resolve from the file itself is still to do, the file, whose m_ResolveBaseRev its changes are based on
+			uint32 m_ResolveBaseRev = 0;
+			CStr m_MovedFile;       // Of a file opened for a move, the depot file at its other end: 'move/add' from it or 'move/delete' to it
 		};
 
 		struct CMapping
@@ -534,6 +539,8 @@ namespace NMib::NPerforce
 		bool f_SetEnvVar(CStr const &_Var, CStr const &_Value);
 
 		bool f_FileStats(CStr const &_File, CFileStats &_Stats);
+		bool f_OpenedFileStats(CStr const &_File, CFileStats &_Stats);
+		bool f_HaveFileStats(CStr const &_File, CFileStats &_Stats);
 
 		bool f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		bool f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
@@ -573,6 +580,7 @@ namespace NMib::NPerforce
 
 		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
 		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
+		bool fp_FileStats(TCVector<CStr> const &_Options, CStr const &_File, CFileStats &_Stats);
 
 		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
 
@@ -833,6 +841,8 @@ namespace NMib::NPerforce
 		void f_SetEnvVar(CStr const &_Var, CStr const &_Value);
 
 		CPerforceClient::CFileStats f_FileStats(CStr const &_File);
+		CPerforceClient::CFileStats f_OpenedFileStats(CStr const &_File);
+		CPerforceClient::CFileStats f_HaveFileStats(CStr const &_File);
 
 		void f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		void f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
