@@ -252,6 +252,15 @@ namespace NMib::NPerforce
 			CStr m_Error;
 		};
 
+		struct CUnresolvedFile
+		{
+			CStr m_ClientFile;
+			CStr m_FromFile;
+			CStr m_ResolveType; // What is to resolve, like content, filetype, move or delete
+			uint32 m_StartFromRev = 0;
+			uint32 m_EndFromRev = 0;
+		};
+
 		CPerforceClient(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
 		CPerforceClient(CConnectionInfo const &_Info);
 		~CPerforceClient();
@@ -260,6 +269,10 @@ namespace NMib::NPerforce
 		CStr const &f_GetServer() const;
 		CStr const &f_GetUser() const;
 		CStr const &f_GetClient() const;
+		CStr f_GetActiveServer();
+		CStr f_GetActiveUser();
+		CStr f_GetActiveClient();
+		CStr f_GetActiveHost();
 		CConnectionInfo const &f_GetConnectionInfo() const;
 
 		CStr f_GetLastError() const;
@@ -374,6 +387,7 @@ namespace NMib::NPerforce
 		bool f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
 		bool f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
 		bool f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
+		bool f_GetUnresolvedFiles(CStr const &_File, uint32 _Changelist, TCVector<CUnresolvedFile> &o_Files);
 		bool f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
 
 		auto f_CopyStream
@@ -594,6 +608,10 @@ namespace NMib::NPerforce
 		CStr const &f_GetServer() const;
 		CStr const &f_GetUser() const;
 		CStr const &f_GetClient() const;
+		CStr f_GetActiveServer();
+		CStr f_GetActiveUser();
+		CStr f_GetActiveClient();
+		CStr f_GetActiveHost();
 		CPerforceClient::CConnectionInfo const &f_GetConnectionInfo() const;
 
 		bool f_IsUTF8();
@@ -705,6 +723,7 @@ namespace NMib::NPerforce
 		void f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
 		void f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
 		void f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
+		TCVector<CPerforceClient::CUnresolvedFile> f_GetUnresolvedFiles(CStr const &_File, uint32 _Changelist = 0);
 		void f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
 
 		auto f_CopyStream

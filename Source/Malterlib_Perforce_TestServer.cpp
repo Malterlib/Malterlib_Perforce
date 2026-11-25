@@ -465,6 +465,29 @@ namespace NMib::NPerforce
 		co_return {};
 	}
 
+	// Sets the configurable in the server's database, which the server reads as it starts, so it is restarted on its port.
+	TCFuture<void> CPerforceTestServer::f_SetConfigurable(CStr _Name, CStr _Value)
+	{
+		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
+
+		co_await fp_StopServer();
+
+		co_await NProcess::CProcessLaunchActor::fs_LaunchSimple
+			(
+				NProcess::CProcessLaunchActor::CSimpleLaunch
+				(
+					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-c", "set {}={}"_f << _Name << _Value})
+					, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
+				)
+			)
+		;
+
+		if (!co_await fp_LaunchServer(mp_Port))
+			co_return DMibErrorInstance("Failed to restart the p4d test server after setting {}"_f << _Name);
+
+		co_return {};
+	}
+
 	TCFuture<CPerforceClient::CConnectionInfo> CPerforceTestServer::f_GetConnectionInfo(CStr _Client)
 	{
 		co_return fg_FixtureConnection(mp_FixtureRoot, mp_Port, mp_User, _Client);

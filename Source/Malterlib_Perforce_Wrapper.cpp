@@ -543,6 +543,42 @@ namespace NMib::NPerforce
 		return mp_ConnectionInfo.m_Client;
 	}
 
+	// The server the session connects to, also when the settings chose it rather than the connection.
+	CStr CPerforceClient::f_GetActiveServer()
+	{
+		if (!mp_pAPI)
+			return mp_ConnectionInfo.m_Server;
+
+		return f_DecodeStr(mp_pAPI->GetPort().Text());
+	}
+
+	// The user the session runs commands as, also when the settings chose it rather than the connection.
+	CStr CPerforceClient::f_GetActiveUser()
+	{
+		if (!mp_pAPI)
+			return mp_ConnectionInfo.m_User;
+
+		return f_DecodeStr(mp_pAPI->GetUser().Text());
+	}
+
+	// The workspace the session uses, also when the settings chose it rather than the connection.
+	CStr CPerforceClient::f_GetActiveClient()
+	{
+		if (!mp_pAPI)
+			return mp_ConnectionInfo.m_Client;
+
+		return f_DecodeStr(mp_pAPI->GetClient().Text());
+	}
+
+	// The host the session tells the server it runs on, also when the settings chose it rather than the connection.
+	CStr CPerforceClient::f_GetActiveHost()
+	{
+		if (!mp_pAPI)
+			return mp_ConnectionInfo.m_Host;
+
+		return f_DecodeStr(mp_pAPI->GetHost().Text());
+	}
+
 	CPerforceClient::CConnectionInfo const &CPerforceClient::f_GetConnectionInfo() const
 	{
 		return mp_ConnectionInfo;
@@ -2613,6 +2649,9 @@ namespace NMib::NPerforce
 		}
 	}
 
+	// Resolves the files that need no merging: a file changed on one side only takes that side. A file changed on both sides is left
+	// unresolved for the user to merge, also when its changes don't conflict, as an automatic merge can merge them wrongly.
+	// f_GetUnresolvedFiles lists the files left. Nothing to resolve is no error.
 	bool CPerforceClient::f_ResolveSafe(CStr const &_File, uint32 _Changelist)
 	{
 		DCheckApi(CStr::CFormat("ResolveSafe({})") << _File);
@@ -2631,11 +2670,82 @@ namespace NMib::NPerforce
 
 		fp_Run("resolve", Arguments);
 
-		if (mp_pClient->m_bError)
+		if (mp_pClient->m_bError && !mp_pClient->f_HasOnlyErrors({&MsgDm::ExTORESOLVE}))
 		{
 			fOnError();
 			return false;
 		}
+		return true;
+	}
+
+	// The opened files of _File, of changelist _Changelist too when it isn't 0, that still need resolving: one entry for each
+	// resolve, as a file can need its content and its filetype resolved.
+	bool CPerforceClient::f_GetUnresolvedFiles(CStr const &_File, uint32 _Changelist, TCVector<CUnresolvedFile> &o_Files)
+	{
+		DCheckApi(CStr::CFormat("GetUnresolvedFiles({})") << _File);
+
+		// Only tagged output names the files, so an untagged session would find none where some need resolving.
+		if (mp_ConnectionInfo.m_bDisableTagging)
+		{
+			mp_LastError = "Listing the files that need resolving needs a session with tagged output";
+			fOnError();
+			return false;
+		}
+
+		TCVector<CStr> Arguments;
+
+		Arguments.f_Insert("-n");
+		if (_Changelist != 0)
+		{
+			Arguments.f_Insert("-c");
+			Arguments.f_Insert(CStr::fs_ToStr(_Changelist));
+		}
+
+		if (!_File.f_IsEmpty())
+			Arguments.f_Insert(_File);
+
+		fp_Run("resolve", Arguments);
+
+		if (mp_pClient->m_bError && !mp_pClient->f_HasOnlyErrors({&MsgDm::ExTORESOLVE}))
+		{
+			fOnError();
+			return false;
+		}
+
+		// The tagged output gives each resolve's fields on lines of their own, and an empty line after them.
+		CUnresolvedFile File;
+		auto fFinishFile = [&]
+			{
+				if (!File.m_ClientFile.f_IsEmpty())
+					o_Files.f_Insert(fg_Move(File));
+				File = {};
+			}
+		;
+
+		for (CStr const &Info : mp_pClient->m_Infos)
+		{
+			if (Info.f_IsEmpty())
+			{
+				fFinishFile();
+				continue;
+			}
+
+			CStr Value = Info;
+			CStr Key = NStr::fg_GetStrSepNoTrim(Value, " ");
+
+			if (Key == "clientFile")
+				File.m_ClientFile = fg_MalterlibPath(Value);
+			else if (Key == "fromFile")
+				File.m_FromFile = Value;
+			else if (Key == "resolveType")
+				File.m_ResolveType = Value;
+			else if (Key == "startFromRev")
+				File.m_StartFromRev = Value.f_ToInt(uint32(0));
+			else if (Key == "endFromRev")
+				File.m_EndFromRev = Value.f_ToInt(uint32(0));
+		}
+		fFinishFile();
+
 		return true;
 	}
 
@@ -5736,6 +5846,26 @@ namespace NMib::NPerforce
 		return mp_Client.f_GetClient();
 	}
 
+	CStr CPerforceClientThrow::f_GetActiveServer()
+	{
+		return mp_Client.f_GetActiveServer();
+	}
+
+	CStr CPerforceClientThrow::f_GetActiveUser()
+	{
+		return mp_Client.f_GetActiveUser();
+	}
+
+	CStr CPerforceClientThrow::f_GetActiveClient()
+	{
+		return mp_Client.f_GetActiveClient();
+	}
+
+	CStr CPerforceClientThrow::f_GetActiveHost()
+	{
+		return mp_Client.f_GetActiveHost();
+	}
+
 	CPerforceClient::CConnectionInfo const &CPerforceClientThrow::f_GetConnectionInfo() const
 	{
 		return mp_Client.f_GetConnectionInfo();
@@ -6245,6 +6375,13 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_ResolveSafe(CStr const &_File, uint32 _ChangeList)
 	{
 		fp_Throw(mp_Client.f_ResolveSafe(_File, _ChangeList));
+	}
+
+	TCVector<CPerforceClient::CUnresolvedFile> CPerforceClientThrow::f_GetUnresolvedFiles(CStr const &_File, uint32 _ChangeList)
+	{
+		TCVector<CPerforceClient::CUnresolvedFile> Files;
+		fp_Throw(mp_Client.f_GetUnresolvedFiles(_File, _ChangeList, Files));
+		return Files;
 	}
 
 	void CPerforceClientThrow::f_ResolveAutomatic(CStr const &_File, uint32 _ChangeList, bool _bRequireResolved)
