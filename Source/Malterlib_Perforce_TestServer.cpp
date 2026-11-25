@@ -4,6 +4,7 @@
 #include "Malterlib_Perforce_TestServer.h"
 #include "Malterlib_Perforce_Wrapper.h"
 
+#include <Mib/Core/OnScopeExitCatch>
 #include <Mib/Cryptography/UUID>
 #include <Mib/File/File>
 #include <Mib/Process/Platform>
@@ -484,6 +485,39 @@ namespace NMib::NPerforce
 
 		if (!co_await fp_LaunchServer(mp_Port))
 			co_return DMibErrorInstance("Failed to restart the p4d test server after setting {}"_f << _Name);
+
+		co_return {};
+	}
+
+	// Sets a counter as a checkpoint's record would, with the server stopped, which takes any value: "change" sets the number the
+	// next changelist follows, also beyond 32 bits where sys.types.allow64 allows it.
+	TCFuture<void> CPerforceTestServer::f_SetCounter(CStr _Name, CStr _Value)
+	{
+		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
+
+		co_await fp_StopServer();
+
+		CStr Journal = mp_ServerRoot / "SetCounter.jnl";
+		auto DeleteJournal = g_OnScopeExitCatch / [Journal]
+			{
+				if (NFile::CFile::fs_FileExists(Journal, NFile::EFileAttrib_File))
+					NFile::CFile::fs_DeleteFile(Journal);
+			}
+		;
+		NFile::CFile::fs_WriteStringToFile(Journal, "@pv@ 1 @db.counters@ @{}@ @{}@ \n"_f << _Name.f_Replace("@", "@@") << _Value.f_Replace("@", "@@"), false);
+
+		co_await NProcess::CProcessLaunchActor::fs_LaunchSimple
+			(
+				NProcess::CProcessLaunchActor::CSimpleLaunch
+				(
+					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-jr", Journal})
+					, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
+				)
+			)
+		;
+
+		if (!co_await fp_LaunchServer(mp_Port))
+			co_return DMibErrorInstance("Failed to restart the p4d test server after setting the counter {}"_f << _Name);
 
 		co_return {};
 	}

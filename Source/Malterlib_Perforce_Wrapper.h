@@ -208,14 +208,14 @@ namespace NMib::NPerforce
 			CStr m_HeadType;
 			CStr m_HeadTime;
 			uint32 m_HeadRev = 0;
-			uint32 m_HeadChange = 0;
+			uint64 m_HeadChange = 0; // 64-bit on a server that allows it, sys.types.allow64
 			uint64 m_HeadModTime = 0;
 			uint32 m_HaveRev = 0;
-			CStr m_Action;          // What the workspace has the file opened for, like 'edit', 'add' or 'move/delete'; empty where it is not opened
-			CStr m_Type;            // The type the file is opened as
-			CStr m_ResolveBaseFile; // Where a content resolve from the file itself is still to do, the file, whose m_ResolveBaseRev its changes are based on
+			CStr m_Action;           // What the workspace has the file opened for, like 'edit', 'add' or 'move/delete'; empty where it is not opened
+			CStr m_Type;             // The type the file is opened as
+			CStr m_ResolveBaseFile;  // Where a content resolve from the file itself is still to do, the file, whose m_ResolveBaseRev its changes are based on
 			uint32 m_ResolveBaseRev = 0;
-			CStr m_MovedFile;       // Of a file opened for a move, the depot file at its other end: 'move/add' from it or 'move/delete' to it
+			CStr m_MovedFile;        // Of a file opened for a move, the depot file at its other end: 'move/add' from it or 'move/delete' to it
 		};
 
 		struct CMapping

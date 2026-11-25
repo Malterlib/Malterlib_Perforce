@@ -453,6 +453,50 @@ namespace
 
 			co_return {};
 		};
+
+		// A changelist beyond 32 bits, which a server allows with sys.types.allow64.
+		DMibTestSuite("Changelist64") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of 64-bit changelists: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceChangelist64";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_SetConfigurable, CStr("sys.types.allow64"), CStr("1"));
+			co_await Server(&CPerforceTestServer::f_SetCounter, CStr("change"), CStr("5000000000"));
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			int64 Changelist = co_await Server(&CPerforceTestServer::f_SubmitFiles, CStr("//Streams/Main"), TCVector<CPerforceTestServer::CFile>{{"File.txt", "a\n"}}, CStr("Add a file"));
+
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr());
+			auto Stats = co_await
+				(
+					g_Dispatch(fg_BlockingActor())
+					/ [Connection]()
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						return Client.f_FileStats("//Streams/Main/File.txt");
+					}
+					% "Failed to read the file's stats"
+				)
+			;
+
+			DMibExpect(Changelist, >, int64(5000000000));
+			DMibExpect(Stats.m_HeadChange, ==, uint64(Changelist));
+
+			co_return {};
+		};
 	}
 }
 

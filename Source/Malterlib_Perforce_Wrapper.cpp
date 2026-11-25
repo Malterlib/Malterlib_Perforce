@@ -419,7 +419,7 @@ namespace NMib::NPerforce
 		else if (_Command == "headRev")
 			o_Stats.m_HeadRev = _Data.f_ToInt(uint32(0));
 		else if (_Command == "headChange")
-			o_Stats.m_HeadChange = _Data.f_ToInt(uint32(0));
+			o_Stats.m_HeadChange = _Data.f_ToInt(uint64(0));
 		else if (_Command == "headModTime")
 			o_Stats.m_HeadModTime = _Data.f_ToInt(uint64(0));
 		else if (_Command == "haveRev")

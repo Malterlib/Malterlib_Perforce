@@ -35,6 +35,7 @@ namespace NMib::NPerforce
 		NConcurrency::TCFuture<int64> f_SubmitFiles(NStr::CStr _Stream, NContainer::TCVector<CFile> _Files, NStr::CStr _Description);
 		NConcurrency::TCFuture<void> f_SetUserPassword(NStr::CStr _Password);
 		NConcurrency::TCFuture<void> f_SetConfigurable(NStr::CStr _Name, NStr::CStr _Value);
+		NConcurrency::TCFuture<void> f_SetCounter(NStr::CStr _Name, NStr::CStr _Value);
 		NConcurrency::TCFuture<CPerforceClient::CConnectionInfo> f_GetConnectionInfo(NStr::CStr _Client);
 		NConcurrency::TCFuture<NEncoding::CJsonSorted> f_GetClientSpec(NStr::CStr _ClientName);
 
