@@ -155,6 +155,7 @@ namespace NMib::NPerforce
 
 		CPerforceIgnore::CSettings const &f_GetSettings() const;
 		bool f_Contains(NStr::CStr const &_Path) const;
+		bool f_IsOfRoot(NStr::CStr const &_Path) const;
 		NContainer::TCVector<NStr::CStr> f_List() const;
 		NContainer::TCVector<NStr::CStr> f_ListExcluded(NContainer::TCVector<NStr::CStr> *o_pRuleFiles = nullptr) const;
 

@@ -1388,18 +1388,26 @@ namespace NMib::NPerforce
 	// Whether f_List would list the file, which need not exist. _Path is absolute and spelled like the root.
 	bool CPerforceRootFiles::f_Contains(CStr const &_Path) const
 	{
+		return f_IsOfRoot(_Path) && !CFile::fs_FileExists(_Path, EFileAttrib_Link) && fg_GetPathType(_Path) != EPathType_Special;
+	}
+
+	// Whether a file at the path is the root's, by the directories it is in and the ignore rules, whatever is at the path now: a
+	// depot revision's path, whose workspace file can be anything. _Path is absolute and spelled like the root.
+	bool CPerforceRootFiles::f_IsOfRoot(CStr const &_Path) const
+	{
 		auto &Internal = *mp_pInternal;
-		CStr RootPrefix = fg_DirectoryPrefix(Internal.m_Root);
-		if (!_Path.f_StartsWith(RootPrefix) || _Path.f_GetLen() == RootPrefix.f_GetLen())
+		CStr Relative;
+		if (!fg_IsLexicallyIn(_Path, Internal.m_Root, Relative) || Relative.f_IsEmpty())
 			return false;
 
-		for (aint iSeparator = _Path.f_Find(aint(RootPrefix.f_GetLen()), "/"); iSeparator >= 0; iSeparator = _Path.f_Find(iSeparator + 1, "/"))
+		aint iRelative = _Path.f_GetLen() - Relative.f_GetLen();
+		for (aint iSeparator = _Path.f_Find(iRelative, "/"); iSeparator >= 0; iSeparator = _Path.f_Find(iSeparator + 1, "/"))
 		{
 			if (!Internal.f_IsDirectoryOfRoot(_Path.f_Left(iSeparator)))
 				return false;
 		}
 
-		return !CFile::fs_FileExists(_Path, EFileAttrib_Link) && fg_GetPathType(_Path) != EPathType_Special && !Internal.m_Ignore.f_IsIgnored(_Path, false);
+		return !Internal.m_Ignore.f_IsIgnored(_Path, false);
 	}
 
 	// Without o_pExcluded an unlistable directory fails the walk: it reads as empty and would drop its files unnoticed. Outside
