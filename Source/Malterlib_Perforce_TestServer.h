@@ -22,6 +22,7 @@ namespace NMib::NPerforce
 		};
 
 		static NStr::CStr fs_FindServerExecutable(NStr::CStr const &_Name = "p4d");
+		static NStr::CStr fs_WorkspaceText(NStr::CStr const &_Text);
 
 		NConcurrency::TCFuture<void> f_Start(NStr::CStr _Root, NStr::CStr _User);
 		NConcurrency::TCFuture<void> f_StartUnicode(NStr::CStr _Root, NStr::CStr _User);

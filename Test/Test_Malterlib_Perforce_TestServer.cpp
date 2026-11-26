@@ -544,9 +544,9 @@ namespace
 
 				DMibExpectTrue(ServerID.f_StartsWith("Fixture"));
 
-				DMibExpect(NFile::CFile::fs_ReadStringFromFile(WorkRoot / "Readme.txt", true), ==, "Second\n");
-				DMibExpect(NFile::CFile::fs_ReadStringFromFile(WorkRoot / "Source/Main.cpp", true), ==, "int main() {}\n");
-				DMibExpect(NFile::CFile::fs_ReadStringFromFile(WorkRoot / "Source/Other.cpp", true), ==, "void fg_Other() {}\n");
+				DMibExpect(NFile::CFile::fs_ReadStringFromFile(WorkRoot / "Readme.txt", true), ==, CPerforceTestServer::fs_WorkspaceText("Second\n"));
+				DMibExpect(NFile::CFile::fs_ReadStringFromFile(WorkRoot / "Source/Main.cpp", true), ==, CPerforceTestServer::fs_WorkspaceText("int main() {}\n"));
+				DMibExpect(NFile::CFile::fs_ReadStringFromFile(WorkRoot / "Source/Other.cpp", true), ==, CPerforceTestServer::fs_WorkspaceText("void fg_Other() {}\n"));
 			}
 
 			{

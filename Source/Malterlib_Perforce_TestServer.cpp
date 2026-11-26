@@ -74,6 +74,17 @@ namespace NMib::NPerforce
 		}
 	}
 
+	// Text with LF line ends as p4 has it in a workspace whose LineEnd is local, as the clients the server creates are: with CRLF on
+	// Windows.
+	CStr CPerforceTestServer::fs_WorkspaceText(CStr const &_Text)
+	{
+#ifdef DPlatformFamily_Windows
+		return _Text.f_Replace("\n", "\r\n");
+#else
+		return _Text;
+#endif
+	}
+
 	// Empty when not found, which tests report as a skip: Perforce doesn't ship p4d for every platform.
 	CStr CPerforceTestServer::fs_FindServerExecutable(CStr const &_Name)
 	{
