@@ -296,120 +296,9 @@ namespace NMib::NPerforce
 			return fg_TextAsBytes(fg_LocalFile(fg_BytesAsText(_Directory), fg_BytesAsText(_Local)));
 		}
 
-#ifndef DPlatformFamily_Windows
-		// The path of resolved components, which has no symbolic link, . or .. in it.
-		CStr fg_JoinComponents(TCVector<CStr> const &_Components)
-		{
-			if (_Components.f_IsEmpty())
-				return "/";
-
-			CStr Path;
-			{
-				CStr::CAppender Appender(Path);
-				for (auto &Component : _Components)
-				{
-					Appender.f_AddChar('/');
-					Appender += Component;
-				}
-			}
-			return Path;
-		}
-
-		// Resolves the absolute _Path, a directory, as the kernel resolves it: one component at a time, . and .. as they come, and a
-		// symbolic link by putting its target's components before the ones left, from / for an absolute target, up to the
-		// system's bound on links. o_Resolved is the directory, without symbolic links, . or .., or when the resolution fails at a
-		// component (missing, not a directory, unreadable or a link too many), o_Failed is that component's path, from the resolved
-		// directory holding it. o_Dependencies gets the directories whose entries decide a step the resolved path doesn't spell:
-		// the one holding each symbolic link, which retargeting replaces, and the one holding each component a .. discards, which
-		// can be removed or created. A component kept in the resolved path needs nothing: the path stops resolving without it.
-		bool fg_ResolveDirectory(CStr const &_Path, CStr &o_Resolved, CStr &o_Failed, TCSet<CStr> &o_Dependencies)
-		{
-			long MaxLinks = sysconf(_SC_SYMLOOP_MAX);
-			if (MaxLinks <= 0)
-				MaxLinks = 40; // Linux's bound, which it doesn't report
-
-			TCVector<CStr> Left; // The components left, the next one last
-			auto fPushComponents = [&](CStr const &_Components)
-				{
-					ch8 const *pComponents = _Components.f_GetStr();
-					ch8 const *pEnd = pComponents + _Components.f_GetLen();
-					while (pEnd > pComponents)
-					{
-						ch8 const *pStart = pEnd;
-						while (pStart > pComponents && pStart[-1] != '/')
-							--pStart;
-						Left.f_Insert(CStr(pStart, umint(pEnd - pStart)));
-						if (pStart == pComponents)
-							break;
-						pEnd = pStart - 1;
-					}
-				}
-			;
-			fPushComponents(_Path);
-
-			TCVector<CStr> Resolved;
-			long nLinks = 0;
-			while (!Left.f_IsEmpty())
-			{
-				CStr Component = Left.f_PopBack();
-				if (Component.f_IsEmpty() || Component == ".")
-					continue;
-
-				if (Component == "..")
-				{
-					if (!Resolved.f_IsEmpty())
-					{
-						Resolved.f_PopBack();
-						o_Dependencies[fg_JoinComponents(Resolved)];
-					}
-					continue;
-				}
-
-				CStr Directory = fg_JoinComponents(Resolved);
-				CStr Path = fg_DirectoryPrefix(Directory) + Component;
-				struct stat Stats;
-				if (lstat(Path.f_GetStr(), &Stats) != 0)
-				{
-					o_Failed = Path;
-					return false;
-				}
-
-				if (S_ISDIR(Stats.st_mode))
-				{
-					Resolved.f_Insert(Component);
-					continue;
-				}
-
-				if (!S_ISLNK(Stats.st_mode) || ++nLinks > MaxLinks)
-				{
-					o_Failed = Path;
-					return false;
-				}
-
-				o_Dependencies[Directory];
-				CStr Target;
-				ssize_t TargetLength = readlink(Path.f_GetStr(), Target.f_GetStr(PATH_MAX + 1), PATH_MAX);
-				if (TargetLength <= 0)
-				{
-					o_Failed = Path;
-					return false;
-				}
-
-				Target.f_SetAt(TargetLength, 0);
-				Target.f_TrimSize();
-				if (Target.f_StartsWith("/"))
-					Resolved.f_Clear();
-				fPushComponents(Target);
-			}
-
-			o_Resolved = fg_JoinComponents(Resolved);
-			return true;
-		}
-#endif
-
 		// The paths the generation tracks for a rule file, which BuildSystem expands by the names alone and follows symbolic links
 		// in, as the open does: the file the matcher and the filter open. Outside Windows the path up to its last . or .. component
-		// is resolved by fg_ResolveDirectory, with the directories whose entries decide what it resolves to, and the rest is kept
+		// is resolved by CFile::fs_ResolveDirectory, with the directories whose entries decide what it resolves to, and the rest is kept
 		// as it is, which the open and BuildSystem resolve alike; when the resolution fails, the path of the component it failed
 		// at is tracked instead, whose creation or replacement changes what is opened. On Windows the system resolves . and .. by
 		// the names (fg_WindowsFullPath, which keeps a UNC share's root).
@@ -449,7 +338,7 @@ namespace NMib::NPerforce
 
 			CStr Resolved;
 			CStr Failed;
-			if (!fg_ResolveDirectory(_Path.f_Left(iDotsEnd), Resolved, Failed, o_Dependencies))
+			if (!CFile::fs_ResolveDirectory(_Path.f_Left(iDotsEnd), Resolved, Failed, o_Dependencies))
 			{
 				o_Dependencies[Failed];
 				return;
@@ -1094,7 +983,7 @@ namespace NMib::NPerforce
 	}
 
 	// The absolute _Path, a directory, as the system resolves it outside Windows: its symbolic links, . and .. resolved one component
-	// at a time (fg_ResolveDirectory), so a .. after a link leaves the link's target. On Windows, and where it can't be resolved, the
+	// at a time (CFile::fs_ResolveDirectory), so a .. after a link leaves the link's target. On Windows, and where it can't be resolved, the
 	// path is given as it is.
 	CStr CPerforceIgnore::fs_ResolveDirectory(CStr const &_Path)
 	{
@@ -1104,7 +993,7 @@ namespace NMib::NPerforce
 		CStr Resolved;
 		CStr Failed;
 		TCSet<CStr> Dependencies;
-		if (!fg_ResolveDirectory(_Path, Resolved, Failed, Dependencies))
+		if (!CFile::fs_ResolveDirectory(_Path, Resolved, Failed, Dependencies))
 			return _Path;
 
 		return Resolved;
