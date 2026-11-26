@@ -20,6 +20,7 @@
 #include "charcvt.h"
 #include "charset.h"
 #include "enviro.h"
+#include "pathsys.h"
 #ifdef DCompiler_MSVC
 #	pragma warning(pop)
 #endif
@@ -55,6 +56,20 @@ namespace NMib::NPerforce
 			return _Directory;
 
 		return _Directory + "/";
+	}
+
+	// The parent of a directory as p4 climbs to it, by the API's own ToParent, the path itself at the top: separators ending the
+	// path are skipped first, so the parent of /Root/Workspace/ is /Root. Outside Windows only '/' separates, so a backslash stays
+	// in a name, and the top is /. On Windows both separators separate, and the top is a drive's root, like C:/, or a UNC share's,
+	// like //Server/Share/. The path is UTF-8, whatever charset p4 uses, which Windows steps through by its characters.
+	NStr::CStr fg_ParentDirectory(NStr::CStr const &_Path)
+	{
+		PathSysUPtr pPath = PathSys::CreateUPtr();
+		pPath->SetCharSet(CharSetApi::UTF_8);
+		pPath->Set(_Path.f_GetStr(), _Path.f_GetLen());
+		pPath->ToParent();
+
+		return NStr::CStr(pPath->Text(), pPath->Length());
 	}
 
 	// The path with the separator of the platform, which the Perforce API uses.
@@ -216,6 +231,76 @@ namespace NMib::NPerforce
 		Charsets.m_bTranslated = true;
 		Charsets.m_FileSystem = fg_FileNameEncoding(Command);
 		return Charsets;
+	}
+
+	namespace
+	{
+		// The path as spelled, with Malterlib's separators and without separators ending it, but for a root of separators alone.
+		NStr::CStr fg_LexicalPath(NStr::CStr const &_Path)
+		{
+			NStr::CStr Path = fg_MalterlibPath(_Path);
+			NStr::CStr Trimmed = Path.f_TrimRight("/");
+			if (Trimmed.f_IsEmpty() && !Path.f_IsEmpty())
+				return "/";
+
+			return Trimmed;
+		}
+	}
+
+	// Whether the path is the directory or one below it, both spelled alike: the directory and a separator start it. o_Relative is
+	// the part below the directory. Only '/' separates, so outside Windows a backslash is a character of a name.
+	bool fg_IsLexicallyIn(NStr::CStr const &_Path, NStr::CStr const &_Directory, NStr::CStr &o_Relative)
+	{
+		if (_Path == _Directory)
+		{
+			o_Relative.f_Clear();
+			return true;
+		}
+
+		auto Prefix = fg_DirectoryPrefix(_Directory);
+		if (!_Path.f_StartsWith(Prefix))
+			return false;
+
+		o_Relative = _Path.f_RemovePrefix(Prefix);
+		return true;
+	}
+
+	bool fg_IsLexicallyIn(NStr::CStr const &_Path, NStr::CStr const &_Directory)
+	{
+		NStr::CStr Relative;
+		return fg_IsLexicallyIn(_Path, _Directory, Relative);
+	}
+
+	// Whether the directory is the config root or one below it, by the paths as they are spelled, as p4 walks the directories spelled
+	// from the one it runs in rather than their links' targets. An empty root bounds nothing.
+	bool fg_IsInConfigRoot(NStr::CStr const &_Directory, NStr::CStr const &_ConfigRoot)
+	{
+		if (_ConfigRoot.f_IsEmpty())
+			return true;
+
+		return fg_IsLexicallyIn(fg_LexicalPath(_Directory), fg_LexicalPath(_ConfigRoot));
+	}
+
+	// Whether the P4CONFIG file can give the settings of the config root: below it as spelled, in a directory the walk up from one in
+	// the root reaches, whatever the file or a directory on the way is, a symbolic link too. An empty root bounds nothing.
+	bool fg_IsConfigFileInRoot(NStr::CStr const &_File, NStr::CStr const &_ConfigRoot)
+	{
+		if (_ConfigRoot.f_IsEmpty())
+			return true;
+
+		NStr::CStr File = fg_LexicalPath(_File);
+		NStr::CStr Root = fg_LexicalPath(_ConfigRoot);
+		NStr::CStr Relative;
+		if (File == Root || !fg_IsLexicallyIn(File, Root, Relative))
+			return false;
+
+		for (auto const &Component : Relative.f_Split("/"))
+		{
+			if (Component == "..")
+				return false;
+		}
+
+		return true;
 	}
 
 	// The encoding the API takes file names in with the file names' charset (SetTrans' fnames, NOCONV untranslated): on Windows

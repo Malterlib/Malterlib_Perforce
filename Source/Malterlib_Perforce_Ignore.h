@@ -98,6 +98,8 @@ namespace NMib::NPerforce
 		struct CSettings
 		{
 			NStr::CStr f_GetConfigFile(NStr::CStr const &_Directory) const;
+			NStr::CStr f_GetSettingsConfigFile(NStr::CStr const &_Directory) const;
+			NStr::CStr f_FindSettingsConfigDirectory(NStr::CStr const &_Directory) const;
 			CSettingsFiles f_GetSettingsFiles(NStr::CStr const &_Directory) const;
 			NStr::CStr f_GetText(CSettingValue const &_Value) const;
 
@@ -107,6 +109,7 @@ namespace NMib::NPerforce
 			NStr::CStr m_CommandCharset;                       // P4COMMANDCHARSET, or empty
 			NStr::CStr m_LearnedCharset;                       // Without P4CHARSET the charset p4 learned for P4PORT, P4_<port>_CHARSET, or empty
 			NStr::CStr m_LearnedCharsetVariable;               // Without P4CHARSET the name of P4_<port>_CHARSET for P4PORT, or empty
+			NStr::CStr m_ConfigRoot;                           // The highest directory a .p4config file is read from, or empty for any directory
 		};
 
 		CPerforceIgnore(CSettings const &_Settings);
@@ -118,11 +121,20 @@ namespace NMib::NPerforce
 		static NContainer::TCVector<NStr::CStr> fs_GetEnvironmentVariables();
 		static NContainer::TCVector<NStr::CStr> fs_GetRegistryVariables();
 		static NContainer::TCMap<NStr::CStr, NStr::CStr> fs_GetProcessEnvironment();
-		static int fs_FilterSettingsFile(char const *_pPath, int _Charset);
+		static int fs_FilterSettingsFile(char const *_pPath, int _Charset, NStr::CStr const &_ConfigRoot);
 		static bool fs_IsLearnedCharsetVariable(NStr::CStr const &_Name);
 		static CRegistrySettings fs_ReadRegistry(NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment);
-		static CSettings fs_GetSettings(NStr::CStr const &_Directory, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment, CRegistrySettings const &_Registry);
+		static auto fs_GetSettings
+			(
+				NStr::CStr const &_Directory
+				, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment
+				, CRegistrySettings const &_Registry
+				, NStr::CStr const &_ConfigRoot
+			)
+			-> CSettings
+		;
 		static NContainer::TCVector<CSettingValue> fs_ResolveIgnoreNames(NStr::CStr const &_IgnoreNames, NStr::CStr const &_Directory);
+		static NStr::CStr fs_ResolveDirectory(NStr::CStr const &_Path);
 
 		bool f_IsIgnored(NStr::CStr const &_Path, bool _bDirectory) const;
 

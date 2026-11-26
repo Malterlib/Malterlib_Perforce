@@ -141,81 +141,39 @@ namespace NMib::NPerforce
 #endif
 		}
 
+		// The type of the file the API opens by the bytes of _pPath, in _Encoding, and in o_Name its name, whether it exists or not: on
+		// Windows the first of the names it tries that exists, else the first.
+		EPathType fg_OpenedPathType(char const *_pPath, EPerforceEncoding _Encoding, CStr &o_Name)
+		{
+#ifdef DPlatformFamily_Windows
+			TCVector<CStr> Names = fg_FileNames(CAnsiStr(_pPath), _Encoding);
+			for (auto &Name : Names)
+			{
+				if (EPathType Type = fg_GetPathType(Name); Type != EPathType_Missing)
+				{
+					o_Name = Name;
+					return Type;
+				}
+			}
+			o_Name = Names.f_IsEmpty() ? CStr() : Names[0];
+			return EPathType_Missing;
+#else
+			o_Name = _pPath;
+			return fg_GetPathType(o_Name);
+#endif
+		}
+
 		// Every rule file the matcher reads passes here before it is opened: only regular files are read, as reading a FIFO
 		// without a writer blocks. The path is the bytes the matcher opens the file by.
 		int fg_FilterRuleFile(char const *_pPath)
 		{
 #ifdef DPlatformFamily_Windows
-			// The file the API opens: the first of the names it tries that exists.
-			for (auto &Name : fg_FileNames(CAnsiStr(_pPath), fg_APIFileNameEncoding()))
-			{
-				if (EPathType Type = fg_GetPathType(Name); Type != EPathType_Missing)
-					return Type == EPathType_File;
-			}
-			return 0;
+			auto Encoding = fg_APIFileNameEncoding();
 #else
-			return fg_GetPathType(CStr(_pPath)) == EPathType_File;
+			auto Encoding = EPerforceEncoding_UTF8; // Outside Windows the bytes are the name
 #endif
-		}
-
-		// The parent of a directory as p4's ToParent takes it, the path itself at the top: separators ending the path are skipped
-		// first, so the parent of /Root/Workspace/ is /Root. Outside Windows only '/' separates, so a backslash stays in a name, and
-		// the top is /. On Windows both separators separate, and the top is a drive's root, like C:/, or a UNC share's, like
-		// //Server/Share/.
-		CStr fg_ParentDirectory(CStr const &_Path)
-		{
-#ifdef DPlatformFamily_Windows
-			auto fIsSeparator = [](ch8 _Character)
-				{
-					return _Character == '/' || _Character == '\\';
-				}
-			;
-
-			ch8 const *pPath = _Path.f_GetStr();
-			ch8 const *pEnd = pPath + _Path.f_GetLen();
-			ch8 const *pStart = pPath;
-			if (pEnd - pPath >= 2 && pPath[1] == ':')
-				pStart = pPath + 2;
-			else if (pEnd - pPath >= 2 && fIsSeparator(pPath[0]) && pPath[1] == pPath[0])
-			{
-				// Up to the separator after the share's name.
-				pStart = pPath + 2;
-				umint nSeparators = 0;
-				while (pStart != pEnd && !(fIsSeparator(*pStart) && ++nSeparators == 2))
-					++pStart;
-			}
-
-			if (pStart != pEnd && fIsSeparator(*pStart))
-				++pStart;
-
-			ch8 const *pLast = nullptr;
-			ch8 const *pBeforeLast = nullptr;
-			for (ch8 const *pCharacter = pStart; pCharacter != pEnd; ++pCharacter)
-			{
-				if (fIsSeparator(*pCharacter))
-				{
-					pBeforeLast = pLast;
-					pLast = pCharacter;
-				}
-			}
-
-			if (pLast && pLast + 1 == pEnd)
-				pLast = pBeforeLast;
-
-			return _Path.f_Left((pLast ? pLast : pStart) - pPath);
-#else
-			ch8 const *pPath = _Path.f_GetStr();
-			ch8 const *pStart = pPath + (_Path.f_StartsWith("/") ? 1 : 0);
-			ch8 const *pEnd = pPath + _Path.f_GetLen();
-			if (pEnd > pStart && pEnd[-1] == '/')
-				--pEnd;
-			while (pEnd > pStart && pEnd[-1] != '/')
-				--pEnd;
-			if (pEnd > pStart && pEnd[-1] == '/')
-				--pEnd;
-
-			return _Path.f_Left(pEnd - pPath);
-#endif
+			CStr Name;
+			return fg_OpenedPathType(_pPath, Encoding, Name) == EPathType_File;
 		}
 
 		// The file p4's SetLocal makes of _Local in the directory _Directory, as p4 joins a P4CONFIG name to the directories it looks in
@@ -644,6 +602,45 @@ namespace NMib::NPerforce
 			}
 		}
 
+		// The .p4config file p4 tries in the directory, by the directory's bytes in the encoding.
+		CAnsiStr fg_ConfigFileBytes(CStr const &_Directory, EPerforceEncoding _Encoding)
+		{
+			return fg_LocalFileBytes(fg_EncodePerforceString(_Directory, _Encoding), gc_pConfigName);
+		}
+
+		// Calls _fOnConfigFile with each directory from _Directory up, the nearest first, and the .p4config file p4 tries in it, by its
+		// bytes in the encoding, up to where p4 stops climbing, on Windows a UNC share's root too, or the config root, or until
+		// _fOnConfigFile returns false.
+		template <typename tf_FOnConfigFile>
+		void fg_ForEachConfigFile(CStr const &_Directory, CStr const &_ConfigRoot, EPerforceEncoding _Encoding, tf_FOnConfigFile &&_fOnConfigFile)
+		{
+			for (CStr Directory = _Directory; Directory && fg_IsInConfigRoot(Directory, _ConfigRoot);)
+			{
+				if (!_fOnConfigFile(Directory, fg_ConfigFileBytes(Directory, _Encoding)))
+					break;
+
+				CStr Parent = fg_ParentDirectory(Directory);
+				if (Parent == Directory)
+					break;
+				Directory = Parent;
+			}
+		}
+
+		// Whether the settings file named, a .p4config or the enviro file, gives settings: a file, of type _Type, in the config root
+		// (fg_IsConfigFileInRoot).
+		bool fg_ConfigFileGivesSettings(CStr const &_ConfigFile, EPathType _Type, CStr const &_ConfigRoot)
+		{
+			return _ConfigFile && _Type == EPathType_File && fg_IsConfigFileInRoot(_ConfigFile, _ConfigRoot);
+		}
+
+		// The .p4config file p4 opens by _ConfigFile's bytes in _Encoding, where it gives settings (fg_ConfigFileGivesSettings), or empty.
+		CStr fg_SettingsConfigFile(CAnsiStr const &_ConfigFile, EPerforceEncoding _Encoding, CStr const &_ConfigRoot)
+		{
+			CStr ConfigFile;
+			EPathType Type = fg_OpenedPathType(_ConfigFile.f_GetStr(), _Encoding, ConfigFile);
+			return fg_ConfigFileGivesSettings(ConfigFile, Type, _ConfigRoot) ? ConfigFile : CStr();
+		}
+
 		// The charsets p4 selects with the settings (fg_PerforceCharsets), untranslated where p4 would stop.
 		CPerforceCharsets fg_SettingsCharsets(CPerforceIgnore::CSettings const &_Settings)
 		{
@@ -935,41 +932,73 @@ namespace NMib::NPerforce
 	CStr CPerforceIgnore::CSettings::f_GetConfigFile(CStr const &_Directory) const
 	{
 		EPerforceEncoding Encoding = fg_SettingsCharsets(*this).m_FileSystem;
-		TCVector<CStr> Names = fg_FileNames(fg_LocalFileBytes(fg_EncodePerforceString(_Directory, Encoding), gc_pConfigName), Encoding);
-		for (auto &Name : Names)
-		{
-			if (fg_GetPathType(Name) != EPathType_Missing)
-				return Name;
-		}
-		return Names.f_IsEmpty() ? CStr() : Names[0];
+		CStr Name;
+		fg_OpenedPathType(fg_ConfigFileBytes(_Directory, Encoding).f_GetStr(), Encoding, Name);
+		return Name;
 	}
 
-	// The .p4config file of the directory, when it is a regular file, and the files that decide the settings, whether they exist
-	// or not: the enviro file, and each .p4config tried in the directory and each one above it, where its charset settings can be,
-	// also in the encoding of file names the untranslated reading of the charsets takes. The paths are the system's as p4 opens
-	// them. A .p4config is tracked by its path, whose creation, removal and replacement, by a symbolic link too, change what the
-	// path gives, and not by its directory, whose entries change with every file created in it.
+	// The .p4config file of the directory when it gives settings (fg_SettingsConfigFile), or empty.
+	CStr CPerforceIgnore::CSettings::f_GetSettingsConfigFile(CStr const &_Directory) const
+	{
+		if (!fg_IsInConfigRoot(_Directory, m_ConfigRoot))
+			return {};
+
+		EPerforceEncoding Encoding = fg_SettingsCharsets(*this).m_FileSystem;
+		return fg_SettingsConfigFile(fg_ConfigFileBytes(_Directory, Encoding), Encoding, m_ConfigRoot);
+	}
+
+	// The nearest directory from _Directory up whose .p4config gives settings (f_GetSettingsConfigFile), or empty.
+	CStr CPerforceIgnore::CSettings::f_FindSettingsConfigDirectory(CStr const &_Directory) const
+	{
+		EPerforceEncoding Encoding = fg_SettingsCharsets(*this).m_FileSystem;
+		CStr Found;
+		fg_ForEachConfigFile
+			(
+				_Directory
+				, m_ConfigRoot
+				, Encoding
+				, [&](CStr const &_ConfigDirectory, CAnsiStr const &_ConfigFile)
+				{
+					if (!fg_SettingsConfigFile(_ConfigFile, Encoding, m_ConfigRoot))
+						return true;
+
+					Found = _ConfigDirectory;
+					return false;
+				}
+			)
+		;
+
+		return Found;
+	}
+
+	// The .p4config file of the directory, when it gives settings (f_GetSettingsConfigFile), and the files that decide the settings,
+	// whether they exist or not, as p4 opens them: the enviro file and each .p4config tried from the directory up to m_ConfigRoot,
+	// also in the file names' encoding of the untranslated reading of the charsets. A .p4config is tracked by its path, as its
+	// creation or replacement changes the settings, rather than by its directory, whose entries change with every file made in it.
 	auto CPerforceIgnore::CSettings::f_GetSettingsFiles(CStr const &_Directory) const -> CSettingsFiles
 	{
 		CSettingsFiles Files;
 		if (m_EnviroFile)
 			fg_AddRuleFileDependencies(m_EnviroFile, Files.m_Dependencies);
 
-		if (CStr ConfigFile = f_GetConfigFile(_Directory); ConfigFile && fg_GetPathType(ConfigFile) == EPathType_File)
-			Files.m_ConfigFile = ConfigFile;
+		Files.m_ConfigFile = f_GetSettingsConfigFile(_Directory);
 
 		auto fAddConfigFiles = [&](EPerforceEncoding _Encoding)
 			{
-				for (CStr Directory = _Directory; Directory;)
-				{
-					for (auto &Name : fg_FileNames(fg_LocalFileBytes(fg_EncodePerforceString(Directory, _Encoding), gc_pConfigName), _Encoding))
-						Files.m_Dependencies[Name];
+				fg_ForEachConfigFile
+					(
+						_Directory
+						, m_ConfigRoot
+						, _Encoding
+						, [&](CStr const &_ConfigDirectory, CAnsiStr const &_ConfigFile)
+						{
+							for (auto &Name : fg_FileNames(_ConfigFile, _Encoding))
+								Files.m_Dependencies[Name];
 
-					CStr Parent = fg_ParentDirectory(Directory);
-					if (Parent == Directory)
-						break;
-					Directory = Parent;
-				}
+							return true;
+						}
+					)
+				;
 			}
 		;
 		fAddConfigFiles(fg_SettingsCharsets(*this).m_FileSystem);
@@ -1064,6 +1093,24 @@ namespace NMib::NPerforce
 		return {"P4IGNORE", "P4ENVIRO", "P4CHARSET", "P4COMMANDCHARSET", "P4PORT"};
 	}
 
+	// The absolute _Path, a directory, as the system resolves it outside Windows: its symbolic links, . and .. resolved one component
+	// at a time (fg_ResolveDirectory), so a .. after a link leaves the link's target. On Windows, and where it can't be resolved, the
+	// path is given as it is.
+	CStr CPerforceIgnore::fs_ResolveDirectory(CStr const &_Path)
+	{
+#ifdef DPlatformFamily_Windows
+		return _Path;
+#else
+		CStr Resolved;
+		CStr Failed;
+		TCSet<CStr> Dependencies;
+		if (!fg_ResolveDirectory(_Path, Resolved, Failed, Dependencies))
+			return _Path;
+
+		return Resolved;
+#endif
+	}
+
 	// The process's environment, as Malterlib has it, for reading the settings as p4 run by the process does.
 	TCMap<CStr, CStr> CPerforceIgnore::fs_GetProcessEnvironment()
 	{
@@ -1071,20 +1118,11 @@ namespace NMib::NPerforce
 	}
 
 	// Whether p4 reads a P4CONFIG or enviro file by these bytes, in the file names' encoding of the settings' charset, for the
-	// filter of the API's settings: only a regular file, as fs_GetSettings reads, since reading a FIFO without a writer blocks.
-	int CPerforceIgnore::fs_FilterSettingsFile(char const *_pPath, int _Charset)
+	// filter of the API's settings: only a regular file, as fs_GetSettings reads, since reading a FIFO without a writer blocks, and
+	// only one in _ConfigRoot, as spelled (fg_IsConfigFileInRoot), which is empty for the enviro file.
+	int CPerforceIgnore::fs_FilterSettingsFile(char const *_pPath, int _Charset, CStr const &_ConfigRoot)
 	{
-#ifdef DPlatformFamily_Windows
-		// The file the API opens: the first of the names it tries that exists.
-		for (auto &Name : fg_FileNames(CAnsiStr(_pPath), fg_FileNameEncoding(_Charset)))
-		{
-			if (EPathType Type = fg_GetPathType(Name); Type != EPathType_Missing)
-				return Type == EPathType_File;
-		}
-		return 0;
-#else
-		return fg_GetPathType(CStr(_pPath)) == EPathType_File;
-#endif
+		return !fg_SettingsConfigFile(CAnsiStr(_pPath), fg_FileNameEncoding(_Charset), _ConfigRoot).f_IsEmpty();
 	}
 
 	// Whether a variable of the environment is the charset p4 learned for some port, P4_<port>_CHARSET, named as p4 looks it up.
@@ -1155,14 +1193,17 @@ namespace NMib::NPerforce
 	// registry on Windows.
 	//
 	// The P4CONFIG files are the .p4config files, whatever P4CONFIG is, so no setting outside the project chooses which of its files
-	// give settings.
+	// give settings. A file above _ConfigRoot, the project's root, which another user can write and whose port can name a command,
+	// gives none, nor does any where _Directory is outside the root, by the paths as spelled from it (fg_IsConfigFileInRoot). One
+	// that is a symbolic link is read as any other. An empty _ConfigRoot reads them in every directory.
 	//
 	// The values are read as p4 has them, in its file names' encoding (fg_PerforceCharsets), and decoded to UTF-8 only for Malterlib's
 	// paths. As p4 selects the charsets before its translation changes that encoding, P4ENVIRO and the charset settings are read
 	// untranslated, with the P4CONFIG files found in that encoding, and the others with the translation's.
-	auto CPerforceIgnore::fs_GetSettings(CStr const &_Directory, TCMap<CStr, CStr> const &_Environment, CRegistrySettings const &_Registry) -> CSettings
+	auto CPerforceIgnore::fs_GetSettings(CStr const &_Directory, TCMap<CStr, CStr> const &_Environment, CRegistrySettings const &_Registry, CStr const &_ConfigRoot) -> CSettings
 	{
 		CSettings Settings;
+		Settings.m_ConfigRoot = _ConfigRoot;
 
 		TCMap<CStr, CStr> Environment;
 		for (auto iVariable = _Environment.f_GetIterator(); iVariable; ++iVariable)
@@ -1287,27 +1328,26 @@ namespace NMib::NPerforce
 				return Value ? fg_ValueBytes(*Value, _Encoding) : CAnsiStr();
 			}
 		;
-		// The .p4config files of the directory and those above it, the nearest first, up to where p4 stops climbing: on Windows a
-		// UNC share's root too, with the directories in the encoding. Each is the first of the names p4 tries that exists.
+		// The .p4config files of the directory and those above it, the nearest first, up to where p4 stops climbing, on Windows a UNC
+		// share's root too, or the config root, with the directories in the encoding. Each is the first of the names p4 tries that
+		// exists.
 		auto fConfigSettings = [&](EPerforceEncoding _Encoding) -> TCMap<CStr, CAnsiStr>
 			{
 				TCMap<CStr, CAnsiStr> ConfigSettings;
-				for (CStr Directory = _Directory; Directory;)
-				{
-					CAnsiStr ConfigFile = fg_LocalFileBytes(fg_EncodePerforceString(Directory, _Encoding), gc_pConfigName);
-					for (auto &Name : fg_FileNames(ConfigFile, _Encoding))
-					{
-						if (fg_GetPathType(Name) == EPathType_Missing)
-							continue;
-						fg_ReadSettingsFile(Name, ConfigFile, ConfigSettings);
-						break;
-					}
+				fg_ForEachConfigFile
+					(
+						_Directory
+						, _ConfigRoot
+						, _Encoding
+						, [&](CStr const &_ConfigDirectory, CAnsiStr const &_ConfigFile)
+						{
+							if (CStr Name = fg_SettingsConfigFile(_ConfigFile, _Encoding, _ConfigRoot))
+								fg_ReadSettingsFile(Name, _ConfigFile, ConfigSettings);
 
-					CStr Parent = fg_ParentDirectory(Directory);
-					if (Parent == Directory)
-						break;
-					Directory = Parent;
-				}
+							return true;
+						}
+					)
+				;
 
 				return ConfigSettings;
 			}

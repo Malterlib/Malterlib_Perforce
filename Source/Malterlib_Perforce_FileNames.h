@@ -19,6 +19,9 @@ namespace NMib::NPerforce
 
 	EPathType fg_GetPathType(NStr::CStr const &_Path);
 	NStr::CStr fg_DirectoryPrefix(NStr::CStr const &_Directory);
+	NStr::CStr fg_ParentDirectory(NStr::CStr const &_Path);
+	bool fg_IsLexicallyIn(NStr::CStr const &_Path, NStr::CStr const &_Directory, NStr::CStr &o_Relative);
+	bool fg_IsLexicallyIn(NStr::CStr const &_Path, NStr::CStr const &_Directory);
 	NStr::CStr fg_PerforcePath(NStr::CStr const &_Path);
 	NStr::CStr fg_MalterlibPath(NStr::CStr const &_Path);
 	NStr::CStr fg_ConvertCharset(NStr::CStr const &_Str, int _Charset, bool _bToCharset);
@@ -46,6 +49,8 @@ namespace NMib::NPerforce
 	};
 
 	EPerforceEncoding fg_FileNameEncoding(int _FileNamesCharset);
+	bool fg_IsInConfigRoot(NStr::CStr const &_Directory, NStr::CStr const &_ConfigRoot);
+	bool fg_IsConfigFileInRoot(NStr::CStr const &_File, NStr::CStr const &_ConfigRoot);
 	CPerforceCharsets fg_PerforceCharsets(ch8 const *_pCharset, ch8 const *_pCommandCharset, ch8 const *_pLearnedCharset, Enviro *_pEnviro);
 	NStr::CStr fg_DecodePerforceString(NStr::CAnsiStr const &_Bytes, EPerforceEncoding _Encoding);
 	NStr::CAnsiStr fg_EncodePerforceString(NStr::CStr const &_String, EPerforceEncoding _Encoding);

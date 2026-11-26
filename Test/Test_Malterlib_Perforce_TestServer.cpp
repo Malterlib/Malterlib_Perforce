@@ -405,7 +405,7 @@ namespace
 				(
 					g_Dispatch(fg_BlockingActor()) / [Workspace, Environment]() -> CStr
 					{
-						auto pClient = CPerforceClientThrow::fs_GetFromP4Config(Workspace / "A.cpp", Environment, {});
+						auto pClient = CPerforceClientThrow::fs_GetFromP4Config(Workspace / "A.cpp", Environment, {}, {});
 						if (!pClient)
 							return "No Perforce root";
 

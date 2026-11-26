@@ -478,6 +478,19 @@ namespace NMib::NPerforce
 		}
 	}
 
+	// The settings files the API opens: regular files, and a P4CONFIG file in the connection's config root alone, as fs_GetSettings
+	// reads them, which the API would otherwise read up to the file system's root: one in a directory it walks outside the root,
+	// where fs_GetSettings never walks, is refused. The enviro file, which has no directory, is read wherever it is.
+	int CPerforceClient::fsp_FilterSettingsFile(char const *_pPath, int _Charset, char const *_pDirectory, void *_pContext)
+	{
+		auto *pThis = (CPerforceClient *)_pContext;
+		CStr ConfigRoot = _pDirectory && pThis ? pThis->mp_ConfigRoot : CStr();
+		if (ConfigRoot && !fg_IsInConfigRoot(fg_DecodePerforceString(CAnsiStr(_pDirectory), fg_FileNameEncoding(_Charset)), ConfigRoot))
+			return 0;
+
+		return CPerforceIgnore::fs_FilterSettingsFile(_pPath, _Charset, ConfigRoot);
+	}
+
 	CPerforceClient::EAction fg_ConvertAction(CStr const &_Action)
 	{
 		if (_Action == "add")
@@ -593,7 +606,8 @@ namespace NMib::NPerforce
 		// constructed, which a FIFO among them blocks, so the settings are made here, with the connection's enviro file and
 		// P4CONFIG applied before anything is read from them.
 		mp_pEnviro = fg_ConstructObject<Enviro>(NMemory::CDefaultAllocator());
-		mp_pEnviro->SetFileFilter(CPerforceIgnore::fs_FilterSettingsFile);
+		mp_ConfigRoot = _Info.m_ConfigRoot;
+		mp_pEnviro->SetFileFilter(fsp_FilterSettingsFile, this);
 		if (_Info.m_Environment)
 		{
 			StrBufDict Environment;
@@ -7221,28 +7235,29 @@ namespace NMib::NPerforce
 		fp_Throw(mp_Client.f_DeleteBranch(_Name));
 	}
 
-	// The client of p4 run in the nearest directory above _Path that has its .p4config file, with the settings
+	// The client of p4 run in the nearest directory above _Path, in _ConfigRoot, that has its .p4config file, with the settings
 	// CPerforceIgnore::fs_GetSettings reads, logged in there, or null when no directory has one.
-	auto CPerforceClientThrow::fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry)
+	auto CPerforceClientThrow::fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot)
 		-> NStorage::TCUniquePointer<CPerforceClientThrow>
 	{
-		for (CStr Directory = CFile::fs_GetPath(_Path); !Directory.f_IsEmpty();)
-		{
-			auto Settings = CPerforceIgnore::fs_GetSettings(Directory, _Environment, _Registry);
-			if (Settings.f_GetSettingsFiles(Directory).m_ConfigFile)
-			{
-				NStorage::TCUniquePointer<CPerforceClientThrow> pClient = fg_Construct(CPerforceClient::fs_GetConnectionInfo(Directory, Settings, _Environment));
-				pClient->f_Login(CStr(), Directory);
-				return pClient;
-			}
+		// The directories are taken by their names as p4 climbs, where outside Windows a backslash is a character of a name. A
+		// directory without a .p4config of its own reads the .p4config files of the nearest one above it, so the settings read at the
+		// start find that one, where they are read again, as the names they hold relative to the directory resolve from it.
+		CStr Start = fg_ParentDirectory(_Path);
+		if (Start.f_IsEmpty())
+			return nullptr;
 
-			CStr Parent = CFile::fs_GetPath(Directory);
-			if (Parent == Directory)
-				break;
-			Directory = Parent;
-		}
+		auto Settings = CPerforceIgnore::fs_GetSettings(Start, _Environment, _Registry, _ConfigRoot);
+		CStr Directory = Settings.f_FindSettingsConfigDirectory(Start);
+		if (Directory.f_IsEmpty())
+			return nullptr;
 
-		return nullptr;
+		if (Directory != Start)
+			Settings = CPerforceIgnore::fs_GetSettings(Directory, _Environment, _Registry, _ConfigRoot);
+
+		NStorage::TCUniquePointer<CPerforceClientThrow> pClient = fg_Construct(CPerforceClient::fs_GetConnectionInfo(Directory, Settings, _Environment));
+		pClient->f_Login(CStr(), Directory);
+		return pClient;
 	}
 
 	// Logs o_Client in at the nearest directory above _Path that has the file P4CONFIG names, as o_Client reads P4CONFIG, unlike the
@@ -7288,15 +7303,16 @@ namespace NMib::NPerforce
 		Info.m_ConfigName = CStr(".p4config");
 		Info.m_EnviroFile = _Settings.m_EnviroFile;
 		Info.m_Environment = _Environment;
+		Info.m_ConfigRoot = _Settings.m_ConfigRoot;
 
 		return Info;
 	}
 
-	// Whether the directory has its .p4config file, with the settings (CPerforceIgnore::fs_GetSettings).
-	bool CPerforceClient::fs_HasP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry)
+	// Whether the directory has its .p4config file that gives settings in _ConfigRoot (CPerforceIgnore::fs_GetSettings).
+	bool CPerforceClient::fs_HasP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot)
 	{
-		auto Settings = CPerforceIgnore::fs_GetSettings(_Path, _Environment, _Registry);
-		return !Settings.f_GetSettingsFiles(_Path).m_ConfigFile.f_IsEmpty();
+		auto Settings = CPerforceIgnore::fs_GetSettings(_Path, _Environment, _Registry, _ConfigRoot);
+		return !Settings.f_GetSettingsConfigFile(_Path).f_IsEmpty();
 	}
 
 	// Whether the directory has the file P4CONFIG names, as the process's p4 settings give P4CONFIG, unlike the overload taking the

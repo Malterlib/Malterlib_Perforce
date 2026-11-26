@@ -529,7 +529,7 @@ namespace
 				DMibAssertTrue(Native.f_MakeDirectory(ConfigDirectory));
 				DMibAssertTrue(Native.f_Write(Backslash / "Local\\enviro", "P4CLIENT=Local\n"));
 				DMibAssertTrue(Native.f_Write(ConfigDirectory + "/.p4config", "P4IGNORE=$configdir/Config.ignore\n"));
-				auto ConfigSettings = CPerforceIgnore::fs_GetSettings(ConfigDirectory, {{"P4ENVIRO", Backslash / "Local\\enviro"}}, {});
+				auto ConfigSettings = CPerforceIgnore::fs_GetSettings(ConfigDirectory, {{"P4ENVIRO", Backslash / "Local\\enviro"}}, {}, {});
 				DMibExpect
 					(
 						(TCVector<CStr>{ConfigSettings.m_EnviroFile, ConfigSettings.f_GetConfigFile(ConfigDirectory)})
@@ -576,9 +576,11 @@ namespace
 
 				// The generation tracks the files opened, spelled so that expanding them by the names alone keeps them: a .. after
 				// the link from the link's target, and a missing directory before a .. itself.
-				char ResolvedShared[PATH_MAX];
-				DMibAssertTrue(realpath((Root / "Shared").f_GetStr(), ResolvedShared) != nullptr);
-				CStr Shared = ResolvedShared;
+				char ResolvedPath[PATH_MAX];
+				DMibAssertTrue(realpath((Root / "Shared").f_GetStr(), ResolvedPath) != nullptr);
+				CStr Shared = ResolvedPath;
+				DMibAssertTrue(realpath(Linked.f_GetStr(), ResolvedPath) != nullptr);
+				CStr ResolvedLinked = ResolvedPath;
 				CPerforceIgnore::CSettings LinkedSettings
 					{
 						.m_IgnoreNames = CPerforceIgnore::fs_ResolveIgnoreNames("Config/../ignore;Config/../Missing.ignore;Missing/../ignore", Linked)
@@ -587,12 +589,12 @@ namespace
 				TCVector<CStr> LinkedRuleFiles;
 				CPerforceRootFiles(Linked, {}, LinkedSettings).f_ListExcluded(&LinkedRuleFiles);
 				TCVector<CStr> Tracked;
-				for (CStr const &File : {Shared + "/ignore", Shared + "/Missing.ignore", Linked + "/Missing", Linked + "/Config/../ignore"})
+				for (CStr const &File : {Shared + "/ignore", Shared + "/Missing.ignore", ResolvedLinked + "/Missing", Linked + "/Config/../ignore"})
 				{
 					if (LinkedRuleFiles.f_Contains(File) >= 0)
 						Tracked.f_Insert(File);
 				}
-				DMibExpect(Tracked, ==, (TCVector<CStr>{Shared + "/ignore", Shared + "/Missing.ignore", Linked + "/Missing"}));
+				DMibExpect(Tracked, ==, (TCVector<CStr>{Shared + "/ignore", Shared + "/Missing.ignore", ResolvedLinked + "/Missing"}));
 
 				{
 					// A directory's settings files, by which BuildSystem knows a Perforce root before any walk: the enviro file p4
@@ -600,10 +602,8 @@ namespace
 					// the link as the resolver spells it, without links, and the directory's .p4config.
 					DMibTestPath("SettingsFiles");
 					fg_WriteFile(Root / "Shared/linked.p4enviro", "");
-					char ResolvedLinkedPath[PATH_MAX];
-					DMibAssertTrue(realpath(Linked.f_GetStr(), ResolvedLinkedPath) != nullptr);
-					CStr LinkDirectory = ResolvedLinkedPath;
-					auto SettingsFiles = CPerforceIgnore::fs_GetSettings(Linked, {{"P4ENVIRO", Linked + "/Config/../linked.p4enviro"}}, {}).f_GetSettingsFiles(Linked);
+					CStr LinkDirectory = ResolvedLinked;
+					auto SettingsFiles = CPerforceIgnore::fs_GetSettings(Linked, {{"P4ENVIRO", Linked + "/Config/../linked.p4enviro"}}, {}, {}).f_GetSettingsFiles(Linked);
 					DMibExpect(SettingsFiles.m_ConfigFile, ==, "");
 					TCVector<CStr> Dependencies;
 					for (CStr const &File : {Shared + "/linked.p4enviro", LinkDirectory, Linked + "/.p4config"})
@@ -620,9 +620,6 @@ namespace
 				fg_WriteFile(Root / "Links/Placeholder", "");
 				DMibAssert(symlink((Root / "Shared/Sub").f_GetStr(), (Root / "Links/Current").f_GetStr()), ==, 0);
 				DMibAssert(symlink((Root / "Links/Current").f_GetStr(), (Linked / "Chained").f_GetStr()), ==, 0);
-				char ResolvedPath[PATH_MAX];
-				DMibAssertTrue(realpath(Linked.f_GetStr(), ResolvedPath) != nullptr);
-				CStr ResolvedLinked = ResolvedPath;
 				DMibAssertTrue(realpath((Root / "Links").f_GetStr(), ResolvedPath) != nullptr);
 				CStr ResolvedLinks = ResolvedPath;
 				DMibAssertTrue(realpath((Root / "Other").f_GetStr(), ResolvedPath) != nullptr);
@@ -1126,6 +1123,148 @@ namespace
 			}
 		};
 
+		// A project's .p4config files give its settings, whatever P4CONFIG is, but none above its root, which p4 itself would read.
+		DMibTestSuite("ConfigRoot")
+		{
+			CStr Root = fg_MakeTestRoot("TestPerforceConfigRoot");
+			CStr Project = Root / "Project";
+			CStr Source = Project / "Source";
+			CFile::fs_CreateDirectory(Source);
+			fg_WriteFile(Root / ".p4config", "P4CLIENT=Above\nP4IGNORE=Above.ignore\n");
+			TCMap<CStr, CStr> Environment = {{"P4PORT", "127.0.0.1:1"}, {"P4ENVIRO", Root / "None.enviro"}};
+
+			auto fIgnoreNames = [](CPerforceIgnore::CSettings const &_Settings)
+				{
+					CStr Names;
+					for (auto &Name : _Settings.m_IgnoreNames)
+						Names += Name.f_GetDescription() + ";";
+					return Names;
+				}
+			;
+			auto fActiveClient = [&](CStr const &_Directory, CPerforceIgnore::CSettings const &_Settings, TCMap<CStr, CStr> const &_Environment)
+				{
+					CPerforceClient Client(CPerforceClient::fs_GetConnectionInfo(_Directory, _Settings, _Environment));
+					return Client.f_GetActiveClient();
+				}
+			;
+
+			{
+				DMibTestPath("Above");
+				auto Bounded = CPerforceIgnore::fs_GetSettings(Source, Environment, {}, Project);
+				auto Unbounded = CPerforceIgnore::fs_GetSettings(Source, Environment, {}, {});
+				DMibExpect(fIgnoreNames(Bounded).f_Find("Above.ignore"), <, 0);
+				DMibExpect(fIgnoreNames(Unbounded).f_Find("Above.ignore"), >=, 0);
+				DMibExpectFalse(Bounded.f_GetSettingsFiles(Source).m_Dependencies.f_FindEqual(Root / ".p4config"));
+				DMibExpectTrue(Unbounded.f_GetSettingsFiles(Source).m_Dependencies.f_FindEqual(Root / ".p4config"));
+
+				// A directory outside the root has none of its own.
+				DMibExpectFalse(CPerforceClient::fs_HasP4Config(Root, Environment, {}, Project));
+				DMibExpectTrue(CPerforceClient::fs_HasP4Config(Root, Environment, {}, {}));
+
+				DMibExpect(fActiveClient(Source, Bounded, Environment), !=, "Above");
+				DMibExpect(fActiveClient(Source, Unbounded, Environment), ==, "Above");
+			}
+
+			{
+				// In the root, also where P4CONFIG names another file, which the environment, the enviro file or the registry can set:
+				// only .p4config gives settings, also to the connections.
+				DMibTestPath("Inside");
+				fg_WriteFile(Project / ".p4config", "P4CLIENT=Inside\nP4IGNORE=Inside.ignore\n");
+				fg_WriteFile(Project / "Other.cfg", "P4CLIENT=Other\nP4IGNORE=Other.ignore\n");
+				fg_WriteFile(Root / "Config.enviro", "P4CONFIG=Other.cfg\n");
+				TCMap<CStr, TCMap<CStr, CStr>> ConfigEnvironments =
+					{
+						{"Unset", {}}
+						, {"Environment", {{"P4CONFIG", "Other.cfg"}}}
+						, {"EnviroFile", {{"P4ENVIRO", Root / "Config.enviro"}}}
+					}
+				;
+				for (auto iConfigEnvironment = ConfigEnvironments.f_GetIterator(); iConfigEnvironment; ++iConfigEnvironment)
+				{
+					DMibTestPath(iConfigEnvironment.f_GetKey());
+					auto &ConfigEnvironment = *iConfigEnvironment;
+					auto WithConfig = Environment;
+					for (auto iVariable = ConfigEnvironment.f_GetIterator(); iVariable; ++iVariable)
+						WithConfig[iVariable.f_GetKey()] = *iVariable;
+
+					auto Bounded = CPerforceIgnore::fs_GetSettings(Source, WithConfig, {}, Project);
+					DMibExpect(fIgnoreNames(Bounded), ==, "Inside.ignore;");
+					DMibExpectTrue(CPerforceClient::fs_HasP4Config(Project, WithConfig, {}, Project));
+					DMibExpect(Bounded.f_GetSettingsFiles(Project).m_ConfigFile, ==, Project / ".p4config");
+					DMibExpect(fActiveClient(Source, Bounded, WithConfig), ==, "Inside");
+				}
+			}
+#ifndef DPlatformFamily_Windows
+			{
+				// A .p4config that is a symbolic link is read as any other, also through a directory that is one, and so is what it
+				// leads to tracked.
+				DMibTestPath("Link");
+				CStr Linked = Root / "Linked";
+				fg_WriteFile(Linked / "Target.cfg", "P4CLIENT=Linked\nP4IGNORE=Linked.ignore\n");
+				CFile::fs_CreateSymbolicLink(Linked / "Target.cfg", Linked / ".p4config", EFileAttrib_File, ESymbolicLinkFlag_None);
+				auto Settings = CPerforceIgnore::fs_GetSettings(Linked, Environment, {}, Linked);
+				auto Files = Settings.f_GetSettingsFiles(Linked);
+				DMibExpect(fIgnoreNames(Settings).f_Find("Linked.ignore"), >=, 0);
+				DMibExpect(Files.m_ConfigFile, ==, Linked / ".p4config");
+				DMibExpectTrue(Files.m_Dependencies.f_FindEqual(Linked / ".p4config"));
+				DMibExpectTrue(CPerforceClient::fs_HasP4Config(Linked, Environment, {}, Linked));
+				DMibExpect(fActiveClient(Linked, Settings, Environment), ==, "Linked");
+
+				CFile::fs_CreateDirectory(Root / "Linking/Sub");
+				CFile::fs_CreateSymbolicLink(Linked, Root / "Linking/Sub/Link", EFileAttrib_Directory, ESymbolicLinkFlag_None);
+				auto Through = CPerforceIgnore::fs_GetSettings(Root / "Linking/Sub/Link", Environment, {}, Root / "Linking");
+				DMibExpect(fIgnoreNames(Through).f_Find("Linked.ignore"), >=, 0);
+				DMibExpect(fActiveClient(Root / "Linking/Sub/Link", Through, Environment), ==, "Linked");
+			}
+			{
+				// The root's directories are told by their spelling: outside Windows a backslash is a character of a name.
+				DMibTestPath("SpelledAlike");
+				CStr Project = Root / "Spelled";
+				CStr Sibling = Root / "Spelled\\Other";
+				CFile::fs_CreateDirectory(Project);
+				CNativePaths Native;
+				DMibAssertTrue(Native.f_MakeDirectory(Sibling));
+				DMibAssertTrue(Native.f_Write(Sibling + "/.p4config", "P4CLIENT=Above\nP4IGNORE=Above.ignore\n"));
+				auto Settings = CPerforceIgnore::fs_GetSettings(Sibling, Environment, {}, Project);
+				DMibExpect(fIgnoreNames(Settings).f_Find("Above.ignore"), <, 0);
+				DMibExpectFalse(CPerforceClient::fs_HasP4Config(Sibling, Environment, {}, Project));
+			}
+			{
+				// Below the root a .p4config in a directory with a backslash in its name gives settings, to the resolver and the API's
+				// filter alike, which open it by its bytes.
+				DMibTestPath("BackslashBelowRoot");
+				CStr Project = Root / "Backslashed";
+				CStr Directory = Project + "/Sub\\Dir";
+				CFile::fs_CreateDirectory(Project);
+				CNativePaths Native;
+				DMibAssertTrue(Native.f_MakeDirectory(Directory));
+				DMibAssertTrue(Native.f_Write(Directory + "/.p4config", "P4CLIENT=Backslashed\nP4IGNORE=Backslashed.ignore\n"));
+				auto Settings = CPerforceIgnore::fs_GetSettings(Directory, Environment, {}, Project);
+				DMibExpect(fIgnoreNames(Settings).f_Find("Backslashed.ignore"), >=, 0);
+				DMibExpect(Settings.f_GetSettingsFiles(Directory).m_ConfigFile, ==, Directory + "/.p4config");
+				DMibExpectTrue(CPerforceClient::fs_HasP4Config(Directory, Environment, {}, Project));
+				DMibExpect(CPerforceIgnore::fs_FilterSettingsFile((Directory + "/.p4config").f_GetStr(), 0, Project), ==, 1);
+				DMibExpect(fActiveClient(Directory, Settings, Environment), ==, "Backslashed");
+
+				// The walk climbs from it by the names, so the directory the backslash would separate a name into isn't one of its.
+				fg_WriteFile(Project / "Sub/Dir/.p4config", "P4CLIENT=Separated\n");
+				DMibExpect(fActiveClient(Directory, CPerforceIgnore::fs_GetSettings(Directory, Environment, {}, Project), Environment), ==, "Backslashed");
+			}
+			{
+				// So does one in a root whose own name holds one.
+				DMibTestPath("BackslashInRoot");
+				CStr Project = Root + "/Back\\slashed";
+				CNativePaths Native;
+				DMibAssertTrue(Native.f_MakeDirectory(Project));
+				DMibAssertTrue(Native.f_Write(Project + "/.p4config", "P4CLIENT=InRoot\nP4IGNORE=InRoot.ignore\n"));
+				auto Settings = CPerforceIgnore::fs_GetSettings(Project, Environment, {}, Project);
+				DMibExpect(fIgnoreNames(Settings).f_Find("InRoot.ignore"), >=, 0);
+				DMibExpectTrue(CPerforceClient::fs_HasP4Config(Project, Environment, {}, Project));
+				DMibExpect(CPerforceIgnore::fs_FilterSettingsFile((Project + "/.p4config").f_GetStr(), 0, Project), ==, 1);
+			}
+#endif
+		};
+
 		DMibTestSuite("Settings")
 		{
 			CStr Root = fg_MakeTestRoot("TestPerforceSettings");
@@ -1150,7 +1289,7 @@ namespace
 			CFile::fs_CreateDirectory(LinkedFifo);
 			DMibAssert(mkfifo((Root / "Config.fifo").f_GetStr(), 0600), ==, 0);
 			DMibAssert(symlink((Root / "Config.fifo").f_GetStr(), (LinkedFifo / ".p4config").f_GetStr()), ==, 0);
-			auto LinkedFifoSettings = CPerforceIgnore::fs_GetSettings(LinkedFifo, {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", (Root / "Config.fifo").f_GetStr()}}, {});
+			auto LinkedFifoSettings = CPerforceIgnore::fs_GetSettings(LinkedFifo, {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", (Root / "Config.fifo").f_GetStr()}}, {}, {});
 			DMibExpect(LinkedFifoSettings.f_GetSettingsFiles(LinkedFifo).m_ConfigFile, ==, "");
 #endif
 
@@ -1169,7 +1308,7 @@ namespace
 				{
 					auto Environment = _Environment;
 					Environment[HomeVariable] = Home;
-					auto Settings = CPerforceIgnore::fs_GetSettings(_Directory, Environment, {});
+					auto Settings = CPerforceIgnore::fs_GetSettings(_Directory, Environment, {}, {});
 
 					return {fg_JoinDescriptions(Settings.m_IgnoreNames), Settings.m_EnviroFile};
 				}
@@ -1236,13 +1375,13 @@ namespace
 			DMibExpect(Settings, ==, Expected);
 
 			// $home is the home directory without the separator ending it.
-			auto TrailingHome = CPerforceIgnore::fs_GetSettings(Plain, {{HomeVariable, Home + "/"}, {"P4IGNORE", "$home.ignore"}}, {});
+			auto TrailingHome = CPerforceIgnore::fs_GetSettings(Plain, {{HomeVariable, Home + "/"}, {"P4IGNORE", "$home.ignore"}}, {}, {});
 			DMibExpect(fg_JoinDescriptions(TrailingHome.m_IgnoreNames), ==, Home + ".ignore");
 
 #ifndef DPlatformFamily_Windows
 			// The default enviro file of a relative home is opened from the directory, as a relative P4ENVIRO is, not from the
 			// process's current directory.
-			auto RelativeHome = CPerforceIgnore::fs_GetSettings(Root, {{HomeVariable, "Home"}}, {});
+			auto RelativeHome = CPerforceIgnore::fs_GetSettings(Root, {{HomeVariable, "Home"}}, {}, {});
 			DMibExpect((TCVector<CStr>{RelativeHome.m_EnviroFile, fg_JoinDescriptions(RelativeHome.m_IgnoreNames)}), ==, (TCVector<CStr>{Root / "Home/.p4enviro", "Enviro.ignore"}));
 #endif
 
@@ -1252,7 +1391,7 @@ namespace
 			if (GetACP() == 1252)
 			{
 				fg_WriteFile(Root / "Enviro \u6f22/p4enviro", "P4IGNORE=Outside.ignore\n");
-				auto OutsideSettings = CPerforceIgnore::fs_GetSettings(Plain, {{"P4ENVIRO", Root / "Enviro \u6f22/p4enviro"}}, {});
+				auto OutsideSettings = CPerforceIgnore::fs_GetSettings(Plain, {{"P4ENVIRO", Root / "Enviro \u6f22/p4enviro"}}, {}, {});
 				DMibExpect
 					(
 						(TCVector<CStr>{OutsideSettings.m_EnviroFile, fg_JoinDescriptions(OutsideSettings.m_IgnoreNames)})
@@ -1265,7 +1404,7 @@ namespace
 
 			// P4CHARSET and P4COMMANDCHARSET are read like the other settings: a P4CONFIG file outranks the environment.
 			fg_WriteFile(Root / "Charset/.p4config", "P4CHARSET=cp850\n");
-			auto CharsetSettings = CPerforceIgnore::fs_GetSettings(Root / "Charset", {{"P4CONFIG", ".p4config"}, {"P4CHARSET", "winansi"}, {"P4COMMANDCHARSET", "cp1251"}}, {});
+			auto CharsetSettings = CPerforceIgnore::fs_GetSettings(Root / "Charset", {{"P4CONFIG", ".p4config"}, {"P4CHARSET", "winansi"}, {"P4COMMANDCHARSET", "cp1251"}}, {}, {});
 			DMibExpect((TCVector<CStr>{CharsetSettings.m_Charset, CharsetSettings.m_CommandCharset}), ==, (TCVector<CStr>{"cp850", "cp1251"}));
 
 			// Without P4CHARSET the charset p4 learned for the port the settings give, here a P4CONFIG file's, is read from the
@@ -1275,6 +1414,7 @@ namespace
 				(
 					Root / "Learned"
 					, {{"P4CONFIG", ".p4config"}, {"P4PORT", "other:1666"}, {"P4_ssl:server@1666_CHARSET", "utf8"}, {"P4_other:1666_CHARSET", "cp850"}}
+					, {}
 					, {}
 				)
 			;
@@ -1317,7 +1457,7 @@ namespace
 					;
 					fWriteBytes(Root / "NonASCIIPort/.p4config", CAnsiStr("P4PORT=") + Port + "\n");
 					fWriteBytes(Root / "NonASCIIPort.p4enviro", CAnsiStr("P4_") + Port + "_CHARSET=utf8\n");
-					auto PortSettings = CPerforceIgnore::fs_GetSettings(Root / "NonASCIIPort", {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", Root / "NonASCIIPort.p4enviro"}}, {});
+					auto PortSettings = CPerforceIgnore::fs_GetSettings(Root / "NonASCIIPort", {{"P4CONFIG", ".p4config"}, {"P4ENVIRO", Root / "NonASCIIPort.p4enviro"}}, {}, {});
 #ifdef DPlatformFamily_Windows
 					CStr Variable = "P4_rsh:C:\\D\u00e9pot\\p4d.exe_CHARSET";
 #else
@@ -1359,7 +1499,7 @@ namespace
 							TCVector<CStr>
 							{
 								fg_JoinDescriptions(CPerforceIgnore::fs_ResolveIgnoreNames(ShareParent + "\\ignore", Share / "Project"))
-								, CPerforceIgnore::fs_GetSettings(Share / "Project", {{"P4ENVIRO", ShareParent + "\\enviro"}}, {}).m_EnviroFile
+								, CPerforceIgnore::fs_GetSettings(Share / "Project", {{"P4ENVIRO", ShareParent + "\\enviro"}}, {}, {}).m_EnviroFile
 							}
 						)
 						, ==
@@ -1416,7 +1556,7 @@ namespace
 			;
 			auto fIgnore = [&](CStr const &_Directory, TCMap<CStr, CStr> const &_Variables, CRegistrySettings const &_Registry)
 				{
-					return fg_JoinDescriptions(CPerforceIgnore::fs_GetSettings(_Directory, fEnvironment(_Variables), _Registry).m_IgnoreNames);
+					return fg_JoinDescriptions(CPerforceIgnore::fs_GetSettings(_Directory, fEnvironment(_Variables), _Registry, {}).m_IgnoreNames);
 				}
 			;
 			CStr Default = ".p4ignore;p4ignore.txt;{};{}"_f << fNative(Home / ".p4ignore") << fNative(Home / "p4ignore.txt");
@@ -1448,15 +1588,15 @@ namespace
 						, (TCVector<CStr>{"User.ignore", "Machine.ignore", "Enviro.ignore", "Env.ignore", Default, "Config.ignore", Default, ""})
 					)
 				;
-				DMibExpect(CPerforceIgnore::fs_GetSettings(Configured, NoEnviro, Both).f_GetSettingsFiles(Configured).m_ConfigFile, ==, Configured / ".p4config");
+				DMibExpect(CPerforceIgnore::fs_GetSettings(Configured, NoEnviro, Both, {}).f_GetSettingsFiles(Configured).m_ConfigFile, ==, Configured / ".p4config");
 			}
 
 			{
 				// P4ENVIRO comes from the registry too, with $home replaced, unless the environment sets it, also empty.
 				DMibTestPath("EnviroFile");
 				auto Registry = fTextRegistry({{"P4ENVIRO", "$home/Enviro.enviro"}}, {});
-				auto FromRegistry = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}}, Registry);
-				auto Hidden = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}, {"P4ENVIRO", ""}}, Registry);
+				auto FromRegistry = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}}, Registry, {});
+				auto Hidden = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}, {"P4ENVIRO", ""}}, Registry, {});
 #ifdef DPlatformFamily_Windows
 				CStr HiddenEnviro;
 #else
@@ -1477,7 +1617,7 @@ namespace
 				DMibTestPath("Charsets");
 				auto fCharsets = [&](CRegistrySettings const &_Registry) -> TCVector<CStr>
 					{
-						auto Settings = CPerforceIgnore::fs_GetSettings(Workspace, NoEnviro, _Registry);
+						auto Settings = CPerforceIgnore::fs_GetSettings(Workspace, NoEnviro, _Registry, {});
 						return {Settings.m_Charset, Settings.m_LearnedCharset, Settings.m_LearnedCharsetVariable};
 					}
 				;
@@ -1522,7 +1662,7 @@ namespace
 				Paired.m_User["P4IGNORE"] = CRegistryValue{.m_Data = {'A', 0, 0x3D, 0xD8, 0x00, 0xDE, 'B', 0, 0, 0}};
 				auto fFirstIgnore = [&](TCMap<CStr, CStr> const &_Variables, CRegistrySettings const &_Registry) -> TCVector<CStr>
 					{
-						auto Names = CPerforceIgnore::fs_GetSettings(Workspace, fEnvironment(_Variables), _Registry).m_IgnoreNames;
+						auto Names = CPerforceIgnore::fs_GetSettings(Workspace, fEnvironment(_Variables), _Registry, {}).m_IgnoreNames;
 						if (Names.f_IsEmpty())
 							return {};
 						return {Names[0].f_GetDescription(), Names[0].m_bBytes ? "Bytes" : "Text"};
@@ -1568,7 +1708,7 @@ namespace
 				{
 					DMibTestPath("CodePage");
 					auto Registry = fTextRegistry({{"P4ENVIRO", Root / "Enviro 漢/p4enviro"}}, {});
-					DMibExpect(CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}}, Registry).m_EnviroFile, ==, Root / "Enviro ?/p4enviro");
+					DMibExpect(CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}}, Registry, {}).m_EnviroFile, ==, Root / "Enviro ?/p4enviro");
 				}
 #endif
 			}
@@ -1643,7 +1783,7 @@ namespace
 				auto fNames = [&](TCMap<CStr, CStr> const &_Variables, CRegistrySettings const &_Registry)
 					{
 						TCVector<CStr> Descriptions;
-						for (auto &Name : CPerforceIgnore::fs_GetSettings(Workspace, fEnvironment(_Variables), _Registry).m_IgnoreNames)
+						for (auto &Name : CPerforceIgnore::fs_GetSettings(Workspace, fEnvironment(_Variables), _Registry, {}).m_IgnoreNames)
 							Descriptions.f_Insert(Name.f_GetDescription());
 						return Descriptions;
 					}
@@ -1665,7 +1805,7 @@ namespace
 				fg_WriteFile(Root / "Colon/p4enviro", "P4IGNORE=Colon.ignore\n");
 				CStr Path = Root / "Colon/p4enviro";
 				CStr FullWidthPath = Path.f_Left(1) + "\uff1a" + Path.f_Extract(2);
-				auto Settings = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}, {"P4ENVIRO", FullWidthPath}}, {});
+				auto Settings = CPerforceIgnore::fs_GetSettings(Workspace, {{HomeVariable, Home}, {"P4ENVIRO", FullWidthPath}}, {}, {});
 				DMibExpect((TCVector<CStr>{Settings.m_EnviroFile, fg_JoinDescriptions(Settings.m_IgnoreNames)}), ==, (TCVector<CStr>{Path, "Colon.ignore"}));
 			}
 
@@ -1763,7 +1903,7 @@ namespace
 					}
 				;
 				DMibExpect(fDescriptions(Registry), ==, fDescriptions(Expected));
-				DMibExpect(CPerforceIgnore::fs_GetSettings(Configured, {{HomeVariable, Home}}, Registry).m_EnviroFile, ==, Configured / "Registry.enviro");
+				DMibExpect(CPerforceIgnore::fs_GetSettings(Configured, {{HomeVariable, Home}}, Registry, {}).m_EnviroFile, ==, Configured / "Registry.enviro");
 
 				CStr MissingKeyPath = KeyPath + "\\Missing";
 				auto Missing = CPerforceIgnore::fs_ReadRegistry({{"P4TEST_REGISTRY_PATH_T4_TEST", MissingKeyPath}});

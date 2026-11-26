@@ -57,6 +57,7 @@ namespace NMib::NPerforce
 			fp64 m_Timeout = 0.0;                                  // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
 			bool m_bDisableTagging = false;
 			bool m_bIgnorePasswordSetting = false;                 // P4PASSWD is not read: only the password given to f_Login and the tickets are used
+			CStr m_ConfigRoot;                                     // The highest directory whose P4CONFIG file gives settings, or empty for any, as p4 reads them
 		};
 
 		struct CChangeList
@@ -596,7 +597,7 @@ namespace NMib::NPerforce
 		static CStr fs_ActionToStr(EAction _Action);
 
 		static bool fs_HasP4Config(CStr const &_Path);
-		static bool fs_HasP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry);
+		static bool fs_HasP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot);
 		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory);
 		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory, CPerforceIgnore::CSettings const &_Settings, TCMap<CStr, CStr> const &_Environment);
 
@@ -612,6 +613,7 @@ namespace NMib::NPerforce
 		NStr::CAnsiStr fp_EncodeFileName(CStr const &_Name) const;
 		void fp_SetClientPath();
 		void fp_SetIdentity();
+		static int fsp_FilterSettingsFile(char const *_pPath, int _Charset, char const *_pDirectory, void *_pContext);
 
 		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
 		bool fp_GetNonTaggedClient();
@@ -627,6 +629,7 @@ namespace NMib::NPerforce
 		CP4Client *mp_pClient;
 		ClientApi *mp_pAPI;
 		Enviro *mp_pEnviro = nullptr; // The API's settings, when the connection's overrides are applied before it reads them
+		CStr mp_ConfigRoot;           // The connection's m_ConfigRoot, which the settings' filter needs before the connection is kept
 		bool mp_bUTF8 = false;
 		int mp_CommandCharset = 0;    // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
 		int mp_FileNamesCharset = 0;  // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
@@ -898,7 +901,7 @@ namespace NMib::NPerforce
 		void f_DeleteBranch(CStr const &_Name);
 
 		static bool fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client);
-		static auto fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry)
+		static auto fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot)
 			-> NStorage::TCUniquePointer<CPerforceClientThrow>
 		;
 
