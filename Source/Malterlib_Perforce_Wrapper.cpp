@@ -2020,10 +2020,7 @@ namespace NMib::NPerforce
 #endif
 		auto fStartsWith = [&](CStr const &_Path, CStr const &_Prefix)
 			{
-				if (_Path.f_GetLen() < _Prefix.f_GetLen())
-					return false;
-				CStr Start = _Path.f_Left(_Prefix.f_GetLen());
-				return bIgnoreCase ? Start.f_CmpNoCase(_Prefix) == 0 : Start == _Prefix;
+				return bIgnoreCase ? _Path.f_StartsWithNoCase(_Prefix) : _Path.f_StartsWith(_Prefix);
 			}
 		;
 		CStr LocalRoot = fg_DirectoryPrefix(_LocalRoot);
