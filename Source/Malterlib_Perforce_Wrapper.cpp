@@ -982,18 +982,21 @@ namespace NMib::NPerforce
 	}
 
 	// A broken connection, as the timeout breaks it, gives no error of its own. A timeout is reported even after the command's
-	// warnings, which don't tell that its output is incomplete.
+	// warnings, which don't tell that its output is incomplete, and is an error without a code, so f_HasOnlyErrors never takes the
+	// warnings alone for the command's result.
 	void CPerforceClient::fp_CheckDropped()
 	{
 		if (!mp_pAPI->Dropped())
 			return;
+
+		mp_pClient->m_bErrorWithoutCode = true;
 
 		if (mp_pClient->m_Timeout > 0.0 && mp_pClient->m_CommandStopwatch.f_GetTime() > mp_pClient->m_Timeout)
 		{
 			mp_pClient->m_bError = true;
 			mp_pClient->m_LastError += "The Perforce server did not answer within {} seconds\r\n"_f << mp_pClient->m_Timeout;
 		}
-		else if (!mp_pClient->m_bError)
+		else
 		{
 			mp_pClient->m_bError = true;
 			mp_pClient->m_LastError += "The connection to the Perforce server was lost\r\n";
@@ -1533,7 +1536,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			if (mp_pClient->f_HasError(MsgDm::ExFILE))
+			if (mp_pClient->f_HasOnlyErrors({&MsgDm::ExFILE}))
 			{
 				mp_LastError.f_Clear();
 				mp_pClient->m_LastError.f_Clear();
@@ -1570,7 +1573,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			if (mp_pClient->f_HasError(MsgDm::ExFILE) || mp_pClient->f_HasError(MsgDm::ExATCHANGE) || mp_pClient->f_HasError(MsgDm::ExATDATE))
+			if (mp_pClient->f_HasOnlyErrors({&MsgDm::ExFILE, &MsgDm::ExATCHANGE, &MsgDm::ExATDATE}))
 			{
 				mp_LastError.f_Clear();
 				mp_pClient->m_LastError.f_Clear();
@@ -1621,7 +1624,7 @@ namespace NMib::NPerforce
 		fp_Run("fstat");
 		if (mp_pClient->m_bError)
 		{
-			if (mp_pClient->f_HasError(MsgDm::ExFILE))
+			if (mp_pClient->f_HasOnlyErrors({&MsgDm::ExFILE}))
 			{
 				mp_pClient->m_LastError = CStr();
 				return false;
