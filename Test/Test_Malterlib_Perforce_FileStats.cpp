@@ -423,6 +423,49 @@ namespace
 			co_return {};
 		};
 
+#ifndef DPlatformFamily_Windows
+		// The workspace path of a depot file keeps a backslash of its name, which only Windows takes for a separator.
+		DMibTestSuite("ClientPathBackslash") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of a client path with a backslash: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceClientPathBackslash";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			auto ClientPath = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection]() -> CStr
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						return Client.f_GetClientPath("//Streams/Main/Back\\slash.txt");
+					}
+					% "Failed to get the client path"
+				)
+			;
+
+			DMibExpect(ClientPath, ==, WorkRoot + "/Back\\slash.txt");
+
+			co_return {};
+		};
+#endif
+
 		// f_DepotFileStats and f_GetTextFileContentsIfExists tell what the depot doesn't have from a lookup that fails: a file it has
 		// no revision of, one outside the workspace's root, a revision at a changelist from before the file was added, a revision that
 		// deletes the file and #have of a file the workspace hasn't synced are absent, while an empty file is there, and empty.

@@ -5578,9 +5578,9 @@ namespace NMib::NPerforce
 			if (Command == "path")
 			{
 				if (bRemove)
-					_ClientPath = NFile::CFile::fs_GetMalterlibPath(Data.f_Left(Data.f_GetLen() - 39));
+					_ClientPath = fg_MalterlibPath(Data.f_Left(Data.f_GetLen() - 39));
 				else
-					_ClientPath = NFile::CFile::fs_GetMalterlibPath(Data);
+					_ClientPath = fg_MalterlibPath(Data);
 				return true;
 			}
 		}
