@@ -361,6 +361,189 @@ namespace
 			co_return {};
 		};
 
+		// A filetype resolve still to do, after the content resolve from the same revision is done, gives the opened file no resolve
+		// base: only a content resolve does, as p4 diff compares the file with the revision the workspace has once it is done.
+		DMibTestSuite("OpenedFiletypeResolvePending") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of a filetype resolve still to do: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceOpenedFiletypeResolvePending";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			co_await Server(&CPerforceTestServer::f_SubmitFiles, CStr("//Streams/Main"), TCVector<CPerforceTestServer::CFile>{{"Typed.txt", "a\n"}}, CStr("Add the file"));
+
+			CStr WorkRoot = Root / "Work";
+			CStr OtherRoot = Root / "Other";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("OtherWork"), CStr("//Streams/Main"), OtherRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+			auto OtherConnection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("OtherWork"));
+
+			auto Stats = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, OtherConnection, WorkRoot, OtherRoot]() -> CPerforceClient::CFileStats
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Sync(WorkRoot / "...");
+						Client.f_OpenForEdit(WorkRoot / "Typed.txt", "text+x");
+
+						CPerforceClientThrow Other(OtherConnection);
+						Other.f_Login(CStr());
+						Other.f_Sync(OtherRoot / "...");
+						Other.f_OpenForEdit(OtherRoot / "Typed.txt", "text+k");
+						NFile::CFile::fs_WriteStringToFile(OtherRoot / "Typed.txt", CPerforceTestServer::fs_WorkspaceText("b\n"), false);
+						Other.f_Submit(OtherRoot / "Typed.txt", "Change the file and its type");
+
+						// The safe resolve takes the content, which only theirs changed, and leaves the types, which both changed.
+						Client.f_Sync(WorkRoot / "...");
+						Client.f_NoThrow().f_ResolveSafe(WorkRoot / "Typed.txt");
+						return Client.f_OpenedFileStats(WorkRoot / "Typed.txt");
+					}
+					% "Failed to set up the resolves"
+				)
+			;
+
+			DMibExpect(Stats.m_HaveRev, ==, 2u);
+			DMibExpect(Stats.m_ResolveBaseFile, ==, "");
+			DMibExpect(Stats.m_ResolveBaseRev, ==, 0u);
+
+			co_return {};
+		};
+
+		// f_DepotFileStats and f_GetTextFileContentsIfExists tell what the depot doesn't have from a lookup that fails: a file it has
+		// no revision of, one outside the workspace's root, a revision at a changelist from before the file was added, a revision that
+		// deletes the file and #have of a file the workspace hasn't synced are absent, while an empty file is there, and empty.
+		DMibTestSuite("AbsentFiles") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of absent files: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceAbsentFiles";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			int64 BeforeFile = co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"Other.txt", "o\n"}}
+					, CStr("Add another file")
+				)
+			;
+			co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"File.txt", "a\n"}, {"Empty.txt", ""}, {"Deleted.txt", "d\n"}}
+					, CStr("Add the files")
+				)
+			;
+
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			auto Results = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, Root, WorkRoot, BeforeFile]() -> TCVector<CStr>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Sync(WorkRoot / "Deleted.txt");
+						Client.f_Delete(WorkRoot / "Deleted.txt");
+						Client.f_Submit(WorkRoot / "Deleted.txt", "Delete the file");
+
+						TCVector<CStr> Results;
+						for (CStr const &Path : {WorkRoot / "File.txt", WorkRoot / "Missing.txt", Root / "Outside.txt"})
+						{
+							auto Stats = Client.f_DepotFileStats(Path);
+							Results.f_Insert("{} {} {}"_f << NFile::CFile::fs_GetFile(Path) << Stats.m_DepotFile << Stats.m_HeadRev);
+						}
+
+						for
+						(
+							CStr Revision :
+							{
+								CStr("//Streams/Main/File.txt#1")
+								, CStr("//Streams/Main/Missing.txt")
+								, CStr("//Streams/Main/File.txt@{}"_f << BeforeFile)
+								, CStr("//Streams/Main/Deleted.txt#head")
+								, CStr("//Streams/Main/File.txt#have")
+								, CStr("//Streams/Main/Empty.txt#1")
+							}
+						)
+						{
+							auto Contents = Client.f_GetTextFileContentsIfExists(Revision);
+							Results.f_Insert(Contents ? *Contents : CStr("none"));
+						}
+
+						// Only tagged output tells a revision that deletes the file from an empty one.
+						CPerforceClient::CConnectionInfo Untagged = Connection;
+						Untagged.m_bDisableTagging = true;
+						CPerforceClient UntaggedClient(Untagged);
+						NStorage::TCOptional<CStr> UntaggedContents;
+						if (!UntaggedClient.f_Login(CStr()))
+							Results.f_Insert("Untagged login failed: " + UntaggedClient.f_GetLastError());
+						else if (UntaggedClient.f_GetTextFileContentsIfExists("//Streams/Main/Deleted.txt#head", UntaggedContents))
+							Results.f_Insert("Untagged read");
+						else
+							Results.f_Insert(UntaggedClient.f_GetLastError());
+
+						return Results;
+					}
+					% "Failed to look up the files"
+				)
+			;
+
+			DMibExpect
+				(
+					Results
+					, ==
+					,
+					(
+						TCVector<CStr>
+						{
+							"File.txt //Streams/Main/File.txt 1"
+							, "Missing.txt  0"
+							, "Outside.txt  0"
+							, "a\n"
+							, "none"
+							, "none"
+							, "none"
+							, "none"
+							, ""
+							, "Reading a revision that may be absent needs a session with tagged output"
+						}
+					)
+				)
+			;
+
+			co_return {};
+		};
+
 		// A revision printed as its bytes, which no charset decodes, with its keywords expanded or as they are written.
 		DMibTestSuite("Contents") -> TCFuture<void>
 		{
@@ -651,6 +834,34 @@ namespace
 				)
 			;
 			DMibExpect(Rejected, ==, (TCVector<bool>{true, true, true, true, true, true, true}));
+
+			// The listing under a root gives each file the fields of its own record, also where a -T filter leaves out the depot file.
+			auto Listed = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot]() -> TCVector<CStr>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+
+						// The stats are the query's, whatever the vector held.
+						TCVector<CPerforceClient::CFileStats> Stats;
+						Stats.f_Insert();
+						auto Files = Client.f_GetFileStatFilesUnder(WorkRoot, {"-T", "clientFile,headType", "//Streams/Main/..."}, Stats);
+
+						TCVector<CStr> Listed;
+						if (Stats.f_GetLen() != Files.f_GetLen())
+							return TCVector<CStr>{CStr("{} stats of {} files"_f << Stats.f_GetLen() << Files.f_GetLen())};
+
+						for (umint iFile = 0; iFile < Files.f_GetLen(); ++iFile)
+							Listed.f_Insert("{} {}"_f << NFile::CFile::fs_GetFile(Files[iFile]) << Stats[iFile].m_HeadType);
+
+						return Listed;
+					}
+					% "Failed to list the files"
+				)
+			;
+
+			DMibExpect(Listed, ==, (TCVector<CStr>{"Other.txt text", "Removed.txt text", "Retyped.txt binary", CStr(gc_pStarName) + " text"}));
 
 			co_return {};
 		};

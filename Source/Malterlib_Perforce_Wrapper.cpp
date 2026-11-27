@@ -601,7 +601,7 @@ namespace NMib::NPerforce
 		else if (_Command == "clientFile")
 			o_Stats.m_ClientFile = _Data;
 		else if (_Command == "isMapped")
-			o_Stats.m_bIsMapped = _Data != "";
+			o_Stats.m_bIsMapped = true; // A tag without a value
 		else if (_Command == "headAction")
 			o_Stats.m_HeadAction = fg_ConvertAction(_Data);
 		else if (_Command == "headType")
@@ -1998,15 +1998,36 @@ namespace NMib::NPerforce
 		}
 	}
 
-	bool CPerforceClient::fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles)
+	// With o_pStats, the stats of each client file's record, aligned with o_ClientFiles, from the record's fields as the API gives
+	// them. With -Om a record holds a client file for each mapping, and m_ClientFile is the local path -Op gives, or empty.
+	bool CPerforceClient::fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles, TCVector<CFileStats> *o_pStats)
 	{
-		fp_Run("fstat", _Arguments);
-
-		CStr ToFindClient = "clientFile ";
-		for (CStr const &Info : mp_pClient->m_Infos)
+		for (auto const &Entry : CP4Client::fs_RunOrdered(*this, "fstat", _Arguments))
 		{
-			if (Info.f_StartsWith(ToFindClient))
-				o_ClientFiles.f_Insert(Info.f_Extract(ToFindClient.f_GetLen()));
+			CFileStats Stats;
+			CScheduledResolves Resolves;
+			TCVector<CStr> ClientFiles;
+			CStr LocalPath;
+			for (auto const &Field : Entry.m_Fields)
+			{
+				if (Field.m_Name == "clientFile")
+					ClientFiles.f_Insert(Field.m_Value);
+				else if (Field.m_Name == "path")
+					LocalPath = Field.m_Value;
+
+				if (o_pStats)
+					fg_ReadFileStatsField(Field.m_Name, Field.m_Value, Stats, Resolves);
+			}
+
+			if (o_pStats)
+				fg_SetResolveBase(Resolves, Stats);
+
+			for (auto const &ClientFile : ClientFiles)
+			{
+				o_ClientFiles.f_Insert(ClientFile);
+				if (o_pStats)
+					o_pStats->f_Insert(Stats).m_ClientFile = LocalPath;
+			}
 		}
 
 		if (!mp_pClient->m_bError)
@@ -2024,7 +2045,7 @@ namespace NMib::NPerforce
 		DCheckApi(CStr::CFormat("GetFileStatClientFiles({})") << CStr::fs_Join(_Arguments, " "));
 
 		TCVector<CStr> ClientFiles;
-		if (!fp_FileStatClientFiles(_Arguments, ClientFiles))
+		if (!fp_FileStatClientFiles(_Arguments, ClientFiles, nullptr))
 		{
 			fOnError();
 			return false;
@@ -2039,6 +2060,17 @@ namespace NMib::NPerforce
 	// The files of f_GetFileStatClientFiles under _LocalRoot, spelled as _LocalRoot is. p4 spells local paths with the workspace's
 	// root, which can differ in case, separators, symbolic links or alternate root, so the files are mapped through client syntax.
 	bool CPerforceClient::f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files)
+	{
+		return fp_GetFileStatFilesUnder(_LocalRoot, _Arguments, o_Files, nullptr);
+	}
+
+	// As f_GetFileStatFilesUnder, with the stats of each file's record, aligned with o_Files.
+	bool CPerforceClient::f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files, TCVector<CFileStats> &o_Stats)
+	{
+		return fp_GetFileStatFilesUnder(_LocalRoot, _Arguments, o_Files, &o_Stats);
+	}
+
+	bool CPerforceClient::fp_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files, TCVector<CFileStats> *o_pStats)
 	{
 		DCheckApi(CStr::CFormat("GetFileStatFilesUnder({}, {})") << _LocalRoot << CStr::fs_Join(_Arguments, " "));
 
@@ -2098,20 +2130,32 @@ namespace NMib::NPerforce
 		TCVector<CStr> Arguments = {"-Op", "-Om"};
 		Arguments.f_Insert(_Arguments);
 		TCVector<CStr> ClientFiles;
-		if (!fp_FileStatClientFiles(Arguments, ClientFiles))
+		TCVector<CFileStats> ClientStats;
+		if (!fp_FileStatClientFiles(Arguments, ClientFiles, o_pStats ? &ClientStats : nullptr))
 		{
 			fOnError();
 			return false;
 		}
 
-		for (auto const &ClientFile : ClientFiles)
+		for (umint iClientFile = 0; iClientFile < ClientFiles.f_GetLen(); ++iClientFile)
 		{
+			auto const &ClientFile = ClientFiles[iClientFile];
 			if (!ClientFile.f_StartsWith(ClientPrefix))
 				continue;
 
 			CStr Path = fs_UnescapeFileName(ClientFile.f_Extract(ClientPrefix.f_GetLen()));
 			if (Path.f_GetLen() > LocalRootPath.f_GetLen() && fStartsWith(Path, LocalRootPath))
+			{
 				o_Files.f_Insert(_LocalRoot / Path.f_Extract(LocalRootPath.f_GetLen()));
+				if (!o_pStats)
+					continue;
+
+				// The local path as p4 spells it, as fstat gives it without -Op: the path field, or where a -T filter left it out, the
+				// path below the root in the platform's separators.
+				auto &Stats = o_pStats->f_Insert(fg_Move(ClientStats[iClientFile]));
+				if (!Stats.m_ClientFile)
+					Stats.m_ClientFile = fg_PerforcePath(WorkspaceRoot + Path);
+			}
 		}
 
 		return true;
@@ -3014,7 +3058,7 @@ namespace NMib::NPerforce
 		if (!_File.f_IsEmpty())
 			Arguments.f_Insert(_File);
 
-		fp_Run("resolve", Arguments);
+		auto Entries = CP4Client::fs_RunOrdered(*this, "resolve", Arguments);
 
 		if (mp_pClient->m_bError && !mp_pClient->f_HasOnlyErrors({&MsgDm::ExTORESOLVE}))
 		{
@@ -3022,39 +3066,27 @@ namespace NMib::NPerforce
 			return false;
 		}
 
-		// The tagged output gives each resolve's fields on lines of their own, and an empty line after them.
-		CUnresolvedFile File;
-		auto fFinishFile = [&]
-			{
-				if (!File.m_ClientFile.f_IsEmpty())
-					o_Files.f_Insert(fg_Move(File));
-				File = {};
-			}
-		;
-
-		for (CStr const &Info : mp_pClient->m_Infos)
+		// Each resolve is a record of its own.
+		for (auto const &Entry : Entries)
 		{
-			if (Info.f_IsEmpty())
+			CUnresolvedFile File;
+			for (auto const &Field : Entry.m_Fields)
 			{
-				fFinishFile();
-				continue;
+				if (Field.m_Name == "clientFile")
+					File.m_ClientFile = fg_MalterlibPath(Field.m_Value);
+				else if (Field.m_Name == "fromFile")
+					File.m_FromFile = Field.m_Value;
+				else if (Field.m_Name == "resolveType")
+					File.m_ResolveType = Field.m_Value;
+				else if (Field.m_Name == "startFromRev")
+					File.m_StartFromRev = Field.m_Value.f_ToInt(uint32(0));
+				else if (Field.m_Name == "endFromRev")
+					File.m_EndFromRev = Field.m_Value.f_ToInt(uint32(0));
 			}
 
-			CStr Value = Info;
-			CStr Key = NStr::fg_GetStrSepNoTrim(Value, " ");
-
-			if (Key == "clientFile")
-				File.m_ClientFile = fg_MalterlibPath(Value);
-			else if (Key == "fromFile")
-				File.m_FromFile = Value;
-			else if (Key == "resolveType")
-				File.m_ResolveType = Value;
-			else if (Key == "startFromRev")
-				File.m_StartFromRev = Value.f_ToInt(uint32(0));
-			else if (Key == "endFromRev")
-				File.m_EndFromRev = Value.f_ToInt(uint32(0));
+			if (!File.m_ClientFile.f_IsEmpty())
+				o_Files.f_Insert(fg_Move(File));
 		}
-		fFinishFile();
 
 		return true;
 	}
@@ -3841,6 +3873,21 @@ namespace NMib::NPerforce
 			return true;
 
 		if (!mp_pClient->f_HasOnlyErrors({&MsgDm::ExHAVE, &MsgDm::ExATHAVE, &MsgDm::ExFILE, &MsgDm::ExVIEW}))
+			return false;
+
+		_Stats = CFileStats();
+		return true;
+	}
+
+	// The stats of the file, empty where the depot has no such file, or the workspace doesn't map it, outside its view or its root,
+	// so an absent file is told from a lookup that fails.
+	bool CPerforceClient::f_DepotFileStats(CStr const &_File, CFileStats &_Stats)
+	{
+		if (fp_FileStats({}, _File, _Stats))
+			return true;
+
+		// mp_LastError holds why fstat didn't run, where the codes are those of an earlier command.
+		if (!mp_LastError.f_IsEmpty() || !mp_pClient->f_HasOnlyErrors({&MsgDm::ExFILE, &MsgDm::ExVIEW, &MsgDm::NotUnderRoot}))
 			return false;
 
 		_Stats = CFileStats();
@@ -5577,6 +5624,37 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	// The text of a revision, or none where the depot has no such file, or no revision of it at the changelist, date or revision
+	// asked, also where that revision deletes the file, or the workspace has none for #have, so a missing revision is told from a
+	// read that fails.
+	bool CPerforceClient::f_GetTextFileContentsIfExists(CStr const &_Path, NStorage::TCOptional<CStr> &o_Contents)
+	{
+		DCheckApi(CStr::CFormat("GetTextFileContentsIfExists({})") << _Path);
+
+		o_Contents.f_Clear();
+
+		// Only tagged output tells a revision that deletes the file, which p4 print otherwise gives as an empty file.
+		if (mp_ConnectionInfo.m_bDisableTagging)
+		{
+			mp_LastError = "Reading a revision that may be absent needs a session with tagged output";
+			fOnError();
+			return false;
+		}
+
+		CStr Contents;
+		if (f_GetTextFileContents(_Path, Contents))
+		{
+			// p4 print gives a deleted revision as a record without a body.
+			CStr Action = mp_pClient->f_GetInfo("action");
+			if (Action != "delete" && Action != "move/delete")
+				o_Contents = fg_Move(Contents);
+			return true;
+		}
+
+		// mp_LastError holds why p4 print didn't run, where the codes are those of an earlier command.
+		return mp_LastError.f_IsEmpty() && mp_pClient->f_HasOnlyErrors({&MsgDm::ExFILE, &MsgDm::ExATCHANGE, &MsgDm::ExATDATE, &MsgDm::ExATREVISION, &MsgDm::ExHAVE, &MsgDm::ExATHAVE});
+	}
+
 	// The bytes of a revision as p4 print gives them, which no charset decodes, so they needn't be in the workspace file's charset.
 	// Without _bExpandKeywords, the keywords of a 'text+k' file stay as they are written, '$Id$', where they would otherwise hold
 	// the printed revision's.
@@ -6703,6 +6781,15 @@ namespace NMib::NPerforce
 		return Ret;
 	}
 
+	TCVector<CStr> CPerforceClientThrow::f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CPerforceClient::CFileStats> &o_Stats)
+	{
+		TCVector<CStr> Ret;
+		TCVector<CPerforceClient::CFileStats> Stats;
+		fp_Throw(mp_Client.f_GetFileStatFilesUnder(_LocalRoot, _Arguments, Ret, Stats));
+		o_Stats = fg_Move(Stats);
+		return Ret;
+	}
+
 	TCVector<CStr> CPerforceClientThrow::f_ClientFiles(CStr const &_Search)
 	{
 		TCVector<CStr> Ret;
@@ -6763,6 +6850,13 @@ namespace NMib::NPerforce
 	{
 		CStr Ret;
 		fp_Throw(mp_Client.f_GetTextFileContents(_Path, Ret));
+		return Ret;
+	}
+
+	NStorage::TCOptional<CStr> CPerforceClientThrow::f_GetTextFileContentsIfExists(CStr const &_Path)
+	{
+		NStorage::TCOptional<CStr> Ret;
+		fp_Throw(mp_Client.f_GetTextFileContentsIfExists(_Path, Ret));
 		return Ret;
 	}
 
@@ -7369,6 +7463,13 @@ namespace NMib::NPerforce
 	{
 		CPerforceClient::CFileStats Ret;
 		fp_Throw(mp_Client.f_HaveFileStats(_File, Ret));
+		return Ret;
+	}
+
+	CPerforceClient::CFileStats CPerforceClientThrow::f_DepotFileStats(CStr const &_File)
+	{
+		CPerforceClient::CFileStats Ret;
+		fp_Throw(mp_Client.f_DepotFileStats(_File, Ret));
 		return Ret;
 	}
 

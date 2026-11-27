@@ -352,6 +352,7 @@ namespace NMib::NPerforce
 		bool f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing);
 		bool f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
 		bool f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files);
+		bool f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files, TCVector<CFileStats> &o_Stats);
 		bool f_GetJobSpec(CStr &_JobSpec);
 		bool f_GetJobs(CRegistry &_Jobs, CStr const &_JobView);
 		bool f_GetTriggers(CStr &_Triggers);
@@ -360,6 +361,7 @@ namespace NMib::NPerforce
 		bool f_GetClientPath(CStr const &_DepotPath, CStr &_ClientPath);
 		bool f_GetWorkspacePath(CStr const &_DepotPath, CStr &_WorkspacePath);
 		bool f_GetTextFileContents(CStr const &_Path, CStr &_Contents);
+		bool f_GetTextFileContentsIfExists(CStr const &_Path, NStorage::TCOptional<CStr> &o_Contents);
 		bool f_GetFileContents(CStr const &_Path, bool _bExpandKeywords, CByteVector &o_Contents);
 		bool f_DiffOpenedFiles(TCVector<CStr> const &_Files, TCVector<CFileDiff> &o_Diffs);
 		bool f_DiffRevisions(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes = false);
@@ -578,6 +580,7 @@ namespace NMib::NPerforce
 		bool f_FileStats(CStr const &_File, CFileStats &_Stats);
 		bool f_OpenedFileStats(CStr const &_File, CFileStats &_Stats);
 		bool f_HaveFileStats(CStr const &_File, CFileStats &_Stats);
+		bool f_DepotFileStats(CStr const &_File, CFileStats &_Stats);
 		bool f_GetRevisionTypes(TCVector<CStr> const &_Revisions, TCVector<CStr> &o_Types);
 
 		bool f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
@@ -609,7 +612,8 @@ namespace NMib::NPerforce
 		void fp_Run(char const *_pFunc);
 		void fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments);
 		void fp_CheckDropped();
-		bool fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
+		bool fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles, TCVector<CFileStats> *o_pStats);
+		bool fp_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files, TCVector<CFileStats> *o_pStats);
 		void fp_SetFileNames(CStr const &_WorkingDirectory);
 		void fp_SetTrans(int _Charset, int _ContentCharset, CStr const &_WorkingDirectory);
 		NStr::CAnsiStr fp_EncodeFileName(CStr const &_Name) const;
@@ -700,6 +704,7 @@ namespace NMib::NPerforce
 		TCVector<CStr> f_ClientFiles(CStr const &_Search);
 		TCVector<CStr> f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments);
 		TCVector<CStr> f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments);
+		TCVector<CStr> f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CPerforceClient::CFileStats> &o_Stats);
 		CStr f_GetJobSpec();
 		CRegistry f_GetJobs(CStr const &_JobView);
 		CStr f_GetTriggers();
@@ -709,6 +714,7 @@ namespace NMib::NPerforce
 
 		CStr f_GetWorkspacePath(CStr const &_DepotPath);
 		CStr f_GetTextFileContents(CStr const &_Path);
+		NStorage::TCOptional<CStr> f_GetTextFileContentsIfExists(CStr const &_Path);
 		CByteVector f_GetFileContents(CStr const &_Path, bool _bExpandKeywords = true);
 		TCVector<CPerforceClient::CFileDiff> f_DiffOpenedFiles(TCVector<CStr> const &_Files);
 		CPerforceClient::CFileDiff f_DiffRevisions(CStr const &_File1, CStr const &_File2, bool _bAnyTypes = false);
@@ -892,6 +898,7 @@ namespace NMib::NPerforce
 		CPerforceClient::CFileStats f_FileStats(CStr const &_File);
 		CPerforceClient::CFileStats f_OpenedFileStats(CStr const &_File);
 		CPerforceClient::CFileStats f_HaveFileStats(CStr const &_File);
+		CPerforceClient::CFileStats f_DepotFileStats(CStr const &_File);
 		TCVector<CStr> f_GetRevisionTypes(TCVector<CStr> const &_Revisions);
 
 		void f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
