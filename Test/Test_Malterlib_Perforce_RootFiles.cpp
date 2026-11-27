@@ -1378,6 +1378,16 @@ namespace
 			auto TrailingHome = CPerforceIgnore::fs_GetSettings(Plain, {{HomeVariable, Home + "/"}, {"P4IGNORE", "$home.ignore"}}, {}, {});
 			DMibExpect(fg_JoinDescriptions(TrailingHome.m_IgnoreNames), ==, Home + ".ignore");
 
+			// Without the home directory's variable $home is empty, as for p4's Enviro::GetHome, which on Windows gives the Windows
+			// directory instead.
+			auto NoHome = CPerforceIgnore::fs_GetSettings(Plain, {{"P4ENVIRO", "$home/Missing.enviro"}}, {}, {});
+#ifdef DPlatformFamily_Windows
+			DMibExpectTrue(NoHome.m_EnviroFile.f_EndsWith("/Missing.enviro"));
+			DMibExpect(NoHome.m_EnviroFile.f_GetLen(), >, CStr("/Missing.enviro").f_GetLen());
+#else
+			DMibExpect(NoHome.m_EnviroFile, ==, "/Missing.enviro");
+#endif
+
 #ifndef DPlatformFamily_Windows
 			// The default enviro file of a relative home is opened from the directory, as a relative P4ENVIRO is, not from the
 			// process's current directory.
@@ -1387,18 +1397,20 @@ namespace
 
 #ifdef DPlatformFamily_Windows
 			// p4 reads P4ENVIRO through the code page, so a name with a character outside it names no file p4 opens, and its
-			// settings don't apply.
+			// settings don't apply: the ignore files are the default ones, with the Windows directory's, as USERPROFILE is unset.
 			if (GetACP() == 1252)
 			{
 				fg_WriteFile(Root / "Enviro \u6f22/p4enviro", "P4IGNORE=Outside.ignore\n");
 				auto OutsideSettings = CPerforceIgnore::fs_GetSettings(Plain, {{"P4ENVIRO", Root / "Enviro \u6f22/p4enviro"}}, {}, {});
+				auto DefaultSettings = CPerforceIgnore::fs_GetSettings(Plain, {}, {}, {});
 				DMibExpect
 					(
 						(TCVector<CStr>{OutsideSettings.m_EnviroFile, fg_JoinDescriptions(OutsideSettings.m_IgnoreNames)})
 						, ==
-						, (TCVector<CStr>{Root / "Enviro ?/p4enviro", ".p4ignore;p4ignore.txt"})
+						, (TCVector<CStr>{Root / "Enviro ?/p4enviro", fg_JoinDescriptions(DefaultSettings.m_IgnoreNames)})
 					)
 				;
+				DMibExpect(DefaultSettings.m_IgnoreNames.f_GetLen(), ==, umint(4));
 			}
 #endif
 

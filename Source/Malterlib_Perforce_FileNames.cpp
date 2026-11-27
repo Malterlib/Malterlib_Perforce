@@ -94,6 +94,26 @@ namespace NMib::NPerforce
 	}
 
 #ifdef DPlatformFamily_Windows
+	// The Windows directory, as GetWindowsDirectoryW gives it, which p4's Enviro::GetHome gives for the home directory where
+	// USERPROFILE is unset; empty where it fails.
+	NStr::CStr fg_WindowsDirectory()
+	{
+		UINT nLength = GetWindowsDirectoryW(nullptr, 0);
+		if (nLength == 0)
+			return {};
+
+		NStr::CWStr Directory;
+		auto *pDirectory = Directory.f_GetStr(nLength);
+		UINT nWritten = GetWindowsDirectoryW((wchar_t *)pDirectory, nLength);
+		if (nWritten == 0 || nWritten >= nLength)
+			return {};
+
+		Directory.f_SetAt(nWritten, 0);
+		Directory.f_TrimSize();
+
+		return NStr::CStr(Directory);
+	}
+
 	// The path Windows opens for _Path, with Malterlib's separators: . and .. resolved by the names as GetFullPathNameW resolves
 	// them, which stops at a drive's root or a UNC share's root, and a rooted path without a drive on the current drive. A drive
 	// keeps the spelling _Path gives it, and the current drive is in lower case, as Malterlib spells the current directory, where

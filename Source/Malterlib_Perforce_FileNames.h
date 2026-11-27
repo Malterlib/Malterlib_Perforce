@@ -66,5 +66,6 @@ namespace NMib::NPerforce
 
 	EPerforceEncoding fg_APIFileNameEncoding();
 	NStr::CStr fg_WindowsFullPath(NStr::CStr const &_Path);
+	NStr::CStr fg_WindowsDirectory();
 #endif
 }

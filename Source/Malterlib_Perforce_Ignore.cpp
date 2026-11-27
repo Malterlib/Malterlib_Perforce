@@ -1102,9 +1102,17 @@ namespace NMib::NPerforce
 				Environment[Name] = *iVariable;
 		}
 
-		// The home directory is without a separator ending it, as p4 has it.
+		// The home directory is without a separator ending it, as p4 has it, and on Windows the Windows directory where USERPROFILE is
+		// unset or empty, which p4's Enviro::Get takes as unset (Enviro::GetHome).
 		auto *pHome = Environment.f_FindEqual(gc_pHomeVariable);
 		CStr Home = pHome ? *pHome : CStr();
+#ifdef DPlatformFamily_Windows
+		bool bHome = true;
+		if (Home.f_IsEmpty())
+			Home = fg_WindowsDirectory();
+#else
+		bool bHome = pHome != nullptr;
+#endif
 		if (Home.f_EndsWith("/") || Home.f_EndsWith("\\"))
 			Home = Home.f_Left(Home.f_GetLen() - 1);
 
@@ -1270,7 +1278,7 @@ namespace NMib::NPerforce
 
 		if (auto IgnoreNames = fGet(Encoding, &ConfigSettings, "P4IGNORE"))
 			Settings.m_IgnoreNames = fg_ResolveIgnoreNames(*IgnoreNames, _Directory, Encoding);
-		else if (pHome)
+		else if (bHome)
 			Settings.m_IgnoreNames = fs_ResolveIgnoreNames(".p4ignore;p4ignore.txt;{}/.p4ignore;{}/p4ignore.txt"_f << Home << Home, _Directory);
 		else
 			Settings.m_IgnoreNames = {".p4ignore", "p4ignore.txt"};
