@@ -415,6 +415,7 @@ namespace NMib::NPerforce
 		bool f_Move(CStr const &_From, CStr const &_To);
 		bool f_OpenForEditOrMakeWritable(CStr const &_File);
 		bool f_TryOpenForEdit(CStr const &_File);
+		bool f_OpenForWrite(CStr const &_File, bool *o_pRefused = nullptr);
 
 		bool f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList);
 
@@ -769,6 +770,7 @@ namespace NMib::NPerforce
 		void f_Move(CStr const &_From, CStr const &_To);
 		void f_OpenForEditOrMakeWritable(CStr const &_File);
 		void f_TryOpenForEdit(CStr const &_File);
+		void f_OpenForWrite(CStr const &_File, bool *o_pRefused = nullptr);
 
 		uint32 f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files);
 

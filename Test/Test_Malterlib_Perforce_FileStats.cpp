@@ -561,6 +561,164 @@ namespace
 			co_return {};
 		};
 
+		// f_OpenForWrite opens a file for edit, keeps one opened for add, and fails for one opened for delete, which p4 edit leaves as
+		// it is and only tells of, also where the file is back in the workspace.
+		DMibTestSuite("OpenForWrite") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of opening files for write: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceOpenForWrite";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"Edited.txt", "a\n"}, {"Deleted.txt", "b\n"}}
+					, CStr("Add the files")
+				)
+			;
+
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			auto Results = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot]() -> TCVector<CStr>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Sync(WorkRoot / "...");
+
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / "Added.txt", "c\n", false);
+						Client.f_Add(WorkRoot / "Added.txt");
+						Client.f_Delete(WorkRoot / "Deleted.txt");
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / "Deleted.txt", "b\n", false);
+
+						TCVector<CStr> Results;
+						for (CStr const &Name : {"Edited.txt", "Added.txt", "Deleted.txt"})
+						{
+							if (Client.f_NoThrow().f_OpenForWrite(WorkRoot / Name))
+								Results.f_Insert(Name + ": " + Client.f_FileStats(WorkRoot / Name).m_Action);
+							else
+								Results.f_Insert(Name + ": " + Client.f_NoThrow().f_GetLastError());
+						}
+
+						return Results;
+					}
+					% "Failed to open the files for write"
+				)
+			;
+
+			DMibExpect
+				(
+					Results
+					, ==
+					,
+					(
+						TCVector<CStr>
+						{
+							"Edited.txt: edit"
+							, "Added.txt: add"
+							, CStr("Deleted.txt: '{}' is opened for delete, which p4 edit leaves as it is"_f << (WorkRoot / "Deleted.txt"))
+						}
+					)
+				)
+			;
+
+			co_return {};
+		};
+
+		// Where an overlay mapping, '+//Depot/...', maps two depot files to the path, the action is that of the one opened: here the
+		// file opened for add in the primary depot, while the overlay's, which sorts first, has a submitted revision.
+		DMibTestSuite("OpenForWriteOverlay") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of opening files for write with an overlay mapping: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceOpenForWriteOverlay";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			auto AdminConnection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr());
+			auto SetupConnection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestSetup"));
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			auto Result = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [AdminConnection, SetupConnection, Connection, Root]() -> CStr
+					{
+						CStr SetupRoot = Root / "Setup";
+						CStr WorkRoot = Root / "Work";
+						NFile::CFile::fs_CreateDirectory(SetupRoot);
+						NFile::CFile::fs_CreateDirectory(WorkRoot);
+
+						CPerforceClientThrow Admin(AdminConnection);
+						Admin.f_Login(CStr());
+						Admin.f_CreateDepot("Primary", "local");
+						Admin.f_CreateDepot("Overlay", "local");
+
+						CPerforceClient::CClient SetupSpec;
+						SetupSpec.m_Root = SetupRoot;
+						SetupSpec.m_Description = "Submits the file.";
+						SetupSpec.m_View = {{"//Overlay/...", "//TestSetup/..."}};
+						Admin.f_SetClient("TestSetup", SetupSpec);
+
+						CPerforceClient::CClient WorkSpec;
+						WorkSpec.m_Root = WorkRoot;
+						WorkSpec.m_Description = "Overlays one depot on another.";
+						WorkSpec.m_View = {{"//Primary/...", "//TestWork/..."}};
+						Admin.f_SetClient("TestWork", WorkSpec);
+
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / "File.txt", "a\n", false);
+						Client.f_Add(WorkRoot / "File.txt");
+
+						WorkSpec.m_View.f_Insert({"+//Overlay/...", "//TestWork/..."});
+						Admin.f_SetClient("TestWork", WorkSpec);
+
+						CPerforceClientThrow Setup(SetupConnection);
+						Setup.f_Login(CStr());
+						NFile::CFile::fs_WriteStringToFile(SetupRoot / "File.txt", "b\n", false);
+						Setup.f_Add(SetupRoot / "File.txt");
+						Setup.f_Submit(SetupRoot / "File.txt", "Add the file");
+
+						if (!Client.f_NoThrow().f_OpenForWrite(WorkRoot / "File.txt"))
+							return Client.f_NoThrow().f_GetLastError();
+
+						return Client.f_OpenedFileStats(WorkRoot / "File.txt").m_DepotFile;
+					}
+					% "Failed to open the file for write"
+				)
+			;
+
+			DMibExpect(Result, ==, "//Primary/File.txt");
+
+			co_return {};
+		};
+
 		// f_DepotFileStats and f_GetTextFileContentsIfExists tell what the depot doesn't have from a lookup that fails: a file it has
 		// no revision of, one outside the workspace's root, a revision at a changelist from before the file was added, a revision that
 		// deletes the file and #have of a file the workspace hasn't synced are absent, while an empty file is there, and empty.

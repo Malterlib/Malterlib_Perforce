@@ -6534,6 +6534,51 @@ namespace NMib::NPerforce
 		return bRet;
 	}
 
+	// Opens one file for edit so that what is written to it is submitted, or keeps it as it is opened already, as for add. p4 edit
+	// only tells that it leaves a file opened for delete as it is, so the action of the file's open record is asked for, of the depot
+	// file opened where an overlay mapping maps several to the path, and the call fails where the file isn't opened, or is opened
+	// for delete, whose content isn't submitted. *o_pRefused tells that failure, where p4 edit ran but leaves the file's open state
+	// as it is, from one of p4 edit itself, as for a file outside the workspace, or of the connection.
+	bool CPerforceClient::f_OpenForWrite(CStr const &_File, bool *o_pRefused)
+	{
+		if (o_pRefused)
+			*o_pRefused = false;
+
+		DCheckApi(CStr::CFormat("OpenForWrite({})") << _File);
+
+		if (!f_OpenForEdit(_File))
+			return false;
+
+		// p4 edit has run, so an open state that can't be told is refused too.
+		CFileStats Stats;
+		if (!f_OpenedFileStats(_File, Stats))
+		{
+			// A file that isn't opened has no open record, which is a warning.
+			if (!mp_pClient->f_HasOnlyErrors({&MsgDm::ExOPENCLIENT, &MsgDm::ExFILE}))
+			{
+				if (o_pRefused)
+					*o_pRefused = true;
+				return false;
+			}
+
+			Stats = CFileStats();
+		}
+
+		if (Stats.m_Action.f_IsEmpty() || Stats.m_Action == "delete" || Stats.m_Action == "move/delete")
+		{
+			if (Stats.m_Action.f_IsEmpty())
+				mp_LastError = "p4 edit left '{}' unopened"_f << _File;
+			else
+				mp_LastError = "'{}' is opened for {}, which p4 edit leaves as it is"_f << _File << Stats.m_Action;
+			if (o_pRefused)
+				*o_pRefused = true;
+			fOnError();
+			return false;
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_Files)
 	{
 		DCheckApi(CStr::CFormat("FindHeadFiles({})") << _Pattern);
@@ -7176,6 +7221,11 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_TryOpenForEdit(CStr const &_File)
 	{
 		fp_Throw(mp_Client.f_TryOpenForEdit(_File));
+	}
+
+	void CPerforceClientThrow::f_OpenForWrite(CStr const &_File, bool *o_pRefused)
+	{
+		fp_Throw(mp_Client.f_OpenForWrite(_File, o_pRefused));
 	}
 
 	uint32 CPerforceClientThrow::f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files)
