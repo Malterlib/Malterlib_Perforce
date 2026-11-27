@@ -433,7 +433,7 @@ namespace NMib::NPerforce
 				CStr::CAppender Appender(Name);
 				auto *pName = (uint8 const *)_Name.f_GetStr();
 				for (auto *pCharacter = pName, *pEnd = pName + _Name.f_GetLen(); pCharacter != pEnd; ++pCharacter)
-					Appender.f_AddChar(*pCharacter >= 'a' && *pCharacter <= 'z' ? uint8(*pCharacter - 'a' + 'A') : *pCharacter);
+					Appender.f_AddChar(NStr::fg_CharUpperCase(*pCharacter));
 			}
 			return Name;
 #else
