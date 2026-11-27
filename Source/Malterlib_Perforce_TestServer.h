@@ -26,6 +26,7 @@ namespace NMib::NPerforce
 
 		NConcurrency::TCFuture<void> f_Start(NStr::CStr _Root, NStr::CStr _User);
 		NConcurrency::TCFuture<void> f_StartUnicode(NStr::CStr _Root, NStr::CStr _User);
+		NConcurrency::TCFuture<void> f_StartCaseInsensitive(NStr::CStr _Root, NStr::CStr _User);
 		NConcurrency::TCFuture<NStr::CStr> f_GetPort();
 
 		NConcurrency::TCFuture<void> f_CreateStreamDepot(NStr::CStr _Depot);
@@ -42,7 +43,7 @@ namespace NMib::NPerforce
 	private:
 		NConcurrency::TCFuture<void> fp_Destroy() override;
 
-		NConcurrency::TCFuture<void> fp_Start(NStr::CStr _Root, NStr::CStr _User, bool _bUnicode);
+		NConcurrency::TCFuture<void> fp_Start(NStr::CStr _Root, NStr::CStr _User, bool _bUnicode, bool _bCaseInsensitive);
 		NConcurrency::TCFuture<bool> fp_LaunchServer(NStr::CStr _Port);
 		NConcurrency::TCFuture<void> fp_StopServer();
 
@@ -50,6 +51,7 @@ namespace NMib::NPerforce
 		NStr::CStr mp_ServerRoot;
 		NStr::CStr mp_ServerID;
 		NStr::CStr mp_ServerExecutable;
+		NContainer::TCVector<NStr::CStr> mp_ServerOptions; // Given to every run of p4d, as -C1 for a server that ignores case
 		NStr::CStr mp_Port;
 		NStr::CStr mp_User;
 		NStr::CStr mp_Password;

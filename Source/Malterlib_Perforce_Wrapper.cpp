@@ -34,7 +34,25 @@ namespace NMib::NPerforce
 {
 	struct CPerforceClient::CP4Client : public ClientUser, public KeepAlive
 	{
+		// A tagged field of a record, as the API gives it.
+		struct CField
+		{
+			CStr m_Name;
+			CStr m_Value;
+		};
+
+		// What the API gives a command, in the order it gives it: a record's fields, from OutputStat, or a warning or error, from
+		// HandleError, which a warning for one of a command's arguments takes the argument's place by.
+		struct COrderedEntry
+		{
+			TCVector<CField> m_Fields;
+			TCVector<int> m_ErrorCodes; // A warning's or error's unique codes (ErrorId::UniqueCode)
+			bool m_bError = false;
+		};
+
 		CP4Client(CPerforceClient *_pClient);
+
+		static TCVector<COrderedEntry> fs_RunOrdered(CPerforceClient &_Client, char const *_pFunc, TCVector<CStr> const &_Arguments);
 
 		virtual int IsAlive() override;
 
@@ -69,23 +87,39 @@ namespace NMib::NPerforce
 
 		CStr m_OutputText;
 		CStr m_OutputTextRaw;
-		CByteVector *m_pOutputBytes = nullptr;          // Borrowed by the command that sets it, null otherwise; takes the output's bytes, NULs included
-		TCFunction<void (CFileDiff &&_Diff)> m_fOnDiff; // Takes what p4's own diff gives in place of P4DIFF
+		CByteVector *m_pOutputBytes = nullptr;                // Borrowed by the command that sets it, null otherwise; takes the output's bytes, NULs included
+		TCFunction<void (CFileDiff &&_Diff)> m_fOnDiff;       // Takes what p4's own diff gives in place of P4DIFF
 		TCVector<CStr> m_Infos;
 		TCFunction<void (CStr const &_Info)> m_fOnInfo;
 		TCFunction<void (CStr const &_Text)> m_fOnText;
 		bool m_bError;
 		CStr m_LastError;
-		TCVector<int> m_ErrorCodes;                     // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
-		bool m_bErrorWithoutCode = false;               // An error given as text alone, without the codes
-		bool m_bHandlingError = false;                  // Within HandleError, whose text OutputError gets
+		TCVector<int> m_ErrorCodes;                           // The unique codes (ErrorId::UniqueCode) of the errors and warnings, which P4LANGUAGE doesn't translate
+		bool m_bErrorWithoutCode = false;                     // An error given as text alone, without the codes
+		bool m_bHandlingError = false;                        // Within HandleError, whose text OutputError gets
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 		CStr m_PromtOverride;
+		TCVector<COrderedEntry> *m_pOrderedEntries = nullptr; // Borrowed by the command that sets it, null otherwise; takes records and warnings in order
 	};
 
 	CPerforceClient::CP4Client::CP4Client(CPerforceClient *_pClient)
 	{
 		m_pClient = _pClient;
+	}
+
+	// Runs the command with its records and warnings kept in order, which the client gives as long as it runs.
+	auto CPerforceClient::CP4Client::fs_RunOrdered(CPerforceClient &_Client, char const *_pFunc, TCVector<CStr> const &_Arguments) -> TCVector<COrderedEntry>
+	{
+		TCVector<COrderedEntry> Entries;
+		_Client.mp_pClient->m_pOrderedEntries = &Entries;
+		auto StopOrdered = g_OnScopeExit / [&]
+			{
+				_Client.mp_pClient->m_pOrderedEntries = nullptr;
+			}
+		;
+		_Client.fp_Run(_pFunc, _Arguments);
+
+		return Entries;
 	}
 
 	int CPerforceClient::CP4Client::IsAlive()
@@ -131,14 +165,25 @@ namespace NMib::NPerforce
 		// DConOut("P4: InputData" DNewLine, 0);
 	}
 
-	// The codes of the error are kept, as its text is in the server's language.
+	// The codes of the error are kept, as its text is in the server's language. Message gives warnings here too.
 	void CPerforceClient::CP4Client::HandleError(Error *_pError)
 	{
+		COrderedEntry *pEntry = nullptr;
+		if (m_pOrderedEntries && _pError->GetSeverity() >= E_WARN)
+		{
+			pEntry = &m_pOrderedEntries->f_Insert();
+			pEntry->m_bError = true;
+		}
+
 		int nIds = _pError->GetErrorCount();
 		if (nIds == 0)
 			m_bErrorWithoutCode = true;
 		for (int iId = 0; iId < nIds; ++iId)
+		{
 			m_ErrorCodes.f_Insert(_pError->GetId(iId)->UniqueCode());
+			if (pEntry)
+				pEntry->m_ErrorCodes.f_Insert(_pError->GetId(iId)->UniqueCode());
+		}
 
 		m_bHandlingError = true;
 		ClientUser::HandleError(_pError);
@@ -243,10 +288,23 @@ namespace NMib::NPerforce
 		// return ClientUser::OutputBinary( _pData, _Length );
 	}
 
+	// With m_pOrderedEntries a record's fields, else the text of them, as ClientUser::OutputStat gives them, without func and
+	// specFormatted, which only the protocol uses.
 	void CPerforceClient::CP4Client::OutputStat(StrDict *_pVariables)
 	{
-		// DConOut("P4: OutputStat" DNewLine, 0);
-		return ClientUser::OutputStat(_pVariables);
+		if (!m_pOrderedEntries)
+			return ClientUser::OutputStat(_pVariables);
+
+		auto &Entry = m_pOrderedEntries->f_Insert();
+		StrRef Name;
+		StrRef Value;
+		for (int iVariable = 0; _pVariables->GetVar(iVariable, Name, Value); ++iVariable)
+		{
+			if (Name == "func" || Name == "specFormatted")
+				continue;
+
+			Entry.m_Fields.f_Insert({m_pClient->f_DecodeStr(CStr(Name.Text(), Name.Length())), m_pClient->f_DecodeStr(CStr(Value.Text(), Value.Length()))});
+		}
 	}
 
 	void CPerforceClient::CP4Client::Prompt(StrPtr const &_Message, StrBuf &o_Response, int _NoEcho, Error *_pError)
@@ -3789,6 +3847,118 @@ namespace NMib::NPerforce
 		return true;
 	}
 
+	// The types of revisions in the order asked, from one p4 fstat, which gives each argument a record or a warning in its place.
+	// Each is a depot path with #<number>, #have, #head or #none, like //Depot/File#3, which fstat gives one entry for: a wildcard,
+	// a range or another selector, as @1234, fails the call before fstat runs. A revision that doesn't exist, or that the workspace
+	// doesn't have, has an empty type, as #none and #0 have, which fstat isn't asked for.
+	bool CPerforceClient::f_GetRevisionTypes(TCVector<CStr> const &_Revisions, TCVector<CStr> &o_Types)
+	{
+		DCheckApi("GetRevisionTypes");
+
+		o_Types.f_Clear();
+		o_Types.f_SetLen(_Revisions.f_GetLen());
+
+		TCVector<CStr> Arguments = {"-T", "depotFile,headType"};
+		TCVector<umint> Asked; // The index of each revision given to fstat
+		TCVector<bool> AskedHaves; // Per revision given to fstat, whether it is #have
+		TCVector<CStr> AskedFiles; // Per revision given to fstat, its depot file unescaped
+		for (umint iRevision = 0; iRevision < _Revisions.f_GetLen(); ++iRevision)
+		{
+			auto const &Revision = _Revisions[iRevision];
+			CStr Specifier = Revision;
+			CStr Path = NStr::fg_GetStrSepNoTrim(Specifier, "#");
+			bool bOneFile = Path.f_StartsWith("//") && Path.f_FindChar('*') < 0 && Path.f_Find("...") < 0 && Path.f_Find("%%") < 0 && Path.f_FindChar('@') < 0;
+			// A revision number is a positive int of the server's, which takes a larger number for another, as #4294967297 for #1.
+			bool bNumber = Specifier.f_IsNumeric();
+			uint64 Number = bNumber && Specifier.f_GetLen() <= 10 ? Specifier.f_ToInt(uint64(0)) : TCLimitsInt<uint64>::mc_Max;
+			bool bOneRevision = (bNumber && Number <= uint64(TCLimitsInt<int32>::mc_Max)) || Specifier == "have" || Specifier == "head" || Specifier == "none";
+			if (!bOneFile || !bOneRevision)
+			{
+				mp_LastError = "'{}' is not a depot file without wildcards with #<number>, #have, #head or #none"_f << Revision;
+				fOnError();
+				return false;
+			}
+
+			if (Specifier == "none" || (bNumber && Number == 0))
+				continue;
+
+			Arguments.f_Insert(Revision);
+			Asked.f_Insert(iRevision);
+			AskedHaves.f_Insert(Specifier == "have");
+			AskedFiles.f_Insert(fs_UnescapeFileName(Path));
+		}
+
+		if (Asked.f_IsEmpty())
+			return true;
+
+		auto Entries = CP4Client::fs_RunOrdered(*this, "fstat", Arguments);
+
+		// After a dropped connection the output can be incomplete, as with an error without its codes.
+		if (mp_pClient->m_bError && (mp_pAPI->Dropped() || mp_pClient->m_bErrorWithoutCode))
+		{
+			fOnError();
+			return false;
+		}
+
+		bool bIgnoreCase = mp_pAPI->GetProtocol("nocase") != nullptr;
+
+		// Another number of entries would give revisions the types of others.
+		if (Entries.f_GetLen() != Asked.f_GetLen())
+		{
+			mp_LastError = "p4 fstat gave {} records and warnings for {} revisions"_f << Entries.f_GetLen() << Asked.f_GetLen();
+			fOnError();
+			return false;
+		}
+
+		// A revision fstat has no record of is a warning in its place, which leaves it without a type: a file or revision that isn't
+		// there, and for #have one the workspace doesn't have, also as it is outside its view. Any other fails the call.
+		for (umint iAsked = 0; iAsked < Asked.f_GetLen(); ++iAsked)
+		{
+			auto const &Entry = Entries[iAsked];
+			for (int Code : Entry.m_ErrorCodes)
+			{
+				bool bMissing = Code == MsgDm::ExFILE.UniqueCode() || Code == MsgDm::ExATREVISION.UniqueCode();
+				bool bNotHad = AskedHaves[iAsked] && (Code == MsgDm::ExHAVE.UniqueCode() || Code == MsgDm::ExATHAVE.UniqueCode() || Code == MsgDm::ExVIEW.UniqueCode());
+				if (!bMissing && !bNotHad)
+				{
+					fOnError();
+					return false;
+				}
+			}
+
+			if (Entry.m_bError && Entry.m_ErrorCodes.f_IsEmpty())
+			{
+				fOnError();
+				return false;
+			}
+
+			if (Entry.m_bError)
+				continue;
+
+			// A record of another file than the one asked would give a revision another's type. The server spells the file as it
+			// stores it, which a server that ignores case can spell in another case than asked.
+			CStr const *pDepotFile = nullptr;
+			for (auto const &Field : Entry.m_Fields)
+			{
+				if (Field.m_Name == "depotFile")
+					pDepotFile = &Field.m_Value;
+				else if (Field.m_Name == "headType")
+					o_Types[Asked[iAsked]] = Field.m_Value;
+			}
+
+			CStr DepotFile = pDepotFile ? fs_UnescapeFileName(*pDepotFile) : CStr();
+			bool bSame = bIgnoreCase ? DepotFile.f_CmpNoCase(AskedFiles[iAsked]) == 0 : DepotFile == AskedFiles[iAsked];
+			if (!bSame)
+			{
+				mp_LastError = "p4 fstat gave a record of '{}' for '{}'"_f << DepotFile << _Revisions[Asked[iAsked]];
+				fOnError();
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	bool CPerforceClient::fp_FileStats(TCVector<CStr> const &_Options, CStr const &_File, CFileStats &_Stats)
 	{
 		// The fields fstat doesn't report for this file are empty, also in an object a lookup of another file filled.
@@ -7200,6 +7370,13 @@ namespace NMib::NPerforce
 		CPerforceClient::CFileStats Ret;
 		fp_Throw(mp_Client.f_HaveFileStats(_File, Ret));
 		return Ret;
+	}
+
+	TCVector<CStr> CPerforceClientThrow::f_GetRevisionTypes(TCVector<CStr> const &_Revisions)
+	{
+		TCVector<CStr> Types;
+		fp_Throw(mp_Client.f_GetRevisionTypes(_Revisions, Types));
+		return Types;
 	}
 
 	void CPerforceClientThrow::f_CreateStreamClient

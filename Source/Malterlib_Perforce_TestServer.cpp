@@ -22,9 +22,10 @@ namespace NMib::NPerforce
 		}
 
 		// Without the user's P4 variables, like P4JOURNAL, P4LOG or P4NAME, so the server writes nothing outside its root.
-		NProcess::CProcessLaunchParams fg_ServerLaunchParams(CStr const &_Executable, CStr const &_ServerRoot, TCVector<CStr> const &_Parameters)
+		NProcess::CProcessLaunchParams fg_ServerLaunchParams(CStr const &_Executable, CStr const &_ServerRoot, TCVector<CStr> const &_Options, TCVector<CStr> const &_Parameters)
 		{
 			TCVector<CStr> Parameters = {"-r", _ServerRoot, "-J", _ServerRoot / "journal", "-L", _ServerRoot / "log"};
+			Parameters.f_Insert(_Options);
 			Parameters.f_Insert(_Parameters);
 
 			NProcess::CProcessLaunchParams Params;
@@ -100,16 +101,22 @@ namespace NMib::NPerforce
 	// Serves "<_Root>/p4d". The fixture user is created by its first command.
 	TCFuture<void> CPerforceTestServer::f_Start(CStr _Root, CStr _User)
 	{
-		co_return co_await fp_Start(_Root, _User, false);
+		co_return co_await fp_Start(_Root, _User, false, false);
 	}
 
 	// As f_Start, with a server in Unicode mode, whose sessions are translated: the fixture's sessions log in as UTF-8 ones.
 	TCFuture<void> CPerforceTestServer::f_StartUnicode(CStr _Root, CStr _User)
 	{
-		co_return co_await fp_Start(_Root, _User, true);
+		co_return co_await fp_Start(_Root, _User, true, false);
 	}
 
-	TCFuture<void> CPerforceTestServer::fp_Start(CStr _Root, CStr _User, bool _bUnicode)
+	// As f_Start, with a server that compares paths regardless of case, as one on Windows does by default (p4d -C1).
+	TCFuture<void> CPerforceTestServer::f_StartCaseInsensitive(CStr _Root, CStr _User)
+	{
+		co_return co_await fp_Start(_Root, _User, false, true);
+	}
+
+	TCFuture<void> CPerforceTestServer::fp_Start(CStr _Root, CStr _User, bool _bUnicode, bool _bCaseInsensitive)
 	{
 		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
 
@@ -120,6 +127,8 @@ namespace NMib::NPerforce
 		mp_FixtureRoot = _Root;
 		mp_ServerRoot = _Root / "p4d";
 		mp_User = _User;
+		if (_bCaseInsensitive)
+			mp_ServerOptions = {"-C1"};
 		NFile::CFile::fs_CreateDirectory(mp_ServerRoot);
 
 		// A random base port keeps parallel test processes apart. A busy port shows as the server exiting or never answering.
@@ -134,7 +143,7 @@ namespace NMib::NPerforce
 			(
 				NProcess::CProcessLaunchActor::CSimpleLaunch
 				(
-					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-xD", mp_ServerID})
+					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, mp_ServerOptions, {"-xD", mp_ServerID})
 					, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
 				)
 			)
@@ -146,7 +155,7 @@ namespace NMib::NPerforce
 				(
 					NProcess::CProcessLaunchActor::CSimpleLaunch
 					(
-						fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-xi"})
+						fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, mp_ServerOptions, {"-xi"})
 						, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
 					)
 				)
@@ -173,7 +182,7 @@ namespace NMib::NPerforce
 				(
 					NProcess::CProcessLaunchActor::CSimpleLaunch
 					(
-						fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-c", "set {}"_f << Configurable})
+						fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, mp_ServerOptions, {"-c", "set {}"_f << Configurable})
 						, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
 					)
 				)
@@ -196,7 +205,7 @@ namespace NMib::NPerforce
 	{
 		auto CheckDestroy = co_await f_CheckDestroyedOnResume();
 
-		NProcess::CProcessLaunchParams Params = fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-p", _Port});
+		NProcess::CProcessLaunchParams Params = fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, mp_ServerOptions, {"-p", _Port});
 		Params.m_bCreateNewProcessGroup = true; // On Windows the stop that fp_StopServer waits for needs its own process group
 
 		TCPromise<void> ExitPromise;
@@ -477,7 +486,7 @@ namespace NMib::NPerforce
 			(
 				NProcess::CProcessLaunchActor::CSimpleLaunch
 				(
-					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-c", "set {}={}"_f << _Name << _Value})
+					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, mp_ServerOptions, {"-c", "set {}={}"_f << _Name << _Value})
 					, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
 				)
 			)
@@ -510,7 +519,7 @@ namespace NMib::NPerforce
 			(
 				NProcess::CProcessLaunchActor::CSimpleLaunch
 				(
-					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, {"-jr", Journal})
+					fg_ServerLaunchParams(mp_ServerExecutable, mp_ServerRoot, mp_ServerOptions, {"-jr", Journal})
 					, NProcess::CProcessLaunchActor::ESimpleLaunchFlag_GenerateExceptionOnNonZeroExitCode
 				)
 			)

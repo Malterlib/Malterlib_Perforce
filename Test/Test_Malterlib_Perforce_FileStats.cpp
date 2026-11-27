@@ -21,6 +21,13 @@ using namespace NMib::NPerforce;
 
 namespace
 {
+	// A name holding a wildcard, which a depot path escapes; Windows has no such file names.
+#ifdef DPlatformFamily_Windows
+	constexpr ch8 const *gc_pStarName = "Star%.txt";
+#else
+	constexpr ch8 const *gc_pStarName = "Star*.txt";
+#endif
+
 	struct CFileStats_Tests : public NMib::NTest::CTest
 	{
 		void f_DoTests();
@@ -494,6 +501,202 @@ namespace
 
 			DMibExpect(Changelist, >, int64(5000000000));
 			DMibExpect(Stats.m_HeadChange, ==, uint64(Changelist));
+
+			co_return {};
+		};
+
+		// The types of several revisions from one fstat are in the order asked, also two revisions of one file, and a revision the
+		// workspace has. A revision that doesn't exist, or that the workspace doesn't have, has none, and the others keep theirs, also a
+		// later revision asked of a file the workspace has no revision of, and one after #none, and #have of a file outside the
+		// workspace's view. The server takes a name with an escape as it stores it, so one spelled with other letters for its digits
+		// names the file only on a server that ignores case.
+		DMibTestSuite("RevisionTypes") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of the types of revisions: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceRevisionTypes";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			// A stream the workspace doesn't map, whose files are outside its view.
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Outside"));
+			co_await Server(&CPerforceTestServer::f_SubmitFiles, CStr("//Streams/Outside"), TCVector<CPerforceTestServer::CFile>{{"Away.txt", "a\n"}}, CStr("Add a file outside"));
+			co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"Other.txt", "a\n"}, {"Removed.txt", "a\n"}, {gc_pStarName, "a\n"}}
+					, CStr("Add the files")
+				)
+			;
+
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			CStr StarFile = CPerforceClient::fs_EscapeFileName(gc_pStarName);
+			CStr StarFileLower = StarFile.f_Replace("%2A", "%2a");
+
+			struct CTypes
+			{
+				TCVector<CStr> m_Types;
+				CStr m_CaseHandling;
+			};
+
+			auto Types = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot, StarFile, StarFileLower]() -> CTypes
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Info();
+						CTypes Result;
+						Result.m_CaseHandling = Client.f_NoThrow().f_GetLastInfo("caseHandling");
+						Client.f_Sync(WorkRoot / "...");
+
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / "Retyped.txt", "a\n", false);
+						Client.f_Add(WorkRoot / "Retyped.txt");
+						Client.f_Submit(WorkRoot / "Retyped.txt", "Add the file");
+						Client.f_OpenForEdit(WorkRoot / "Retyped.txt", "binary");
+						Client.f_Submit(WorkRoot / "Retyped.txt", "Make it binary");
+						Client.f_Sync(WorkRoot / "Removed.txt#0");
+
+						Result.m_Types = Client.f_GetRevisionTypes
+							(
+								{
+									"//Streams/Main/Retyped.txt#2"
+									, "//Streams/Main/Retyped.txt#5"
+									, "//Streams/Main/Other.txt#have"
+									, "//Streams/Main/Unsynced.txt#have"
+									, "//Streams/Main/Retyped.txt#1"
+									, "//Streams/Main/Removed.txt#have"
+									, "//Streams/Main/Removed.txt#1"
+									, "//Streams/Main/Retyped.txt#none"
+									, "//Streams/Main/Retyped.txt#2"
+									, CStr("//Streams/Main/{}#1"_f << StarFile)
+									, CStr("//Streams/Main/{}#1"_f << StarFileLower)
+									, "//Streams/Outside/Away.txt#have"
+									, "//Streams/Outside/Away.txt#1"
+								}
+							)
+						;
+
+						return Result;
+					}
+					% "Failed to look up the types"
+				)
+			;
+
+			DMibAssertTrue(Types.m_CaseHandling == "sensitive" || Types.m_CaseHandling == "insensitive");
+			CStr LowerType = Types.m_CaseHandling == "insensitive" || StarFileLower == StarFile ? "text" : "";
+			DMibExpect(Types.m_Types, ==, (TCVector<CStr>{"binary", "", "text", "", "text", "", "text", "", "binary", "text", LowerType, "", "text"}));
+
+			// The stats of the revision the workspace has of a file outside its view are those of no revision.
+			auto OutsideHave = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection]() -> uint32
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						return Client.f_HaveFileStats("//Streams/Outside/Away.txt").m_HaveRev;
+					}
+					% "Failed to read the revision the workspace has"
+				)
+			;
+			DMibExpect(OutsideHave, ==, 0u);
+
+			// A request fstat could give more than one entry or none for, a selector other than a revision number, #have, #head or #none,
+			// a range, a wildcard or no selector, fails the call before p4 runs, as does a number larger than a revision's, which p4d takes
+			// for another.
+			auto Rejected = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection]() -> TCVector<bool>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+
+						TCVector<bool> Rejected;
+						for
+						(
+							CStr Request :
+							{
+								"//Streams/Main/Other.txt@1"
+								, "//Streams/Main/Other.txt#1,#2"
+								, "//Streams/Main/....txt#1"
+								, "//Streams/Main/*.txt#1"
+								, "//Streams/Main/Other.txt#4294967297"
+								, "//Streams/Main/Other.txt"
+								, "//Streams/Main/Other.txt#"
+							}
+						)
+						{
+							TCVector<CStr> Types;
+							Rejected.f_Insert(!Client.f_NoThrow().f_GetRevisionTypes({"//Streams/Main/Other.txt#head", Request}, Types));
+						}
+
+						return Rejected;
+					}
+					% "Failed to ask for the types"
+				)
+			;
+			DMibExpect(Rejected, ==, (TCVector<bool>{true, true, true, true, true, true, true}));
+
+			co_return {};
+		};
+
+		// A server that ignores case gives a revision's depot file as the depot spells it, which is the revision asked in another
+		// case.
+		DMibTestSuite("RevisionTypesCaseInsensitive") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of the types of revisions on a server that ignores case: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceRevisionTypesCaseInsensitive";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_StartCaseInsensitive, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			co_await Server(&CPerforceTestServer::f_SubmitFiles, CStr("//Streams/Main"), TCVector<CPerforceTestServer::CFile>{{"Upper.txt", "a\n"}}, CStr("Add a file"));
+
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			auto Types = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot]() -> TCVector<CStr>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Sync(WorkRoot / "...");
+
+						return Client.f_GetRevisionTypes({"//Streams/Main/UPPER.TXT#1", "//Streams/Main/upper.txt#have"});
+					}
+					% "Failed to look up the types"
+				)
+			;
+
+			DMibExpect(Types, ==, (TCVector<CStr>{"text", "text"}));
 
 			co_return {};
 		};

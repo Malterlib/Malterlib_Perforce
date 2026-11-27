@@ -578,6 +578,7 @@ namespace NMib::NPerforce
 		bool f_FileStats(CStr const &_File, CFileStats &_Stats);
 		bool f_OpenedFileStats(CStr const &_File, CFileStats &_Stats);
 		bool f_HaveFileStats(CStr const &_File, CFileStats &_Stats);
+		bool f_GetRevisionTypes(TCVector<CStr> const &_Revisions, TCVector<CStr> &o_Types);
 
 		bool f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		bool f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
@@ -891,6 +892,7 @@ namespace NMib::NPerforce
 		CPerforceClient::CFileStats f_FileStats(CStr const &_File);
 		CPerforceClient::CFileStats f_OpenedFileStats(CStr const &_File);
 		CPerforceClient::CFileStats f_HaveFileStats(CStr const &_File);
+		TCVector<CStr> f_GetRevisionTypes(TCVector<CStr> const &_Revisions);
 
 		void f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
 		void f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
