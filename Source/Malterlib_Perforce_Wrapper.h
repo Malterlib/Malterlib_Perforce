@@ -917,6 +917,16 @@ namespace NMib::NPerforce
 		static auto fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot)
 			-> NStorage::TCUniquePointer<CPerforceClientThrow>
 		;
+		static auto fs_GetFromP4ConfigForFile
+			(
+				CStr const &_Path
+				, TCMap<CStr, CStr> const &_Environment
+				, CPerforceIgnore::CRegistrySettings const &_Registry
+				, CStr const &_ConfigRoot
+				, CStr &o_FileName
+			)
+			-> NStorage::TCUniquePointer<CPerforceClientThrow>
+		;
 
 	private:
 		void fp_Throw(bool _bResult) const;

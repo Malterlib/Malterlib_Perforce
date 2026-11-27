@@ -7603,6 +7603,25 @@ namespace NMib::NPerforce
 		return pClient;
 	}
 
+	// The client of fs_GetFromP4Config for the file _Path, and in o_FileName the file as p4 takes it in a file argument in that
+	// workspace (CPerforceRootSpelling::f_ServerFileName), or null where no .p4config gives a workspace.
+	auto CPerforceClientThrow::fs_GetFromP4ConfigForFile
+		(
+			CStr const &_Path
+			, TCMap<CStr, CStr> const &_Environment
+			, CPerforceIgnore::CRegistrySettings const &_Registry
+			, CStr const &_ConfigRoot
+			, CStr &o_FileName
+		)
+		-> NStorage::TCUniquePointer<CPerforceClientThrow>
+	{
+		auto pClient = fs_GetFromP4Config(_Path, _Environment, _Registry, _ConfigRoot);
+		if (pClient)
+			o_FileName = CPerforceRootSpelling::fs_Find(fg_ParentDirectory(_Path), pClient->f_GetClientRoot()).f_ServerFileName(_Path);
+
+		return pClient;
+	}
+
 	// Logs o_Client in at the nearest directory above _Path that has the file P4CONFIG names, as o_Client reads P4CONFIG, unlike the
 	// overload taking the settings, which reads the .p4config files.
 	bool CPerforceClientThrow::fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client)

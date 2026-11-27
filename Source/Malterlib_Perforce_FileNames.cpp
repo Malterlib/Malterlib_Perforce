@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "Malterlib_Perforce_FileNames.h"
+#include "Malterlib_Perforce_Ignore.h"
+#include "Malterlib_Perforce_Wrapper.h"
 
 #include <Mib/File/File>
 
@@ -439,6 +441,62 @@ namespace NMib::NPerforce
 		}
 #endif
 		return NStr::CAnsiStr(_String.f_GetStr(), _String.f_GetLen());
+	}
+
+	// p4 tells the paths in a workspace by their names, so it takes them only as the client spec spells the root, while a project can
+	// reach that root through a symbolic link. A project spelled below the root is taken as it is spelled, as p4 run in it takes it.
+	// Otherwise the root is told by its directory's identity, among those that hold the project's root as the kernel resolves it
+	// outside Windows, where links are resolved (fs_ResolveDirectory). A project outside the workspace keeps its own spelling, which
+	// p4 then refuses.
+	CPerforceRootSpelling CPerforceRootSpelling::fs_Find(NStr::CStr const &_ProjectRoot, NStr::CStr const &_WorkspaceRoot)
+	{
+		CPerforceRootSpelling Spelling{.m_ProjectRoot = _ProjectRoot, .m_ServerRoot = _ProjectRoot};
+
+		// p4 gives its paths with Malterlib's separators, as the paths below the root are compared with.
+		NStr::CStr WorkspaceRoot = fg_MalterlibPath(_WorkspaceRoot);
+		if (WorkspaceRoot.f_IsEmpty() || fg_IsLexicallyIn(_ProjectRoot, WorkspaceRoot))
+			return Spelling;
+
+		NStr::CStr Relative;
+		NStr::CStr ResolvedRoot = CPerforceIgnore::fs_ResolveDirectory(_WorkspaceRoot);
+		if (!NFile::CFile::fs_FindAncestorByIdentity(CPerforceIgnore::fs_ResolveDirectory(_ProjectRoot), ResolvedRoot, Relative))
+			return Spelling;
+
+		Spelling.m_ServerRoot = NFile::CFile::fs_AppendPath(WorkspaceRoot, Relative);
+
+		return Spelling;
+	}
+
+	// A path below the project's root, spelled as the project spells it, as the workspace's root spells it.
+	NStr::CStr CPerforceRootSpelling::f_ServerPath(NStr::CStr const &_ProjectPath) const
+	{
+		NStr::CStr Relative;
+		if (m_ServerRoot == m_ProjectRoot || !fg_IsLexicallyIn(_ProjectPath, m_ProjectRoot, Relative))
+			return _ProjectPath;
+
+		return NFile::CFile::fs_AppendPath(m_ServerRoot, Relative);
+	}
+
+	// A path below the project's root, spelled as the workspace's root spells it, as the project spells it.
+	NStr::CStr CPerforceRootSpelling::f_ProjectPath(NStr::CStr const &_ServerPath) const
+	{
+		NStr::CStr Relative;
+		if (m_ServerRoot == m_ProjectRoot || !fg_IsLexicallyIn(_ServerPath, m_ServerRoot, Relative))
+			return _ServerPath;
+
+		return NFile::CFile::fs_AppendPath(m_ProjectRoot, Relative);
+	}
+
+	// A path below the project's root, spelled as the project spells it, as p4 takes it in a file argument: as the workspace's root
+	// spells it, and escaped, as p4 reads *, %, @ and # there as wildcards and revisions. p4 has no escape for '...', which it reads
+	// as a wildcard of any files below, so a path holding it names no single file to p4 and throws.
+	NStr::CStr CPerforceRootSpelling::f_ServerFileName(NStr::CStr const &_ProjectPath) const
+	{
+		NStr::CStr ServerPath = f_ServerPath(_ProjectPath);
+		if (ServerPath.f_Find("...") >= 0)
+			DMibError(NStr::CStr::CFormat("'{}' holds '...', which p4 reads as a wildcard in any file name") << _ProjectPath);
+
+		return CPerforceClient::fs_EscapeFileName(ServerPath);
 	}
 }
 

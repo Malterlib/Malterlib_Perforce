@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <Mib/Core/Core>
+#include <Mib/File/File>
+#include <Mib/Perforce/FileNames>
 #include <Mib/Perforce/Functions>
 #include <Mib/Test/Exception>
 
@@ -156,6 +158,53 @@ namespace
 				auto StreamPaths = CPerforceFunctions::fs_GetStreamPaths("Hansoft", Stream);
 				DMibExpect(StreamPaths, ==, (TCVector<CStr>{"/Hansoft/Main"}));
 			};
+		};
+
+		// A project's paths as the workspace's root spells it, which p4 takes them as
+		DMibTestSuite("RootSpelling")
+		{
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "PerforceTestRootSpelling";
+			if (NFile::CFile::fs_FileExists(Root))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root);
+			NFile::CFile::fs_CreateDirectory(Root / "Real/Workspace/Project");
+			NFile::CFile::fs_CreateDirectory(Root / "Other");
+			fg_TestAddCleanupPath(Root);
+
+			CStr Workspace = Root / "Real/Workspace";
+			{
+				DMibTestPath("Below the root");
+				auto Spelling = CPerforceRootSpelling::fs_Find(Workspace / "Project", Workspace);
+				DMibExpect(Spelling.m_ServerRoot, ==, Workspace / "Project");
+				DMibExpect(Spelling.f_ServerPath(Workspace / "Project/Pins@Dev.MRepo"), ==, Workspace / "Project/Pins@Dev.MRepo");
+				DMibExpect(Spelling.f_ServerFileName(Workspace / "Project/Pins@Dev.MRepo"), ==, Workspace / "Project/Pins%40Dev.MRepo");
+
+				// p4 can't escape '...', which would name the files it matches.
+				DMibExpectException
+					(
+						Spelling.f_ServerFileName(Workspace / "Project/Sample...txt")
+						, DMibErrorInstance("'{}' holds '...', which p4 reads as a wildcard in any file name"_f << (Workspace / "Project/Sample...txt"))
+					)
+				;
+			}
+			{
+				DMibTestPath("Outside the workspace");
+				auto Spelling = CPerforceRootSpelling::fs_Find(Root / "Other", Workspace);
+				DMibExpect(Spelling.m_ServerRoot, ==, Root / "Other");
+			}
+#ifndef DPlatformFamily_Windows
+			{
+				DMibTestPath("Through a symbolic link");
+				NFile::CFile::fs_CreateSymbolicLink(Root / "Real", Root / "Link", NFile::EFileAttrib_Directory, NFile::ESymbolicLinkFlag_Relative);
+
+				CStr Project = Root / "Link/Workspace/Project";
+				auto Spelling = CPerforceRootSpelling::fs_Find(Project, Workspace);
+				DMibExpect(Spelling.m_ServerRoot, ==, Workspace / "Project");
+				DMibExpect(Spelling.f_ServerPath(Project / "Pins@Dev.MRepo"), ==, Workspace / "Project/Pins@Dev.MRepo");
+				DMibExpect(Spelling.f_ProjectPath(Workspace / "Project/Pins@Dev.MRepo"), ==, Project / "Pins@Dev.MRepo");
+				DMibExpect(Spelling.f_ServerFileName(Project / "Data*.cmake"), ==, Workspace / "Project/Data%2A.cmake");
+				DMibExpect(Spelling.f_ServerPath(Root / "Other/File.txt"), ==, Root / "Other/File.txt");
+			}
+#endif
 		};
 	}
 }

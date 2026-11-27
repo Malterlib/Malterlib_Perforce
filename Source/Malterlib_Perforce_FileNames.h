@@ -27,6 +27,19 @@ namespace NMib::NPerforce
 	NStr::CStr fg_MalterlibPath(NStr::CStr const &_Path);
 	NStr::CStr fg_ConvertCharset(NStr::CStr const &_Str, int _Charset, bool _bToCharset);
 
+	// A project's root as the project spells it and as the root of the Perforce workspace that maps it does.
+	struct CPerforceRootSpelling
+	{
+		static CPerforceRootSpelling fs_Find(NStr::CStr const &_ProjectRoot, NStr::CStr const &_WorkspaceRoot);
+
+		NStr::CStr f_ServerPath(NStr::CStr const &_ProjectPath) const;
+		NStr::CStr f_ProjectPath(NStr::CStr const &_ServerPath) const;
+		NStr::CStr f_ServerFileName(NStr::CStr const &_ProjectPath) const;
+
+		NStr::CStr m_ProjectRoot;
+		NStr::CStr m_ServerRoot; // m_ProjectRoot as the workspace's root spells it
+	};
+
 	// An encoding of the strings the Perforce API takes and gives.
 	enum EPerforceEncoding
 	{
