@@ -1894,15 +1894,11 @@ namespace NMib::NPerforce
 	{
 		DCheckApi(CStr::CFormat("GetHeadChangelist({})") << _Path);
 
-		ch8 const *Commands[] = {"-s", "submitted", "-m", "1", nullptr};
-		Commands[4] = (ch8 *)_Path.f_GetStr();
+		TCVector<CStr> Arguments = {"-s", "submitted", "-m", "1"};
+		if (!_Path.f_IsEmpty())
+			Arguments.f_Insert(_Path);
 
-		if (_Path.f_IsEmpty())
-			mp_pAPI->SetArgv(4, (char * const *)Commands);
-		else
-			mp_pAPI->SetArgv(5, (char * const *)Commands);
-
-		fp_Run("changes");
+		fp_Run("changes", Arguments);
 		if (mp_pClient->m_bError)
 		{
 			fOnError();
@@ -5496,19 +5492,14 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_GetWorkspacePath(CStr const &_DepotPath, CStr &_WorkspacePath)
 	{
 		DCheckApi(CStr::CFormat("GetWorkspacePath({})") << _DepotPath);
-		char const *Commands[] = {nullptr};
-		Commands[0] = (ch8 *)_DepotPath.f_GetStr();
-		mp_pAPI->SetArgv(1, (char * const *)Commands);
-		fp_Run("where");
+		fp_Run("where", {_DepotPath});
 		bool bRemove = false;
 		if (mp_pClient->m_bError)
 		{
 			DCheckApi(CStr::CFormat("GetWorkspacePath({})") << _DepotPath);
 			bRemove = true;
 			CStr Path = _DepotPath + "/{CEF99DB4-836A-4495-B6DF-4C5FBFE7B443}";
-			Commands[0] = (ch8 *)Path.f_GetStr();
-			mp_pAPI->SetArgv(1, (char * const *)Commands);
-			fp_Run("where");
+			fp_Run("where", {Path});
 			if (mp_pClient->m_bError)
 			{
 				fOnError();
@@ -5545,19 +5536,14 @@ namespace NMib::NPerforce
 	{
 		DCheckApi(CStr::CFormat("GetClientPath({})") << _DepotPath);
 
-		char const *Commands[] = {nullptr};
-		Commands[0] = (ch8 *)_DepotPath.f_GetStr();
-		mp_pAPI->SetArgv(1, (char * const *)Commands);
-		fp_Run("where");
+		fp_Run("where", {_DepotPath});
 		bool bRemove = false;
 		if (mp_pClient->m_bError)
 		{
 			DCheckApi(CStr::CFormat("GetClientPath({})") << _DepotPath);
 			bRemove = true;
 			CStr Path = _DepotPath + "/{CEF99DB4-836A-4495-B6DF-4C5FBFE7B443}";
-			Commands[0] = (ch8 *)Path.f_GetStr();
-			mp_pAPI->SetArgv(1, (char * const *)Commands);
-			fp_Run("where");
+			fp_Run("where", {Path});
 			if (mp_pClient->m_bError)
 			{
 				fOnError();
@@ -5594,19 +5580,14 @@ namespace NMib::NPerforce
 	{
 		DCheckApi(CStr::CFormat("GetDepotPath({}, {})") << _ClientPath << _bReturnImportedStream);
 
-		char const *Commands[] = {nullptr};
-		Commands[0] = (ch8 *)_ClientPath.f_GetStr();
-		mp_pAPI->SetArgv(1, (char * const *)Commands);
-		fp_Run("where");
+		fp_Run("where", {_ClientPath});
 		bool bRemove = false;
 		if (mp_pClient->m_bError)
 		{
 			DCheckApi(CStr::CFormat("GetDepotPath({}, {})") << _ClientPath << _bReturnImportedStream);
 			bRemove = true;
 			CStr Path = _ClientPath + "/{CEF99DB4-836A-4495-B6DF-4C5FBFE7B443}";
-			Commands[0] = (ch8 *)Path.f_GetStr();
-			mp_pAPI->SetArgv(1, (char * const *)Commands);
-			fp_Run("where");
+			fp_Run("where", {Path});
 			if (mp_pClient->m_bError)
 			{
 				fOnError();
@@ -6491,10 +6472,7 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_Files)
 	{
 		DCheckApi(CStr::CFormat("FindHeadFiles({})") << _Pattern);
-		char const *Commands[] = {nullptr};
-		Commands[0] = (ch8 *)_Pattern.f_GetStr();
-		mp_pAPI->SetArgv(1, (char * const *)Commands);
-		fp_Run("files");
+		fp_Run("files", {_Pattern});
 		if (mp_pClient->m_bError)
 		{
 			fOnError();

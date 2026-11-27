@@ -17,6 +17,8 @@ using namespace NMib::NEncoding;
 #include <Mib/Perforce/TestServer>
 #include <Mib/Perforce/Wrapper>
 
+#include "Malterlib_Perforce_TestHelpers.h"
+
 using namespace NMib::NPerforce;
 
 namespace
@@ -583,6 +585,83 @@ namespace
 					)
 				)
 			;
+
+			co_return {};
+		};
+
+		// A session of a server without Unicode sends paths in the command charset, the code page on Windows, also to p4 where,
+		// files and changes, and reads them back the same way.
+		DMibTestSuite("NonAsciiPaths") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of paths outside ASCII: p4d was not found in PATH");
+				co_return {};
+			}
+
+			// A character outside ASCII that the command charset holds, which on Windows is the code page.
+			CStr Character = fg_CodePageCharacter();
+			if (!Character)
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of paths outside ASCII: the code page holds none of the characters tried");
+				co_return {};
+			}
+
+			CStr FileName = "Caf{}.txt"_f << Character;
+			CStr DepotFile = "//Streams/Main/" + FileName;
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceNonAsciiPaths";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			int64 Changelist = co_await Server(&CPerforceTestServer::f_SubmitFiles, CStr("//Streams/Main"), TCVector<CPerforceTestServer::CFile>{{FileName, "a\n"}}, CStr("Add the file"));
+
+			CStr WorkRoot = Root / ("W{}rk"_f << Character);
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			struct CResults
+			{
+				CStr m_DepotPath;
+				CStr m_ClientPath;
+				CStr m_WorkspacePath;
+				TCVector<CStr> m_HeadFiles;
+				int64 m_HeadChangelist = 0;
+			};
+
+			auto Results = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot, FileName, DepotFile, Character]() -> CResults
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+
+						CResults Results;
+						Results.m_DepotPath = Client.f_GetDepotPath(WorkRoot / FileName);
+						Results.m_ClientPath = Client.f_GetClientPath(DepotFile);
+						Results.m_WorkspacePath = Client.f_GetWorkspacePath(DepotFile);
+						for (auto &File : Client.f_FindHeadFiles("//Streams/Main/Caf{}*"_f << Character))
+							Results.m_HeadFiles.f_Insert(File.m_File);
+						Results.m_HeadChangelist = Client.f_GetHeadChangelist(DepotFile);
+
+						return Results;
+					}
+					% "Failed to look up the paths"
+				)
+			;
+
+			DMibExpect(Results.m_DepotPath, ==, DepotFile);
+			DMibExpect(Results.m_ClientPath, ==, WorkRoot / FileName);
+			DMibExpect(Results.m_WorkspacePath, ==, "//TestWork/" + FileName);
+			DMibExpect(Results.m_HeadFiles, ==, TCVector<CStr>{DepotFile});
+			DMibExpect(Results.m_HeadChangelist, ==, Changelist);
 
 			co_return {};
 		};

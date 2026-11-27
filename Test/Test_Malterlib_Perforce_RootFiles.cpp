@@ -13,6 +13,8 @@
 #include <Mib/Perforce/TestServer>
 #include <Mib/Perforce/Wrapper>
 
+#include "Malterlib_Perforce_TestHelpers.h"
+
 #ifdef DPlatformFamily_Windows
 #	include <Mib/Core/OnScopeExitCatch>
 #	include <Mib/Core/PlatformSpecific/WindowsRegistry>
@@ -125,25 +127,6 @@ namespace
 	}
 #endif
 
-#ifdef DPlatformFamily_Windows
-	// A non-ASCII character that the active code page represents, one of several scripts' as code pages represent different ones,
-	// or empty when it represents none of them.
-	CStr fg_CodePageCharacter()
-	{
-		for (CStr Character : {"\u00e9", "\u0436", "\u03bb", "\u05d0", "\u0639", "\u0e01", "\u3042", "\u4e2d", "\uac00"})
-		{
-			CAnsiStr Encoded;
-			NStr::NPlatform::fg_SystemEncodeAnsiStr(Character, Encoded, '?');
-			CStr Decoded;
-			NStr::NPlatform::fg_SystemDecodeAnsiStr(Encoded, Decoded);
-			if (Decoded == Character)
-				return Character;
-		}
-
-		return {};
-	}
-#endif
-
 	struct CRootFiles_Tests : public NMib::NTest::CTest
 	{
 		void f_DoTests();
@@ -244,11 +227,7 @@ namespace
 					Letter = {};
 					for (CLetter const &Candidate : {CLetter{"\u00e9", "\u00c9", "E\u0301", "e\u0301"}, CLetter{"\u0436", "\u0416"}, CLetter{"\u03bb", "\u039b"}})
 					{
-						CAnsiStr Encoded;
-						NStr::NPlatform::fg_SystemEncodeAnsiStr(Candidate.m_Lower, Encoded, '?');
-						CStr Decoded;
-						NStr::NPlatform::fg_SystemDecodeAnsiStr(Encoded, Decoded);
-						if (Decoded == Candidate.m_Lower)
+						if (fg_CodePageRepresents(Candidate.m_Lower))
 						{
 							Letter = Candidate;
 							break;
