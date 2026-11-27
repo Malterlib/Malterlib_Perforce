@@ -5935,15 +5935,30 @@ namespace NMib::NPerforce
 
 	bool CPerforceClient::f_OpenForEdit(CStr const &_File)
 	{
-		DCheckApi(CStr::CFormat("OpenForEdit({})") << _File);
-		fp_Run("edit", {_File});
+		return f_OpenForEdit(_File, CStr());
+	}
+
+	// Opens the file for edit, with _Type as p4 edit -t, so the revision submitted has that type; an empty _Type keeps the file's.
+	bool CPerforceClient::f_OpenForEdit(CStr const &_File, CStr const &_Type)
+	{
+		DCheckApi(CStr::CFormat("OpenForEdit({}, {})") << _File << _Type);
+
+		TCVector<CStr> Arguments;
+		if (_Type)
+		{
+			Arguments.f_Insert("-t");
+			Arguments.f_Insert(_Type);
+		}
+		Arguments.f_Insert(_File);
+		fp_Run("edit", Arguments);
+
 		if (mp_pClient->m_bError)
 		{
 			fOnError();
 			return false;
 		}
-		else
-			return true;
+
+		return true;
 	}
 
 	bool CPerforceClient::f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList)
@@ -6764,6 +6779,11 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_OpenForEdit(CStr const &_File)
 	{
 		fp_Throw(mp_Client.f_OpenForEdit(_File));
+	}
+
+	void CPerforceClientThrow::f_OpenForEdit(CStr const &_File, CStr const &_Type)
+	{
+		fp_Throw(mp_Client.f_OpenForEdit(_File, _Type));
 	}
 
 	void CPerforceClientThrow::f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job)

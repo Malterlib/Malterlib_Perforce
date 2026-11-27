@@ -394,6 +394,7 @@ namespace NMib::NPerforce
 		bool f_GetClientName(CStr &_ClientName);
 		bool f_GetClientRoot(CStr &_Root);
 		bool f_OpenForEdit(CStr const &_File);
+		bool f_OpenForEdit(CStr const &_File, CStr const &_Type);
 		bool f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
 		bool f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
 		// Changelist 0 selects the current client's default changelist.
@@ -741,6 +742,7 @@ namespace NMib::NPerforce
 		CStr f_GetClientName();
 		CStr f_GetClientRoot();
 		void f_OpenForEdit(CStr const &_File);
+		void f_OpenForEdit(CStr const &_File, CStr const &_Type);
 		void f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
 		void f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
 		void f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
