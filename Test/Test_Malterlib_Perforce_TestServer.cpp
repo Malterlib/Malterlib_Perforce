@@ -8,6 +8,7 @@
 #include <Mib/Test/Exception>
 #include <Mib/Network/Socket>
 #include <Mib/Network/Sockets/TCP>
+#include <Mib/Process/Platform>
 #include <Mib/Test/Test>
 #include <Mib/Time/Stopwatch>
 
@@ -315,11 +316,7 @@ namespace
 				co_return {};
 			}
 
-#ifdef DPlatformFamily_Windows
-			uint64 ProcessID = GetCurrentProcessId();
-#else
-			uint64 ProcessID = uint64(getpid());
-#endif
+			umint ProcessID = NProcess::NPlatform::fg_Process_GetCurrentUID();
 			CStr RunName = "{}_{}"_f << ProcessID << g_AmbientRun.f_FetchAdd(1);
 			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceResolvedSettings" / RunName;
 			CStr Workspace = Root / "Outer/Workspace";
@@ -355,50 +352,9 @@ namespace
 				}
 			;
 
-			TCVector<CStr> Readers;
 #ifndef DPlatformFamily_Windows
-			// Any open of the FIFO for reading is recorded, also a brief nonblocking one: the watchdog's open for writing waits for a
-			// reader, and a waiting reader gets the end of the file when the watchdog closes it. Its own reader lets it go at the end.
-			// The test goes on once the watchdog is about to wait, and a moment after, for it to be waiting.
 			CStr Fifo = Root / "Outer/.p4config";
 			DMibAssert(mkfifo(Fifo.f_GetStr(), 0600), ==, 0);
-			NAtomic::TCAtomic<bool> bDone = false;
-			NAtomic::TCAtomic<bool> bWaiting = false;
-			auto pWatchdog = NThread::CThreadObject::fs_StartThread
-				(
-					[&](NThread::CThreadObject *_pThread) -> aint
-					{
-						while (true)
-						{
-							bWaiting = true;
-							int File = open(Fifo.f_GetStr(), O_WRONLY | O_CLOEXEC);
-							bool bStopping = bDone.f_Load();
-							if (File >= 0)
-							{
-								if (!bStopping)
-									Readers.f_Insert(Fifo);
-								close(File);
-							}
-							if (bStopping)
-								break;
-						}
-						return 0;
-					}
-					, "Perforce resolved settings FIFO watchdog"
-				)
-			;
-			auto StopWatchdog = g_OnScopeExit / [&]
-				{
-					bDone = true;
-					int Reader = open(Fifo.f_GetStr(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-					pWatchdog->f_Stop(true);
-					if (Reader >= 0)
-						close(Reader);
-				}
-			;
-			while (!bWaiting.f_Load())
-				NSys::fg_Thread_Sleep(0.001f);
-			NSys::fg_Thread_Sleep(0.1f);
 #endif
 
 			auto Result = co_await
@@ -418,13 +374,134 @@ namespace
 			DMibExpect(Result ? *Result : Result.f_GetExceptionStr(), ==, "tester");
 
 #ifndef DPlatformFamily_Windows
-			// The watchdog is joined before its readers are read.
-			StopWatchdog();
+			struct stat Stat;
+			DMibExpectTrue(stat(Fifo.f_GetStr(), &Stat) == 0 && S_ISFIFO(Stat.st_mode));
 #endif
-			DMibExpect(Readers, ==, TCVector<CStr>{});
 
 			co_return {};
 		};
+
+#ifndef DPlatformFamily_Windows
+		// Without a charset set, p4 writes the one it learns from the server to the enviro file, which it leaves alone where that is a
+		// FIFO, as opening it would wait for a writer.
+		DMibTestSuite("LearnedCharsetEnviroFifo") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce learned charset FIFO test: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr RunName = "{}_{}"_f << NProcess::NPlatform::fg_Process_GetCurrentUID() << g_AmbientRun.f_FetchAdd(1);
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceLearnedCharsetEnviroFifo" / RunName;
+			CStr Workspace = Root / "Workspace";
+			NFile::CFile::fs_CreateDirectory(Workspace);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root / "Server", CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			CStr Port = co_await Server(&CPerforceTestServer::f_GetPort);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr());
+
+			CStr Enviro = Root / "p4enviro";
+			DMibAssert(mkfifo(Enviro.f_GetStr(), 0600), ==, 0);
+
+			NFile::CFile::fs_WriteStringToFile(Workspace / ".p4config", "P4USER=tester\nP4CLIENT=PerforceTestServer_NoClient\nP4HOST=PerforceTestServer\n", false);
+			TCMap<CStr, CStr> Environment = {{"P4PORT", Port}, {"P4TICKETS", Connection.m_TicketFile}, {"P4ENVIRO", Enviro}};
+
+			auto Result = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Workspace, Environment]() -> CStr
+					{
+						auto pClient = CPerforceClientThrow::fs_GetFromP4Config(Workspace / "A.cpp", Environment, {}, {});
+						if (!pClient)
+							return "No Perforce root";
+
+						pClient->f_NoThrow().f_Info();
+						return pClient->f_NoThrow().f_GetLastInfo("userName");
+					}
+				)
+				.f_Wrap()
+			;
+			DMibExpect(Result ? *Result : Result.f_GetExceptionStr(), ==, "tester");
+			struct stat Stat;
+			DMibExpectTrue(stat(Enviro.f_GetStr(), &Stat) == 0 && S_ISFIFO(Stat.st_mode));
+
+			co_return {};
+		};
+
+		// An enviro file that is a symbolic link stays one when p4 writes the charset it learns outside Windows: to a file, which p4
+		// writes instead, and to nothing, which it leaves alone rather than create the file through it.
+		DMibTestSuite("LearnedCharsetEnviroLinks") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce learned charset link test: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr RunName = "{}_{}"_f << NProcess::NPlatform::fg_Process_GetCurrentUID() << g_AmbientRun.f_FetchAdd(1);
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceLearnedCharsetEnviroLinks" / RunName;
+			CStr Workspace = Root / "Workspace";
+			NFile::CFile::fs_CreateDirectory(Workspace);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root / "Server", CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			CStr Port = co_await Server(&CPerforceTestServer::f_GetPort);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr());
+			NFile::CFile::fs_WriteStringToFile(Workspace / ".p4config", "P4USER=tester\nP4CLIENT=PerforceTestServer_NoClient\nP4HOST=PerforceTestServer\n", false);
+
+			auto fInfo = [&](CStr const &_Enviro) -> TCFuture<CStr>
+				{
+					TCMap<CStr, CStr> Environment = {{"P4PORT", Port}, {"P4TICKETS", Connection.m_TicketFile}, {"P4ENVIRO", _Enviro}};
+					return g_Dispatch(fg_BlockingActor()) / [Workspace, Environment]() -> CStr
+						{
+							auto pClient = CPerforceClientThrow::fs_GetFromP4Config(Workspace / "A.cpp", Environment, {}, {});
+							if (!pClient)
+								return "No Perforce root";
+
+							pClient->f_NoThrow().f_Info();
+							return pClient->f_NoThrow().f_GetLastInfo("userName");
+						}
+					;
+				}
+			;
+			auto fIsLinkTo = [](CStr const &_Path, CStr const &_Target)
+				{
+					return (NFile::CFile::fs_GetAttributesOnLink(_Path) & NFile::EFileAttrib_Link) && NFile::CFile::fs_ResolveSymbolicLink(_Path) == _Target;
+				}
+			;
+
+			{
+				DMibTestPath("ToFile");
+				CStr Target = Root / "Target.p4enviro";
+				CStr Enviro = Root / "Linked.p4enviro";
+				NFile::CFile::fs_WriteStringToFile(Target, "P4EDITOR=kept\n", false);
+				NFile::CFile::fs_CreateSymbolicLink(Target, Enviro, NFile::EFileAttrib_File, NFile::ESymbolicLinkFlag_None);
+				auto Result = co_await fInfo(Enviro).f_Wrap();
+				DMibExpect(Result ? *Result : Result.f_GetExceptionStr(), ==, "tester");
+				DMibExpectTrue(fIsLinkTo(Enviro, Target));
+				CStr Contents = NFile::CFile::fs_ReadStringFromFile(Target, true);
+				DMibExpect(Contents.f_Find("P4EDITOR=kept"), >=, 0);
+				DMibExpect(Contents.f_Find("_CHARSET="), >=, 0);
+			}
+			{
+				DMibTestPath("ToNothing");
+				CStr Missing = Root / "Missing.p4enviro";
+				CStr Dangling = Root / "Dangling.p4enviro";
+				NFile::CFile::fs_CreateSymbolicLink(Missing, Dangling, NFile::EFileAttrib_File, NFile::ESymbolicLinkFlag_None);
+				auto Result = co_await fInfo(Dangling).f_Wrap();
+				DMibExpect(Result ? *Result : Result.f_GetExceptionStr(), ==, "tester");
+				DMibExpectTrue(fIsLinkTo(Dangling, Missing));
+				DMibExpectFalse(NFile::CFile::fs_FileExists(Missing));
+			}
+
+			co_return {};
+		};
+#endif
 
 		DMibTestSuite("TestServer") -> TCFuture<void>
 		{

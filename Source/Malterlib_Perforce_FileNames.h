@@ -18,6 +18,7 @@ namespace NMib::NPerforce
 	};
 
 	EPathType fg_GetPathType(NStr::CStr const &_Path);
+	bool fg_ReadRegularFile(NStr::CStr const &_Path, NStr::CAnsiStr &o_Contents);
 	NStr::CStr fg_DirectoryPrefix(NStr::CStr const &_Directory);
 	NStr::CStr fg_ParentDirectory(NStr::CStr const &_Path);
 	bool fg_IsLexicallyIn(NStr::CStr const &_Path, NStr::CStr const &_Directory, NStr::CStr &o_Relative);

@@ -8,6 +8,7 @@
 #include <Mib/Test/Exception>
 #include <Mib/Test/Test>
 
+#include <Mib/Perforce/FileNames>
 #include <Mib/Perforce/Ignore>
 #include <Mib/Perforce/TestServer>
 #include <Mib/Perforce/Wrapper>
@@ -2139,6 +2140,43 @@ namespace
 				auto Registry = CPerforceIgnore::fs_ReadRegistry({{"P4TEST_REGISTRY_PATH_T4_TEST", "Software\\Perforce\\Environment"}});
 				DMibExpectTrue(Registry.m_User.f_IsEmpty() && Registry.m_Machine.f_IsEmpty());
 			}
+#endif
+		};
+
+		// The settings files are read only where they are regular files, also through a symbolic link: anything else is refused by
+		// its type before it is opened, as a FIFO's open is what a writer waits for, and leaves the contents as they were.
+		DMibTestSuite("ReadRegularFile")
+		{
+			CStr Root = fg_MakeTestRoot("TestPerforceReadRegularFile");
+			fg_WriteFile(Root / "Regular", "Contents\n");
+			CFile::fs_CreateDirectory(Root / "Directory");
+
+			CAnsiStr Contents;
+			DMibExpectTrue(fg_ReadRegularFile(Root / "Regular", Contents));
+			DMibExpect(Contents, ==, "Contents\n");
+
+			auto fRefused = [&](CStr const &_Path)
+				{
+					CAnsiStr Kept = "Kept";
+					return !fg_ReadRegularFile(_Path, Kept) && Kept == "Kept";
+				}
+			;
+			DMibExpectTrue(fRefused(Root / "Missing"));
+			DMibExpectTrue(fRefused(Root / "Directory"));
+
+#ifndef DPlatformFamily_Windows
+			DMibAssert(mkfifo((Root / "Fifo").f_GetStr(), 0600), ==, 0);
+			DMibExpectTrue(fRefused(Root / "Fifo"));
+			DMibExpect(fg_GetPathType(Root / "Fifo"), ==, EPathType_Special);
+
+			CFile::fs_CreateSymbolicLink(Root / "Regular", Root / "LinkToRegular", EFileAttrib_File, ESymbolicLinkFlag_None);
+			CFile::fs_CreateSymbolicLink(Root / "Fifo", Root / "LinkToFifo", EFileAttrib_File, ESymbolicLinkFlag_None);
+			CFile::fs_CreateSymbolicLink(Root / "Missing", Root / "LinkToNothing", EFileAttrib_File, ESymbolicLinkFlag_None);
+			CAnsiStr Linked;
+			DMibExpectTrue(fg_ReadRegularFile(Root / "LinkToRegular", Linked));
+			DMibExpect(Linked, ==, "Contents\n");
+			DMibExpectTrue(fRefused(Root / "LinkToFifo"));
+			DMibExpectTrue(fRefused(Root / "LinkToNothing"));
 #endif
 		};
 

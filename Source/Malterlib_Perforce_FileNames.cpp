@@ -8,7 +8,10 @@
 #ifdef DPlatformFamily_Windows
 #	include <Windows.h>
 #else
+#	include <errno.h>
+#	include <fcntl.h>
 #	include <sys/stat.h>
+#	include <unistd.h>
 #endif
 
 #ifdef DCompiler_MSVC
@@ -46,6 +49,66 @@ namespace NMib::NPerforce
 		if (S_ISDIR(Stat.st_mode))
 			return EPathType_Directory;
 		return EPathType_Special;
+#endif
+	}
+
+	// The contents of a regular file, also through a symbolic link, or false when it is missing, isn't a regular file or can't
+	// be read: reading a FIFO without a writer blocks. Outside Windows the path is opened as it is, as p4 opens it, where
+	// CFile's functions would take a backslash for a separator.
+	bool fg_ReadRegularFile(NStr::CStr const &_Path, NStr::CAnsiStr &o_Contents)
+	{
+#ifdef DPlatformFamily_Windows
+		try
+		{
+			if (fg_GetPathType(_Path) != EPathType_File)
+				return false;
+
+			NContainer::CByteVector Data = NFile::CFile::fs_ReadFile(_Path);
+			o_Contents = NStr::CAnsiStr((ch8 const *)Data.f_GetArray(), Data.f_GetLen());
+		}
+		catch (NException::CException const &)
+		{
+			return false;
+		}
+
+		return true;
+#else
+		// A FIFO isn't opened at all, as an open is what a writer waits for. Without O_NONBLOCK, opening one that replaced the file
+		// in between waits for a writer, and fstat tells it.
+		if (fg_GetPathType(_Path) != EPathType_File)
+			return false;
+
+		int File = open(_Path.f_GetStr(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		if (File < 0)
+			return false;
+
+		auto Cleanup = g_OnScopeExit / [&]
+			{
+				close(File);
+			}
+		;
+
+		struct stat Stat;
+		if (fstat(File, &Stat) != 0 || !S_ISREG(Stat.st_mode))
+			return false;
+
+		NContainer::CByteVector Data;
+		constexpr umint c_ChunkSize = 65536;
+		while (true)
+		{
+			umint nUsed = Data.f_GetLen();
+			Data.f_SetLen(nUsed + c_ChunkSize);
+			ssize_t nRead = read(File, Data.f_GetArray() + nUsed, c_ChunkSize);
+			Data.f_SetLen(nUsed + (nRead > 0 ? umint(nRead) : 0));
+			if (nRead == 0)
+				break;
+			if (nRead < 0 && errno != EINTR)
+				return false;
+		}
+
+		o_Contents = NStr::CAnsiStr((ch8 const *)Data.f_GetArray(), Data.f_GetLen());
+
+		return true;
 #endif
 	}
 

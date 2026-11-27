@@ -25,11 +25,6 @@
 #	include <Mib/Core/PlatformSpecific/WindowsRegistry>
 #	include <Mib/Core/PlatformSpecific/WindowsString>
 #else
-#	include <errno.h>
-#	include <fcntl.h>
-#	include <limits.h>
-#	include <stdlib.h>
-#	include <sys/stat.h>
 #	include <unistd.h>
 #endif
 
@@ -352,62 +347,6 @@ namespace NMib::NPerforce
 				o_Dependencies[Resolved];
 			else
 				o_Dependencies[fg_DirectoryPrefix(Resolved) + Rest];
-#endif
-		}
-
-		// The contents of a regular file, also through a symbolic link, or false when it is missing, isn't a regular file or can't
-		// be read: reading a FIFO without a writer blocks. Outside Windows the path is opened as it is, as p4 opens it, where
-		// CFile's functions would take a backslash for a separator.
-		bool fg_ReadRegularFile(CStr const &_Path, CAnsiStr &o_Contents)
-		{
-#ifdef DPlatformFamily_Windows
-			try
-			{
-				if (fg_GetPathType(_Path) != EPathType_File)
-					return false;
-
-				CByteVector Data = CFile::fs_ReadFile(_Path);
-				o_Contents = CAnsiStr((ch8 const *)Data.f_GetArray(), Data.f_GetLen());
-			}
-			catch (CException const &)
-			{
-				return false;
-			}
-
-			return true;
-#else
-			// Without O_NONBLOCK, opening a FIFO waits for a writer.
-			int File = open(_Path.f_GetStr(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-			if (File < 0)
-				return false;
-
-			auto Cleanup = g_OnScopeExit / [&]
-				{
-					close(File);
-				}
-			;
-
-			struct stat Stat;
-			if (fstat(File, &Stat) != 0 || !S_ISREG(Stat.st_mode))
-				return false;
-
-			CByteVector Data;
-			constexpr umint c_ChunkSize = 65536;
-			while (true)
-			{
-				umint nUsed = Data.f_GetLen();
-				Data.f_SetLen(nUsed + c_ChunkSize);
-				ssize_t nRead = read(File, Data.f_GetArray() + nUsed, c_ChunkSize);
-				Data.f_SetLen(nUsed + (nRead > 0 ? umint(nRead) : 0));
-				if (nRead == 0)
-					break;
-				if (nRead < 0 && errno != EINTR)
-					return false;
-			}
-
-			o_Contents = CAnsiStr((ch8 const *)Data.f_GetArray(), Data.f_GetLen());
-
-			return true;
 #endif
 		}
 	}
