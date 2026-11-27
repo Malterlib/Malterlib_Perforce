@@ -468,6 +468,99 @@ namespace
 		};
 #endif
 
+		// Each file opened, with the changelist its open record is in: a numbered one, or the default, which only a session with
+		// tagged output tells, and not an opened stream spec.
+		DMibTestSuite("OpenedChangelists") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of the changelists of opened files: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceOpenedChangelists";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"Numbered.txt", "a\n"}, {"Default.txt", "b\n"}}
+					, CStr("Add the files")
+				)
+			;
+
+			CStr WorkRoot = Root / "Work";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+
+			auto Opened = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot]() -> TCVector<CStr>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Sync(WorkRoot / "...");
+						Client.f_OpenForEdit(WorkRoot / "Numbered.txt");
+						Client.f_OpenForEdit(WorkRoot / "Default.txt");
+						uint32 Changelist = Client.f_CreateChangelist("Numbered", {}, {"//Streams/Main/Numbered.txt"});
+						// p4 opened lists the stream's spec, which isn't a file, also for a path of a file.
+						Client.f_OpenStreamSpec();
+
+						TCVector<CPerforceClient::COpenedFile> Files;
+						if (!Client.f_NoThrow().f_GetOpenedFiles(WorkRoot / "...", CStr(), Files))
+							return {};
+
+						TCVector<CStr> Opened;
+						for (auto &File : Files)
+							Opened.f_Insert(File.m_DepotFile + " " + (File.m_Change == CStr::fs_ToStr(Changelist) ? CStr("numbered") : File.m_Change));
+						Opened.f_Sort();
+
+						TCVector<CPerforceClient::COpenedFile> None;
+						if (!Client.f_NoThrow().f_GetOpenedFiles(WorkRoot / "Missing.txt", CStr(), None) || !None.f_IsEmpty())
+							Opened.f_Insert("Missing.txt opened");
+
+						TCVector<CPerforceClient::COpenedFile> OneFile;
+						if (!Client.f_NoThrow().f_GetOpenedFiles(WorkRoot / "Default.txt", CStr(), OneFile) || OneFile.f_GetLen() != 1)
+							Opened.f_Insert("Default.txt not opened alone");
+
+						// f_GetOpened gives the same files, as their depot files.
+						TCVector<CStr> DepotFiles = Client.f_GetOpened(WorkRoot / "...", CStr());
+						DepotFiles.f_Sort();
+						if (DepotFiles != TCVector<CStr>{"//Streams/Main/Default.txt", "//Streams/Main/Numbered.txt"})
+							Opened.f_Insert("f_GetOpened differs");
+
+						// Only tagged output has the records read.
+						CPerforceClient::CConnectionInfo Untagged = Connection;
+						Untagged.m_bDisableTagging = true;
+						CPerforceClient UntaggedClient(Untagged);
+						TCVector<CPerforceClient::COpenedFile> UntaggedFiles;
+						if (!UntaggedClient.f_Login(CStr()))
+							Opened.f_Insert("Untagged login failed: " + UntaggedClient.f_GetLastError());
+						else if (UntaggedClient.f_GetOpenedFiles(WorkRoot / "...", CStr(), UntaggedFiles))
+							Opened.f_Insert("Untagged listed");
+						else if (UntaggedClient.f_GetLastError() != "Listing the opened files needs a session with tagged output")
+							Opened.f_Insert("Untagged failed with: " + UntaggedClient.f_GetLastError());
+
+						return Opened;
+					}
+					% "Failed to list the opened files"
+				)
+			;
+
+			DMibExpect(Opened, ==, (TCVector<CStr>{"//Streams/Main/Default.txt default", "//Streams/Main/Numbered.txt numbered"}));
+
+			co_return {};
+		};
+
 		// f_DepotFileStats and f_GetTextFileContentsIfExists tell what the depot doesn't have from a lookup that fails: a file it has
 		// no revision of, one outside the workspace's root, a revision at a changelist from before the file was added, a revision that
 		// deletes the file and #have of a file the workspace hasn't synced are absent, while an empty file is there, and empty.

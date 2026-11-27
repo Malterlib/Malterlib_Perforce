@@ -4131,12 +4131,34 @@ namespace NMib::NPerforce
 	}
 #endif
 
+	// The depot files of the files opened, as f_GetOpenedFiles gives them.
 	bool CPerforceClient::f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &o_Opened)
 	{
-		DCheckApi(CStr::CFormat("GetOpened({}, {})") << _Path << _Client);
+		TCVector<COpenedFile> Files;
+		if (!f_GetOpenedFiles(_Path, _Client, Files))
+			return false;
+
+		for (auto &File : Files)
+			o_Opened.f_Insert(File.m_DepotFile);
+
+		return true;
+	}
+
+	// The files opened at the path, or all, in _Client's workspace, or this session's, each with the changelist and action p4 opened
+	// gives its open record.
+	bool CPerforceClient::f_GetOpenedFiles(CStr const &_Path, CStr const &_Client, TCVector<COpenedFile> &o_Opened)
+	{
+		DCheckApi(CStr::CFormat("GetOpenedFiles({}, {})") << _Path << _Client);
+
+		// Only tagged output has the records read.
+		if (mp_ConnectionInfo.m_bDisableTagging)
+		{
+			mp_LastError = "Listing the opened files needs a session with tagged output";
+			fOnError();
+			return false;
+		}
 
 		TCVector<CStr> Arguments;
-
 		if (!_Client.f_IsEmpty())
 		{
 			Arguments.f_Insert("-C");
@@ -4145,26 +4167,34 @@ namespace NMib::NPerforce
 		if (!_Path.f_IsEmpty())
 			Arguments.f_Insert(_Path);
 
-		fp_Run("opened", Arguments);
-
-		for (CStr const &CurInfo : mp_pClient->m_Infos)
+		for (auto const &Entry : CP4Client::fs_RunOrdered(*this, "opened", Arguments))
 		{
-			CStr Command;
-			CStr Data;
-			(CStr::CParse("{} {}") >> Command >> Data).f_Parse(CurInfo);
+			if (Entry.m_bError)
+				continue;
 
-			if (Command == "depotFile")
-				o_Opened.f_Insert(Data);
+			COpenedFile File;
+			for (auto const &Field : Entry.m_Fields)
+			{
+				if (Field.m_Name == "depotFile")
+					File.m_DepotFile = Field.m_Value;
+				else if (Field.m_Name == "change")
+					File.m_Change = Field.m_Value;
+				else if (Field.m_Name == "action")
+					File.m_Action = Field.m_Value;
+			}
+
+			// An opened stream spec is a record without a depot file, also when the path names a file.
+			if (!File.m_DepotFile.f_IsEmpty())
+				o_Opened.f_Insert(fg_Move(File));
 		}
 
-		if (mp_pClient->m_bError)
+		// No file opened, or none at the path, is a warning.
+		if (mp_pClient->m_bError && !mp_pClient->f_HasOnlyErrors({&MsgDm::ExOPENCLIENT, &MsgDm::ExFILE}))
 		{
-			if (f_GetLastError() == "File(s) not opened on this client." || f_GetLastError() == _Path + " - file(s) not opened on this client.")
-				return true;
-
 			fOnError();
 			return false;
 		}
+
 		return true;
 	}
 
@@ -4427,6 +4457,21 @@ namespace NMib::NPerforce
 		Arguments.f_Insert(_StreamName);
 
 		fp_Run("stream", Arguments);
+
+		if (mp_pClient->m_bError)
+		{
+			fOnError();
+			return false;
+		}
+		return true;
+	}
+
+	// Opens the spec of the workspace's stream in its default changelist, as p4 stream edit does.
+	bool CPerforceClient::f_OpenStreamSpec()
+	{
+		DCheckApi("OpenStreamSpec()");
+
+		fp_Run("stream", TCVector<CStr>{"edit"});
 
 		if (mp_pClient->m_bError)
 		{
@@ -7419,6 +7464,11 @@ namespace NMib::NPerforce
 	void CPerforceClientThrow::f_DeleteStream(CStr const &_StreamName)
 	{
 		fp_Throw(mp_Client.f_DeleteStream(_StreamName));
+	}
+
+	void CPerforceClientThrow::f_OpenStreamSpec()
+	{
+		fp_Throw(mp_Client.f_OpenStreamSpec());
 	}
 
 	void CPerforceClientThrow::f_Obliterate(CStr const &_Path)

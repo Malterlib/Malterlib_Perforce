@@ -300,6 +300,13 @@ namespace NMib::NPerforce
 			uint32 m_EndFromRev = 0;
 		};
 
+		struct COpenedFile
+		{
+			CStr m_DepotFile;
+			CStr m_Change; // The changelist the file is opened in: default, or its number
+			CStr m_Action; // What the file is opened for, like 'edit', 'add' or 'move/delete'
+		};
+
 		CPerforceClient(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
 		CPerforceClient(CConnectionInfo const &_Info);
 		~CPerforceClient();
@@ -559,6 +566,7 @@ namespace NMib::NPerforce
 		bool f_GetStream(CStr const &_StreamName, CStream &_Stream);
 
 		bool f_DeleteStream(CStr const &_StreamName);
+		bool f_OpenStreamSpec();
 
 		bool f_Obliterate(CStr const &_Path);
 
@@ -572,6 +580,7 @@ namespace NMib::NPerforce
 		bool f_FindStreamsByViewMatch(TCVector<CStr> const &_Views, TCVector<CStr> &o_Streams);
 
 		bool f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &o_Opened);
+		bool f_GetOpenedFiles(CStr const &_Path, CStr const &_Client, TCVector<COpenedFile> &o_Opened);
 
 		bool f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
 		bool f_DeleteWorkspace(CStr const &_Workspace);
@@ -877,6 +886,7 @@ namespace NMib::NPerforce
 		CPerforceClient::CStream f_GetStream(CStr const &_StreamName);
 
 		void f_DeleteStream(CStr const &_StreamName);
+		void f_OpenStreamSpec();
 
 		void f_Obliterate(CStr const &_Path);
 
