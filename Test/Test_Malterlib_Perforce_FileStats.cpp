@@ -590,7 +590,7 @@ namespace
 		};
 
 		// A session of a server without Unicode sends paths in the command charset, the code page on Windows, also to p4 where,
-		// files and changes, and reads them back the same way, and the workspace's root, which the login gives.
+		// files and changes, also a workspace's name, and reads them back the same way, and the workspace's root, which the login gives.
 		DMibTestSuite("NonAsciiPaths") -> TCFuture<void>
 		{
 			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
@@ -624,8 +624,9 @@ namespace
 			int64 Changelist = co_await Server(&CPerforceTestServer::f_SubmitFiles, CStr("//Streams/Main"), TCVector<CPerforceTestServer::CFile>{{FileName, "a\n"}}, CStr("Add the file"));
 
 			CStr WorkRoot = Root / ("W{}rk"_f << Character);
-			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
-			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+			CStr Workspace = "TestW{}rk"_f << Character;
+			co_await Server(&CPerforceTestServer::f_CreateClient, Workspace, CStr("//Streams/Main"), WorkRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, Workspace);
 
 			struct CResults
 			{
@@ -634,13 +635,15 @@ namespace
 				CStr m_WorkspacePath;
 				TCVector<CStr> m_HeadFiles;
 				int64 m_HeadChangelist = 0;
+				TCVector<uint32> m_PendingChangelists;
+				uint32 m_Changelist = 0;
 				CStr m_ClientRoot;
 				CStr m_MovedClientRoot;
 			};
 
 			auto Results = co_await
 				(
-					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot, Root, FileName, DepotFile, Character]() -> CResults
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot, Root, FileName, DepotFile, Character, Workspace]() -> CResults
 					{
 						CPerforceClientThrow Client(Connection);
 						Client.f_Login(CStr());
@@ -653,13 +656,20 @@ namespace
 							Results.m_HeadFiles.f_Insert(File.m_File);
 						Results.m_HeadChangelist = Client.f_GetHeadChangelist(DepotFile);
 
+						// The workspace's pending changelists, which p4 changes is asked for by the workspace's name.
+						Client.f_Sync(WorkRoot / "...");
+						Client.f_OpenForEdit(WorkRoot / FileName);
+						Results.m_Changelist = Client.f_CreateChangelist("Pending", {}, {DepotFile});
+						for (auto &Changelist : Client.f_GetChangelists(DepotFile, false, Workspace, "pending"))
+							Results.m_PendingChangelists.f_Insert(Changelist.m_ChangeID);
+
 						// The root the login gives is the one asked for until a client's spec is written, which can move it.
 						Results.m_ClientRoot = Client.f_GetClientRoot();
 						CPerforceClient::CClient Spec;
 						Spec.m_Root = Root / ("M{}ved"_f << Character);
 						Spec.m_Description = "The workspace moved.";
 						Spec.m_Stream = "//Streams/Main";
-						Client.f_SetClient("TestWork", Spec);
+						Client.f_SetClient(Workspace, Spec);
 						Results.m_MovedClientRoot = Client.f_GetClientRoot();
 
 						return Results;
@@ -670,7 +680,8 @@ namespace
 
 			DMibExpect(Results.m_DepotPath, ==, DepotFile);
 			DMibExpect(Results.m_ClientPath, ==, WorkRoot / FileName);
-			DMibExpect(Results.m_WorkspacePath, ==, "//TestWork/" + FileName);
+			DMibExpect(Results.m_WorkspacePath, ==, CStr("//{}/{}"_f << Workspace << FileName));
+			DMibExpect(Results.m_PendingChangelists, ==, TCVector<uint32>{Results.m_Changelist});
 			DMibExpect(Results.m_HeadFiles, ==, TCVector<CStr>{DepotFile});
 			DMibExpect(Results.m_HeadChangelist, ==, Changelist);
 			DMibExpect(Results.m_ClientRoot, ==, WorkRoot);

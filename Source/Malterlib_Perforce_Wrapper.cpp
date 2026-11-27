@@ -2425,7 +2425,7 @@ namespace NMib::NPerforce
 		if (!_Workspace.f_IsEmpty())
 		{
 			Commands.f_Insert("-c");
-			Commands.f_Insert(f_EncodeStr(_Workspace));
+			Commands.f_Insert(_Workspace);
 		}
 		if (_bIncludeIntegrated)
 			Commands.f_Insert("-i");
@@ -2435,7 +2435,7 @@ namespace NMib::NPerforce
 		if (!_Status.f_IsEmpty())
 		{
 			Commands.f_Insert("-s");
-			Commands.f_Insert(f_EncodeStr(_Status));
+			Commands.f_Insert(_Status);
 		}
 
 		if (!_Path.f_IsEmpty())
