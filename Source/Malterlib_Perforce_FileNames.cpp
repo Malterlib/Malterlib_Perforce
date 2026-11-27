@@ -35,11 +35,24 @@ namespace NMib::NPerforce
 	EPathType fg_GetPathType(NStr::CStr const &_Path)
 	{
 #ifdef DPlatformFamily_Windows
-		if (NFile::CFile::fs_FileExists(_Path, NFile::EFileAttrib_Directory))
-			return EPathType_Directory;
-		if (NFile::CFile::fs_FileExists(_Path, NFile::EFileAttrib_File))
-			return EPathType_File;
-		return EPathType_Missing;
+		// The attributes of a symbolic link are its own, which a link to nothing has too, so the link is followed by an open. A path
+		// that is gone, also since it was found, is missing.
+		try
+		{
+			auto Attributes = NFile::CFile::fs_GetAttributesOnLink(_Path);
+			EPathType Type = (Attributes & NFile::EFileAttrib_Directory) ? EPathType_Directory : EPathType_File;
+			if (Attributes & NFile::EFileAttrib_Link)
+			{
+				NFile::CFile Target;
+				Target.f_Open(_Path, NFile::EFileOpen_ReadAttribs | (Type == EPathType_Directory ? NFile::EFileOpen_Directory : NFile::EFileOpen_None));
+			}
+
+			return Type;
+		}
+		catch (NException::CException const &)
+		{
+			return EPathType_Missing;
+		}
 #else
 		struct stat Stat;
 		if (stat(_Path.f_GetStr(), &Stat) != 0)
