@@ -590,7 +590,7 @@ namespace
 		};
 
 		// A session of a server without Unicode sends paths in the command charset, the code page on Windows, also to p4 where,
-		// files and changes, and reads them back the same way.
+		// files and changes, and reads them back the same way, and the workspace's root, which the login gives.
 		DMibTestSuite("NonAsciiPaths") -> TCFuture<void>
 		{
 			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
@@ -634,11 +634,13 @@ namespace
 				CStr m_WorkspacePath;
 				TCVector<CStr> m_HeadFiles;
 				int64 m_HeadChangelist = 0;
+				CStr m_ClientRoot;
+				CStr m_MovedClientRoot;
 			};
 
 			auto Results = co_await
 				(
-					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot, FileName, DepotFile, Character]() -> CResults
+					g_Dispatch(fg_BlockingActor()) / [Connection, WorkRoot, Root, FileName, DepotFile, Character]() -> CResults
 					{
 						CPerforceClientThrow Client(Connection);
 						Client.f_Login(CStr());
@@ -651,6 +653,15 @@ namespace
 							Results.m_HeadFiles.f_Insert(File.m_File);
 						Results.m_HeadChangelist = Client.f_GetHeadChangelist(DepotFile);
 
+						// The root the login gives is the one asked for until a client's spec is written, which can move it.
+						Results.m_ClientRoot = Client.f_GetClientRoot();
+						CPerforceClient::CClient Spec;
+						Spec.m_Root = Root / ("M{}ved"_f << Character);
+						Spec.m_Description = "The workspace moved.";
+						Spec.m_Stream = "//Streams/Main";
+						Client.f_SetClient("TestWork", Spec);
+						Results.m_MovedClientRoot = Client.f_GetClientRoot();
+
 						return Results;
 					}
 					% "Failed to look up the paths"
@@ -662,6 +673,8 @@ namespace
 			DMibExpect(Results.m_WorkspacePath, ==, "//TestWork/" + FileName);
 			DMibExpect(Results.m_HeadFiles, ==, TCVector<CStr>{DepotFile});
 			DMibExpect(Results.m_HeadChangelist, ==, Changelist);
+			DMibExpect(Results.m_ClientRoot, ==, WorkRoot);
+			DMibExpect(Results.m_MovedClientRoot, ==, Root / ("M{}ved"_f << Character));
 
 			co_return {};
 		};

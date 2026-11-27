@@ -103,6 +103,8 @@ namespace NMib::NPerforce
 		CStr m_DiffClientFile;                                // With m_fOnDiff, the workspace file of the last record p4 diff sent
 		CStr m_DiffDepotFile;                                 // The depot file of that record, which it sends of a file before it diffs it
 		uint32 m_DiffRevision = 0;
+		CStr m_ClientRoot;                                    // The clientRoot of the login's p4 info, while m_bClientRootKnown
+		bool m_bClientRootKnown = false;                      // Until the wrapper writes a client's spec, which can move the root
 	};
 
 	CPerforceClient::CP4Client::CP4Client(CPerforceClient *_pClient)
@@ -1243,6 +1245,8 @@ namespace NMib::NPerforce
 				mp_ActiveClient = mp_pClient->f_GetInfo("clientName");
 				mp_ActiveUser = mp_pClient->f_GetInfo("userName");
 				mp_ActiveVersion = mp_pClient->f_GetInfo("serverVersion");
+				mp_pClient->m_ClientRoot = mp_pClient->f_GetInfo("clientRoot");
+				mp_pClient->m_bClientRootKnown = true;
 
 				CStr Program;
 				CStr Platform;
@@ -1342,6 +1346,7 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_SetClient(CStr const &_ClientName, CClient const &_Client)
 	{
 		DCheckApi(CStr::CFormat("SetClient({})") << _ClientName);
+		mp_pClient->m_bClientRootKnown = false;
 
 		// Root and AltRoots are line fields, which take a value as it is, spaces included, but where a # starts a comment that
 		// would cut the root short. p4d refuses a # in a root anyway.
@@ -4229,6 +4234,7 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream)
 	{
 		DCheckApi(CStr::CFormat("SwitchWorkspaceStream({}, {})") << _Workspace << _Stream);
+		mp_pClient->m_bClientRootKnown = false;
 
 		TCVector<CStr> Arguments;
 
@@ -4250,6 +4256,7 @@ namespace NMib::NPerforce
 	bool CPerforceClient::f_DeleteWorkspace(CStr const &_Workspace)
 	{
 		DCheckApi(CStr::CFormat("DeleteWorkspace({})") << _Workspace);
+		mp_pClient->m_bClientRootKnown = false;
 
 		TCVector<CStr> Arguments;
 
@@ -4962,6 +4969,7 @@ namespace NMib::NPerforce
 		}
 
 		DCheckApi(CStr::CFormat("UpdateStreamClient({}, {}, {}, {}, {})") << _ClientName << _Root << _AltRoot << _Template << _Stream);
+		mp_pClient->m_bClientRootKnown = false;
 
 		char const *Commands[] = {"-i", nullptr};
 		mp_pClient->m_PromtOverride = ClientData;
@@ -5256,6 +5264,7 @@ namespace NMib::NPerforce
 		}
 
 		DCheckApi(CStr::CFormat("UpdateClient({}, {}, {}, {})") << _ClientName << _Root << _AltRoot << _Template);
+		mp_pClient->m_bClientRootKnown = false;
 
 		char const *Commands[] = {"-i", nullptr};
 		mp_pClient->m_PromtOverride = ClientData;
@@ -5370,6 +5379,7 @@ namespace NMib::NPerforce
 		}
 
 		DCheckApi(CStr::CFormat("CreateStreamClient({}, {}, {}, {}, {})") << _ClientName << _Root << _AltRoot << _Template << _Stream);
+		mp_pClient->m_bClientRootKnown = false;
 
 		char const *Commands[] = {"-i", nullptr};
 		mp_pClient->m_PromtOverride = ClientData;
@@ -5475,6 +5485,7 @@ namespace NMib::NPerforce
 		}
 
 		DCheckApi(CStr::CFormat("CreateClient({}, {}, {}, {})") << _ClientName << _Root << _AltRoot << _Template);
+		mp_pClient->m_bClientRootKnown = false;
 
 		char const *Commands[] = {"-i", nullptr};
 		mp_pClient->m_PromtOverride = ClientData;
@@ -6188,9 +6199,16 @@ namespace NMib::NPerforce
 		}
 	}
 
+	// The root of the workspace, as the login's p4 info gave it, unless the wrapper wrote a client's spec since.
 	bool CPerforceClient::f_GetClientRoot(CStr &_Root)
 	{
 		DCheckApi("GetClientRoot");
+		if (mp_pClient->m_bClientRootKnown)
+		{
+			_Root = mp_pClient->m_ClientRoot;
+			return true;
+		}
+
 		char const *Commands[] = {0};
 		mp_pAPI->SetArgv(0, (char * const *)Commands);
 		fp_Run("info");
@@ -6203,6 +6221,8 @@ namespace NMib::NPerforce
 		else
 		{
 			_Root = mp_pClient->f_GetInfo("clientRoot");
+			mp_pClient->m_ClientRoot = _Root;
+			mp_pClient->m_bClientRootKnown = true;
 			return true;
 		}
 	}
