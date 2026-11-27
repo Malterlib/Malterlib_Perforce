@@ -688,6 +688,111 @@ namespace
 			co_return {};
 		};
 
+		// p4 diff names the depot revision it compares a file with, in a record of each file, which a result has only for its own
+		// file: of a moved file, the revision the workspace has of the file it is moved from, also once a sync advanced it past the
+		// one the move started from.
+		DMibTestSuite("DiffComparedRevision") -> TCFuture<void>
+		{
+			if (CPerforceTestServer::fs_FindServerExecutable().f_IsEmpty())
+			{
+				DMibConOut("{}\n", "Skipping the Perforce test of the revision p4 diff compares with: p4d was not found in PATH");
+				co_return {};
+			}
+
+			CStr Root = NFile::CFile::fs_GetProgramDirectory() / "TestPerforceDiffComparedRevision";
+			if (NFile::CFile::fs_FileExists(Root, NFile::EFileAttrib_Directory))
+				NFile::CFile::fs_DeleteDirectoryRecursive(Root, true);
+			NFile::CFile::fs_CreateDirectory(Root);
+			NTest::fg_TestAddCleanupPath(Root);
+
+			TCActor<CPerforceTestServer> Server = fg_Construct<CPerforceTestServer>();
+			co_await Server(&CPerforceTestServer::f_Start, Root, CStr("tester"));
+			auto ServerCleanup = co_await fg_AsyncDestroy(Server);
+			co_await Server(&CPerforceTestServer::f_CreateStreamDepot, CStr("Streams"));
+			co_await Server(&CPerforceTestServer::f_CreateMainlineStream, CStr("//Streams/Main"));
+			co_await Server
+				(
+					&CPerforceTestServer::f_SubmitFiles
+					, CStr("//Streams/Main")
+					, TCVector<CPerforceTestServer::CFile>{{"Source.txt", "a\nb\n"}, {"Changed.txt", "c\n"}, {"Unchanged.txt", "u\n"}, {" Spaced.txt", "s\n"}}
+					, CStr("Add the file")
+				)
+			;
+
+			CStr WorkRoot = Root / "Work";
+			CStr OtherRoot = Root / "Other";
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("TestWork"), CStr("//Streams/Main"), WorkRoot);
+			co_await Server(&CPerforceTestServer::f_CreateClient, CStr("OtherWork"), CStr("//Streams/Main"), OtherRoot);
+			auto Connection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("TestWork"));
+			auto OtherConnection = co_await Server(&CPerforceTestServer::f_GetConnectionInfo, CStr("OtherWork"));
+
+			auto Diffs = co_await
+				(
+					g_Dispatch(fg_BlockingActor()) / [Connection, OtherConnection, WorkRoot, OtherRoot]() -> TCVector<CPerforceClient::CFileDiff>
+					{
+						CPerforceClientThrow Client(Connection);
+						Client.f_Login(CStr());
+						Client.f_Sync(WorkRoot / "...");
+						Client.f_OpenForEdit(WorkRoot / "Source.txt");
+						Client.f_Move(WorkRoot / "Source.txt", WorkRoot / "Moved.txt");
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / "Moved.txt", CPerforceTestServer::fs_WorkspaceText("a\nc\n"), false);
+						Client.f_OpenForEdit(WorkRoot / "Unchanged.txt");
+						Client.f_OpenForEdit(WorkRoot / "Changed.txt");
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / "Changed.txt", CPerforceTestServer::fs_WorkspaceText("c2\n"), false);
+						Client.f_OpenForEdit(WorkRoot / " Spaced.txt");
+						NFile::CFile::fs_WriteStringToFile(WorkRoot / " Spaced.txt", CPerforceTestServer::fs_WorkspaceText("s2\n"), false);
+
+						CPerforceClientThrow Other(OtherConnection);
+						Other.f_Login(CStr());
+						Other.f_Sync(OtherRoot / "...");
+						Other.f_OpenForEdit(OtherRoot / "Source.txt", "binary");
+						NFile::CFile::fs_WriteStringToFile(OtherRoot / "Source.txt", "a\nb\nx\ny\nz\n", false);
+						Other.f_Submit(OtherRoot / "Source.txt", "Change the file and make it binary");
+
+						Client.f_NoThrow().f_Sync(WorkRoot / "...");
+						// Only tagged output names the revisions compared.
+						CPerforceClient::CConnectionInfo Untagged = Connection;
+						Untagged.m_bDisableTagging = true;
+						CPerforceClient UntaggedClient(Untagged);
+						if (!UntaggedClient.f_Login(CStr()))
+							DMibError("Untagged login failed: " + UntaggedClient.f_GetLastError());
+						TCVector<CPerforceClient::CFileDiff> UntaggedDiffs;
+						if (UntaggedClient.f_DiffOpenedFiles({WorkRoot / "Changed.txt"}, UntaggedDiffs))
+							return {};
+						if (UntaggedClient.f_GetLastError() != "Diffing the opened files needs a session with tagged output")
+							DMibError("Untagged diff failed with: " + UntaggedClient.f_GetLastError());
+
+						return Client.f_DiffOpenedFiles({WorkRoot / "Unchanged.txt", WorkRoot / "Moved.txt", WorkRoot / "Changed.txt", WorkRoot / " Spaced.txt"});
+					}
+					% "Failed to diff the moved file"
+				)
+			;
+
+			// Each result has the record of its own file.
+			TCMap<CStr, CPerforceClient::CFileDiff const *> ByName;
+			for (auto const &Diff : Diffs)
+				ByName[NFile::CFile::fs_GetFile(Diff.m_File)] = &Diff;
+			DMibAssertTrue(ByName.f_FindEqual("Moved.txt"));
+			DMibAssertTrue(ByName.f_FindEqual("Changed.txt"));
+			DMibAssertTrue(ByName.f_FindEqual(" Spaced.txt"));
+			DMibExpect((*ByName.f_FindEqual(" Spaced.txt"))->m_DepotFile, ==, "//Streams/Main/ Spaced.txt");
+			auto const &Moved = **ByName.f_FindEqual("Moved.txt");
+			DMibExpect(Moved.m_DepotFile, ==, "//Streams/Main/Source.txt");
+			DMibExpect(Moved.m_Revision, ==, 2u);
+			DMibAssert(Moved.m_Ranges.f_GetLen(), ==, 1u);
+			DMibExpect(Moved.m_Ranges[0].m_nOld, ==, 4u);
+			auto const &Changed = **ByName.f_FindEqual("Changed.txt");
+			DMibExpect(Changed.m_DepotFile, ==, "//Streams/Main/Changed.txt");
+			DMibExpect(Changed.m_Revision, ==, 1u);
+			if (auto *pUnchanged = ByName.f_FindEqual("Unchanged.txt"))
+			{
+				DMibExpect((*pUnchanged)->m_DepotFile, ==, "//Streams/Main/Unchanged.txt");
+				DMibExpect((*pUnchanged)->m_Revision, ==, 1u);
+			}
+
+			co_return {};
+		};
+
 		// The types of several revisions from one fstat are in the order asked, also two revisions of one file, and a revision the
 		// workspace has. A revision that doesn't exist, or that the workspace doesn't have, has none, and the others keep theirs, also a
 		// later revision asked of a file the workspace has no revision of, and one after #none, and #have of a file outside the

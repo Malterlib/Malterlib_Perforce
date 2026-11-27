@@ -100,6 +100,9 @@ namespace NMib::NPerforce
 		TCFunction<CStr (CStr const &_Prompt, Error *_pError)> m_fOnPrompt;
 		CStr m_PromtOverride;
 		TCVector<COrderedEntry> *m_pOrderedEntries = nullptr; // Borrowed by the command that sets it, null otherwise; takes records and warnings in order
+		CStr m_DiffClientFile;                                // With m_fOnDiff, the workspace file of the last record p4 diff sent
+		CStr m_DiffDepotFile;                                 // The depot file of that record, which it sends of a file before it diffs it
+		uint32 m_DiffRevision = 0;
 	};
 
 	CPerforceClient::CP4Client::CP4Client(CPerforceClient *_pClient)
@@ -292,6 +295,16 @@ namespace NMib::NPerforce
 	// specFormatted, which only the protocol uses.
 	void CPerforceClient::CP4Client::OutputStat(StrDict *_pVariables)
 	{
+		if (m_fOnDiff)
+		{
+			StrPtr *pClientFile = _pVariables->GetVar("clientFile");
+			StrPtr *pDepotFile = _pVariables->GetVar("depotFile");
+			StrPtr *pRevision = _pVariables->GetVar("rev");
+			m_DiffClientFile = pClientFile ? m_pClient->f_DecodeStr(CStr(pClientFile->Text(), pClientFile->Length())) : CStr();
+			m_DiffDepotFile = pDepotFile ? m_pClient->f_DecodeStr(CStr(pDepotFile->Text(), pDepotFile->Length())) : CStr();
+			m_DiffRevision = pRevision ? CStr(pRevision->Text(), pRevision->Length()).f_ToInt(uint32(0)) : 0;
+		}
+
 		if (!m_pOrderedEntries)
 			return ClientUser::OutputStat(_pVariables);
 
@@ -380,6 +393,26 @@ namespace NMib::NPerforce
 
 		CFileDiff Diff;
 		Diff.m_File = fg_DecodePerforceString(CAnsiStr(_pFile2->Name()), fg_FileNameEncoding(m_pClient->mp_FileNamesCharset));
+
+		// p4 diff sends a record of a file before the revision it diffs, which is taken only for the file it names, so that a record
+		// of a file it didn't diff never stands for another's. The names are compared with Malterlib's separators on Windows and
+		// nothing else changed, as names that differ only in their whitespace are other files, and elsewhere a backslash is a character
+		// of a name.
+		CStr RecordFile = fg_MalterlibPath(m_DiffClientFile);
+		CStr DiffFile = fg_MalterlibPath(Diff.m_File);
+#ifdef DPlatformFamily_Windows
+		bool bRecordOfFile = RecordFile && RecordFile.f_CmpNoCase(DiffFile) == 0;
+#else
+		bool bRecordOfFile = RecordFile && RecordFile == DiffFile;
+#endif
+		if (bRecordOfFile)
+		{
+			Diff.m_DepotFile = fg_Move(m_DiffDepotFile);
+			Diff.m_Revision = m_DiffRevision;
+		}
+		m_DiffClientFile.f_Clear();
+		m_DiffDepotFile.f_Clear();
+		m_DiffRevision = 0;
 		if (!_pFile1->IsTextual() || !_pFile2->IsTextual())
 		{
 			Diff.m_bBinary = true;
@@ -5690,7 +5723,8 @@ namespace NMib::NPerforce
 
 	// The differences of the opened files from the revisions p4 diff compares them with: a file moved to another path with its
 	// source, one a sync has scheduled a resolve for with the revision its changes are based on. Each file p4 diff compares gives
-	// a result, also one without differences.
+	// a result, also one without differences, with the depot file and revision compared from p4's record of the file, which a
+	// result lacks only where p4 sent none of it before diffing it. An untagged session, which gets no records, fails.
 	bool CPerforceClient::f_DiffOpenedFiles(TCVector<CStr> const &_Files, TCVector<CFileDiff> &o_Diffs)
 	{
 		DCheckApi("DiffOpenedFiles");
@@ -5699,6 +5733,17 @@ namespace NMib::NPerforce
 		if (_Files.f_IsEmpty())
 			return true;
 
+		// Only tagged output has the records that name the revisions compared.
+		if (mp_ConnectionInfo.m_bDisableTagging)
+		{
+			mp_LastError = "Diffing the opened files needs a session with tagged output";
+			fOnError();
+			return false;
+		}
+
+		mp_pClient->m_DiffClientFile.f_Clear();
+		mp_pClient->m_DiffDepotFile.f_Clear();
+		mp_pClient->m_DiffRevision = 0;
 		mp_pClient->m_fOnDiff = [&](CFileDiff &&_Diff)
 			{
 				o_Diffs.f_Insert(fg_Move(_Diff));

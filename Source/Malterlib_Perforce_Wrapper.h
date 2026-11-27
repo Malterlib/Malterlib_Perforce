@@ -220,6 +220,8 @@ namespace NMib::NPerforce
 		struct CFileDiff
 		{
 			CStr m_File;                                                       // The workspace file p4 diff compares, or the second depot file and revision p4 diff2 compares
+			CStr m_DepotFile;                                                  // From p4 diff: the depot file whose m_Revision it compares the workspace file with
+			uint32 m_Revision = 0;                                             // From p4 diff's record of the file, empty with m_DepotFile where p4 sent none
 			CStr m_Status;                                                     // From p4 diff2: identical, content, types, left only or right only
 			CStr m_Type1;                                                      // From p4 diff2: the type of the first revision, empty where there is none
 			CStr m_Type2;                                                      // From p4 diff2: the type of the second revision, empty where there is none
