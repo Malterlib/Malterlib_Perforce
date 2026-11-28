@@ -38,6 +38,8 @@ namespace
 	using namespace NMib;
 	using namespace NMib::NStr;
 	using namespace NMib::NContainer;
+	using namespace NMib::NStorage;
+	using namespace NMib::NException;
 	using namespace NMib::NFile;
 	using namespace NMib::NPerforce;
 

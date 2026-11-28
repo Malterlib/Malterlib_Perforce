@@ -32,51 +32,54 @@ namespace NMib::NPerforce
 			auto operator <=> (CIntegrationResult const &_Right) const noexcept = default;
 
 			EAction m_Action;
-			CStr m_From;
-			CStr m_To;
+			NStr::CStr m_From;
+			NStr::CStr m_To;
 			uint32 m_StartFromRev = 0;
 			uint32 m_EndFromRev = 0;
 		};
 
 		struct CConnectionInfo
 		{
-			CStr m_Server;
-			CStr m_User;
-			CStr m_Client;
-			CStr m_Host;
-			CStr m_TrustedCertificateDigest;
-			CStr m_WorkingDirectory;                               // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
-			CStr m_TicketFile;
-			CStr m_EnviroFile;
-			CStr m_Charset;                                        // Overrides P4CHARSET, like "none" or "utf8"
-			NStorage::TCOptional<CStr> m_CommandCharset;           // Overrides P4COMMANDCHARSET, as p4's -Q; empty for none
-			CStr m_IgnoreFiles;                                    // Overrides P4IGNORE; "unset" for none
-			CStr m_ClientPath;                                     // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
-			NStorage::TCOptional<CStr> m_ConfigName;               // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
-			NStorage::TCOptional<TCMap<CStr, CStr>> m_Environment; // The environment the settings are read from in place of the process's
-			fp64 m_Timeout = 0.0;                                  // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
+			NStr::CStr m_Server;
+			NStr::CStr m_User;
+			NStr::CStr m_Client;
+			NStr::CStr m_Host;
+			NStr::CStr m_TrustedCertificateDigest;
+			NStr::CStr m_WorkingDirectory;                     // Whose P4CONFIG files give what the connection leaves unset; the current directory when empty
+			NStr::CStr m_TicketFile;
+			NStr::CStr m_EnviroFile;
+			NStr::CStr m_Charset;                              // Overrides P4CHARSET, like "none" or "utf8"
+			NStorage::TCOptional<NStr::CStr> m_CommandCharset; // Overrides P4COMMANDCHARSET, as p4's -Q; empty for none
+			NStr::CStr m_IgnoreFiles;                          // Overrides P4IGNORE; "unset" for none
+			NStr::CStr m_ClientPath;                           // Overrides P4CLIENTPATH; "unset" for no restriction, which clears P4INITROOT too
+			NStorage::TCOptional<NStr::CStr> m_ConfigName;     // Overrides P4CONFIG, whose files in m_WorkingDirectory and above it give settings; empty for none
+
+			// The environment the settings are read from in place of the process's
+			NStorage::TCOptional<NContainer::TCMap<NStr::CStr, NStr::CStr>> m_Environment;
+
+			fp64 m_Timeout = 0.0;                  // Seconds the server may take to answer, or zero for no limit. The API's blocking TCP connect is not bounded
 			bool m_bDisableTagging = false;
-			bool m_bIgnorePasswordSetting = false;                 // P4PASSWD is not read: only the password given to f_Login and the tickets are used
-			CStr m_ConfigRoot;                                     // The highest directory whose P4CONFIG file gives settings, or empty for any, as p4 reads them
+			bool m_bIgnorePasswordSetting = false; // P4PASSWD is not read: only the password given to f_Login and the tickets are used
+			NStr::CStr m_ConfigRoot;               // The highest directory whose P4CONFIG file gives settings, or empty for any, as p4 reads them
 		};
 
 		struct CChangeList
 		{
 			struct CFile
 			{
-				CStr m_Name;
+				NStr::CStr m_Name;
 			};
 
 			uint32 m_ChangeID = 0;
 			uint64 m_Date = 0;
 			bool m_bHasShelvedFiles = false;
-			CStr m_PerforceDate;
-			CStr m_Client;
-			CStr m_User;
-			CStr m_Status;
-			CStr m_Description;
-			TCVector<CStr> m_Jobs;
-			TCVector<CFile> m_Files;
+			NStr::CStr m_PerforceDate;
+			NStr::CStr m_Client;
+			NStr::CStr m_User;
+			NStr::CStr m_Status;
+			NStr::CStr m_Description;
+			NContainer::TCVector<NStr::CStr> m_Jobs;
+			NContainer::TCVector<CFile> m_Files;
 		};
 
 		struct CFileRev
@@ -97,7 +100,7 @@ namespace NMib::NPerforce
 				CRevDesc();
 
 				EHow m_How;
-				CStr m_File;
+				NStr::CStr m_File;
 				int32 m_StartRev = 0;
 				int32 m_EndRev = 0;
 			};
@@ -109,24 +112,24 @@ namespace NMib::NPerforce
 
 			EAction m_Action;
 			uint64 m_Time = 0;
-			CStr m_User;
-			CStr m_Client;
-			CStr m_Comment;
+			NStr::CStr m_User;
+			NStr::CStr m_Client;
+			NStr::CStr m_Comment;
 
-			TCVector<CRevDesc> m_RevDescs;
+			NContainer::TCVector<CRevDesc> m_RevDescs;
 		};
 
 		struct CFile
 		{
-			CStr m_File;
-			TCVector<CFileRev> m_Revisions;
+			NStr::CStr m_File;
+			NContainer::TCVector<CFileRev> m_Revisions;
 		};
 
 		struct CFileRevision
 		{
 			CFileRevision();
 
-			CStr m_File;
+			NStr::CStr m_File;
 			zint32 m_ChangeList;
 			zint32 m_Revision;
 
@@ -136,27 +139,27 @@ namespace NMib::NPerforce
 
 		struct CFileRevisions
 		{
-			TCVector<CFile> m_Files;
+			NContainer::TCVector<CFile> m_Files;
 		};
 
 		struct CFix
 		{
 			auto operator <=> (CFix const &_Other) const noexcept = default;
 
-			CStr m_Job;
+			NStr::CStr m_Job;
 			uint32 m_ChangeNumber = 0;
 			uint64 m_Date = 0;
-			CStr m_User;
-			CStr m_Client;
-			CStr m_Status;
+			NStr::CStr m_User;
+			NStr::CStr m_Client;
+			NStr::CStr m_Status;
 			uint64 m_PerforceGUID = 0;
 		};
 
 		struct CJob
 		{
 			uint64 m_Date = 0;
-			CStr m_Status;
-			CStr m_User;
+			NStr::CStr m_Status;
+			NStr::CStr m_User;
 		};
 
 		struct CDescription
@@ -165,34 +168,34 @@ namespace NMib::NPerforce
 			{
 				CFile();
 
-				CStr m_Name;
+				NStr::CStr m_Name;
 				EAction m_Action;
 			};
 
-			CStr m_User;
-			CStr m_ChangelistStatus;
-			TCVector<CStr> m_Jobs;
-			TCVector<CStr> m_JobStatuses;
-			TCVector<CFile> m_Files;
+			NStr::CStr m_User;
+			NStr::CStr m_ChangelistStatus;
+			NContainer::TCVector<NStr::CStr> m_Jobs;
+			NContainer::TCVector<NStr::CStr> m_JobStatuses;
+			NContainer::TCVector<CFile> m_Files;
 		};
 
 		struct CStream
 		{
-			CStr m_Update;
-			CStr m_Access;
-			CStr m_Owner;
-			CStr m_Name;
+			NStr::CStr m_Update;
+			NStr::CStr m_Access;
+			NStr::CStr m_Owner;
+			NStr::CStr m_Name;
 
-			CStr m_Type;
-			CStr m_Description;
+			NStr::CStr m_Type;
+			NStr::CStr m_Description;
 
-			TCVector<CStr> m_Options;
-			TCVector<CStr> m_Paths;
-			TCVector<CStr> m_Remapped;
-			TCVector<CStr> m_Ignored;
+			NContainer::TCVector<NStr::CStr> m_Options;
+			NContainer::TCVector<NStr::CStr> m_Paths;
+			NContainer::TCVector<NStr::CStr> m_Remapped;
+			NContainer::TCVector<NStr::CStr> m_Ignored;
 
-			CStr m_Parent;
-			CStr m_BaseParent;
+			NStr::CStr m_Parent;
+			NStr::CStr m_BaseParent;
 
 			bool m_bFirmerThanParent = false;
 			bool m_bInheritParentView = true;
@@ -219,13 +222,13 @@ namespace NMib::NPerforce
 
 		struct CFileDiff
 		{
-			CStr m_File;                                                       // The workspace file p4 diff compares, or the second depot file and revision p4 diff2 compares
-			CStr m_DepotFile;                                                  // From p4 diff: the depot file whose m_Revision it compares the workspace file with
+			NStr::CStr m_File;                                                 // The workspace file p4 diff compares, or the second depot file and revision p4 diff2 compares
+			NStr::CStr m_DepotFile;                                            // From p4 diff: the depot file whose m_Revision it compares the workspace file with
 			uint32 m_Revision = 0;                                             // From p4 diff's record of the file, empty with m_DepotFile where p4 sent none
-			CStr m_Status;                                                     // From p4 diff2: identical, content, types, left only or right only
-			CStr m_Type1;                                                      // From p4 diff2: the type of the first revision, empty where there is none
-			CStr m_Type2;                                                      // From p4 diff2: the type of the second revision, empty where there is none
-			TCVector<CDiffRange> m_Ranges;                                     // The chunks of differences, in order
+			NStr::CStr m_Status;                                               // From p4 diff2: identical, content, types, left only or right only
+			NStr::CStr m_Type1;                                                // From p4 diff2: the type of the first revision, empty where there is none
+			NStr::CStr m_Type2;                                                // From p4 diff2: the type of the second revision, empty where there is none
+			NContainer::TCVector<CDiffRange> m_Ranges;                         // The chunks of differences, in order
 			EComparedLineEnds m_ComparedLineEnds = EComparedLineEnds::mc_None; // From p4 diff: the line ends the read of the workspace file turned into LFs
 			bool m_bConverted = false;                                         // From p4 diff: the workspace file was compared converted to UTF-8, else as its bytes
 			bool m_bBinary = false;                                            // Compared as binary, which gives no differences
@@ -235,430 +238,499 @@ namespace NMib::NPerforce
 		{
 			CFileStats();
 
-			CStr m_DepotFile;
-			CStr m_ClientFile;
+			NStr::CStr m_DepotFile;
+			NStr::CStr m_ClientFile;
 			bool m_bIsMapped = false;
 			EAction m_HeadAction;
-			CStr m_HeadType;
-			CStr m_HeadTime;
+			NStr::CStr m_HeadType;
+			NStr::CStr m_HeadTime;
 			uint32 m_HeadRev = 0;
-			uint64 m_HeadChange = 0; // 64-bit on a server that allows it, sys.types.allow64
+			uint64 m_HeadChange = 0;      // 64-bit on a server that allows it, sys.types.allow64
 			uint64 m_HeadModTime = 0;
 			uint32 m_HaveRev = 0;
-			CStr m_Action;           // What the workspace has the file opened for, like 'edit', 'add' or 'move/delete'; empty where it is not opened
-			CStr m_Type;             // The type the file is opened as
-			CStr m_ResolveBaseFile;  // Where a content resolve from the file itself is still to do, the file, whose m_ResolveBaseRev its changes are based on
+			NStr::CStr m_Action;          // What the workspace has the file opened for, like 'edit', 'add' or 'move/delete'; empty where it is not opened
+			NStr::CStr m_Type;            // The type the file is opened as
+			NStr::CStr m_ResolveBaseFile; // Where a content resolve from the file itself is still to do, the file, whose m_ResolveBaseRev its changes are based on
 			uint32 m_ResolveBaseRev = 0;
-			CStr m_MovedFile;        // Of a file opened for a move, the depot file at its other end: 'move/add' from it or 'move/delete' to it
+			NStr::CStr m_MovedFile;       // Of a file opened for a move, the depot file at its other end: 'move/add' from it or 'move/delete' to it
 		};
 
 		struct CMapping
 		{
-			CStr m_From;
-			CStr m_To;
+			NStr::CStr m_From;
+			NStr::CStr m_To;
 			bool m_bNegative = false;
 		};
 
 		struct CBranchSpec
 		{
-			CStr m_UpdateTime;
-			CStr m_AccessTime;
-			CStr m_Owner;
-			CStr m_Description;
-			TCVector<CStr> m_Options;
-			TCVector<CMapping> m_View;
+			NStr::CStr m_UpdateTime;
+			NStr::CStr m_AccessTime;
+			NStr::CStr m_Owner;
+			NStr::CStr m_Description;
+			NContainer::TCVector<NStr::CStr> m_Options;
+			NContainer::TCVector<CMapping> m_View;
 		};
 
 		struct CClient
 		{
-			CStr m_UpdateTime;
-			CStr m_AccessTime;
-			CStr m_Owner;
-			CStr m_Host;
-			CStr m_Description;
-			CStr m_Root;
-			CStr m_AltRoot0;
-			CStr m_AltRoot1;
-			CStr m_LineEndings;
-			CStr m_Stream;
-			TCVector<CStr> m_Options;
-			TCVector<CMapping> m_View;
+			NStr::CStr m_UpdateTime;
+			NStr::CStr m_AccessTime;
+			NStr::CStr m_Owner;
+			NStr::CStr m_Host;
+			NStr::CStr m_Description;
+			NStr::CStr m_Root;
+			NStr::CStr m_AltRoot0;
+			NStr::CStr m_AltRoot1;
+			NStr::CStr m_LineEndings;
+			NStr::CStr m_Stream;
+			NContainer::TCVector<NStr::CStr> m_Options;
+			NContainer::TCVector<CMapping> m_View;
 		};
 
 		struct CMergeError
 		{
-			CStr m_Path;
-			CStr m_Error;
+			NStr::CStr m_Path;
+			NStr::CStr m_Error;
 		};
 
 		struct CUnresolvedFile
 		{
-			CStr m_ClientFile;
-			CStr m_FromFile;
-			CStr m_ResolveType; // What is to resolve, like content, filetype, move or delete
+			NStr::CStr m_ClientFile;
+			NStr::CStr m_FromFile;
+			NStr::CStr m_ResolveType; // What is to resolve, like content, filetype, move or delete
 			uint32 m_StartFromRev = 0;
 			uint32 m_EndFromRev = 0;
 		};
 
 		struct COpenedFile
 		{
-			CStr m_DepotFile;
-			CStr m_Change; // The changelist the file is opened in: default, or its number
-			CStr m_Action; // What the file is opened for, like 'edit', 'add' or 'move/delete'
+			NStr::CStr m_DepotFile;
+			NStr::CStr m_Change; // The changelist the file is opened in: default, or its number
+			NStr::CStr m_Action; // What the file is opened for, like 'edit', 'add' or 'move/delete'
 		};
 
-		CPerforceClient(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
+		CPerforceClient(NStr::CStr const &_Server = {}, NStr::CStr const &_User = {}, NStr::CStr const &_Client = {}, NStr::CStr const &_Host = {});
 		CPerforceClient(CConnectionInfo const &_Info);
 		~CPerforceClient();
 
-		CStr const &f_GetHost() const;
-		CStr const &f_GetServer() const;
-		CStr const &f_GetUser() const;
-		CStr const &f_GetClient() const;
-		CStr f_GetActiveServer();
-		CStr f_GetActiveUser();
-		CStr f_GetActiveClient();
-		CStr f_GetActiveHost();
+		NStr::CStr const &f_GetHost() const;
+		NStr::CStr const &f_GetServer() const;
+		NStr::CStr const &f_GetUser() const;
+		NStr::CStr const &f_GetClient() const;
+		NStr::CStr f_GetActiveServer();
+		NStr::CStr f_GetActiveUser();
+		NStr::CStr f_GetActiveClient();
+		NStr::CStr f_GetActiveHost();
 		CConnectionInfo const &f_GetConnectionInfo() const;
 
-		CStr f_GetLastError() const;
-		CStr f_GetLastFunction() const;
-		CStr f_GetLastInfo(CStr const &_Name) const;
-		bool f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
-		bool f_GetSecurityLevel(CStr &_SecurityLevel);
-		bool f_GetLoginTicket(CStr const &_Password, bool _bAllHosts, CStr &o_Ticket);
-		bool f_CreateDepot(CStr const &_Name, CStr const &_Type);
-		bool f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword = {});
-		bool f_SetClient(CStr const &_ClientName, CClient const &_Client);
-		bool f_SetProtections(TCVector<CStr> const &_Lines);
-		bool f_SetTypeMap(TCVector<CStr> const &_Lines);
+		NStr::CStr f_GetLastError() const;
+		NStr::CStr f_GetLastFunction() const;
+		NStr::CStr f_GetLastInfo(NStr::CStr const &_Name) const;
+		bool f_Login(NStr::CStr const &_Password, NStr::CStr const &_WorkingDir = {});
+		bool f_GetSecurityLevel(NStr::CStr &_SecurityLevel);
+		bool f_GetLoginTicket(NStr::CStr const &_Password, bool _bAllHosts, NStr::CStr &o_Ticket);
+		bool f_CreateDepot(NStr::CStr const &_Name, NStr::CStr const &_Type);
+		bool f_SetUserPassword(NStr::CStr const &_User, NStr::CStr const &_Password, NStr::CStr const &_OldPassword = {});
+		bool f_SetClient(NStr::CStr const &_ClientName, CClient const &_Client);
+		bool f_SetProtections(NContainer::TCVector<NStr::CStr> const &_Lines);
+		bool f_SetTypeMap(NContainer::TCVector<NStr::CStr> const &_Lines);
 		bool f_Dropped();
 
 		bool f_IsUTF8() const;
-		CStr f_EncodeStr(CStr const &_Str);
-		CStr f_DecodeStr(CStr const &_Str);
+		NStr::CStr f_EncodeStr(NStr::CStr const &_Str);
+		NStr::CStr f_DecodeStr(NStr::CStr const &_Str);
 
-		bool f_FileExistsInDepot(CStr const &_File);
-		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
-		bool f_FileExistsInChangeList(CStr const &_File);
-		bool f_FileExists(CStr const &_File);
-		bool f_CanOpenForEdit(CStr const &_File);
-		bool f_RemoveFromClient(CStr const &_File);
-		bool f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bool _bPretend = false);
+		bool f_FileExistsInDepot(NStr::CStr const &_File);
+		bool f_FileExistsInDepotNotDeleted(NStr::CStr const &_File);
+		bool f_FileExistsInChangeList(NStr::CStr const &_File);
+		bool f_FileExists(NStr::CStr const &_File);
+		bool f_CanOpenForEdit(NStr::CStr const &_File);
+		bool f_RemoveFromClient(NStr::CStr const &_File);
+		bool f_Sync(NStr::CStr const &_File, NContainer::TCVector<NStr::CStr> &_Synced, NContainer::TCVector<NStr::CStr> &_Removed, bool _bPretend = false);
 		auto f_Sync
 			(
-				CStr const &_File
-				, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
+				NStr::CStr const &_File
+				, NFunction::TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress = NFunction::TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
 				, bool _bForce = false
-				, TCVector<CStr> const &_MoreFiles = TCVector<CStr>()
+				, NContainer::TCVector<NStr::CStr> const &_MoreFiles = NContainer::TCVector<NStr::CStr>()
 			)
 			-> bool
 		;
-		bool f_GetHeadChangelist(int64 &_Changelist, CStr const &_Path);
+		bool f_GetHeadChangelist(int64 &_Changelist, NStr::CStr const &_Path);
 		bool f_GetHeadChangelistUnsafe(int64 &_Changelist);
-		bool f_Files(CStr const &_Search, TCVector<CStr> &_Existing);
-		bool f_Files(CStr const &_Search, TCVector<CStr> &_Existing, TCVector<CStr> &_Deleted);
-		bool f_ClientFiles(CStr const &_Search, TCVector<CStr> &_Existing);
-		bool f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles);
-		bool f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files);
-		bool f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files, TCVector<CFileStats> &o_Stats);
-		bool f_GetJobSpec(CStr &_JobSpec);
-		bool f_GetJobs(CRegistry &_Jobs, CStr const &_JobView);
-		bool f_GetTriggers(CStr &_Triggers);
-		bool f_GetUsers(CRegistry &_Users);
-		bool f_GetDepotPath(CStr const &_ClientPath, CStr &_DepotPath, bool _bReturnImportedStream = true);
-		bool f_GetClientPath(CStr const &_DepotPath, CStr &_ClientPath);
-		bool f_GetWorkspacePath(CStr const &_DepotPath, CStr &_WorkspacePath);
-		bool f_GetTextFileContents(CStr const &_Path, CStr &_Contents);
-		bool f_GetTextFileContentsIfExists(CStr const &_Path, NStorage::TCOptional<CStr> &o_Contents);
-		bool f_GetFileContents(CStr const &_Path, bool _bExpandKeywords, CByteVector &o_Contents);
-		bool f_DiffOpenedFiles(TCVector<CStr> const &_Files, TCVector<CFileDiff> &o_Diffs);
-		bool f_DiffRevisions(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes = false);
-		bool f_GetStreams(TCVector<CStr> &_Streams);
-		bool f_GetStreamDepots(TCVector<CStr> &_Depots);
+		bool f_Files(NStr::CStr const &_Search, NContainer::TCVector<NStr::CStr> &_Existing);
+		bool f_Files(NStr::CStr const &_Search, NContainer::TCVector<NStr::CStr> &_Existing, NContainer::TCVector<NStr::CStr> &_Deleted);
+		bool f_ClientFiles(NStr::CStr const &_Search, NContainer::TCVector<NStr::CStr> &_Existing);
+		bool f_GetFileStatClientFiles(NContainer::TCVector<NStr::CStr> const &_Arguments, NContainer::TCVector<NStr::CStr> &o_ClientFiles);
+		auto f_GetFileStatFilesUnder(NStr::CStr const &_LocalRoot, NContainer::TCVector<NStr::CStr> const &_Arguments, NContainer::TCVector<NStr::CStr> &o_Files) -> bool;
+		auto f_GetFileStatFilesUnder
+			(
+				NStr::CStr const &_LocalRoot
+				, NContainer::TCVector<NStr::CStr> const &_Arguments
+				, NContainer::TCVector<NStr::CStr> &o_Files
+				, NContainer::TCVector<CFileStats> &o_Stats
+			)
+			-> bool
+		;
+		bool f_GetJobSpec(NStr::CStr &_JobSpec);
+		bool f_GetJobs(NContainer::CRegistry &_Jobs, NStr::CStr const &_JobView);
+		bool f_GetTriggers(NStr::CStr &_Triggers);
+		bool f_GetUsers(NContainer::CRegistry &_Users);
+		bool f_GetDepotPath(NStr::CStr const &_ClientPath, NStr::CStr &_DepotPath, bool _bReturnImportedStream = true);
+		bool f_GetClientPath(NStr::CStr const &_DepotPath, NStr::CStr &_ClientPath);
+		bool f_GetWorkspacePath(NStr::CStr const &_DepotPath, NStr::CStr &_WorkspacePath);
+		bool f_GetTextFileContents(NStr::CStr const &_Path, NStr::CStr &_Contents);
+		bool f_GetTextFileContentsIfExists(NStr::CStr const &_Path, NStorage::TCOptional<NStr::CStr> &o_Contents);
+		bool f_GetFileContents(NStr::CStr const &_Path, bool _bExpandKeywords, NContainer::CByteVector &o_Contents);
+		bool f_DiffOpenedFiles(NContainer::TCVector<NStr::CStr> const &_Files, NContainer::TCVector<CFileDiff> &o_Diffs);
+		bool f_DiffRevisions(NStr::CStr const &_File1, NStr::CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes = false);
+		bool f_GetStreams(NContainer::TCVector<NStr::CStr> &_Streams);
+		bool f_GetStreamDepots(NContainer::TCVector<NStr::CStr> &_Depots);
 
 		bool f_GetChangelist(uint32 _ChangeList, CChangeList &_Ret);
-		bool f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User);
-		bool f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
-		bool f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
+		bool f_SetChangelistOwner(uint32 _ChangeList, NStr::CStr const &_User);
+		bool f_SetChangelistClient(uint32 _ChangeList, NStr::CStr const &_Client, bool _bForce = false);
+		bool f_SetChangelistDescription(uint32 _ChangeList, NStr::CStr const &_Description, bool _bForce = false);
 
-		bool f_GetChangelists(CStr const &_Path, TCVector<CChangeList> &_Ret, bool _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
-
-		bool f_GetFileRevisions(CStr const &_File, CFileRevisions &_Revisions);
-		bool f_GetFileRevisions(TCVector<CStr> const &_Files, CFileRevisions &_Revisions);
-
-		bool f_ChangeExists(CFix const &_Fix);
-
-		bool f_GetFixes(CStr const &_Job, TCVector<CFix> &_Fixes, uint64 _PerforceGUID);
-		bool f_AddFixes(CStr const &_Job, TCVector<uint32> const &_Fixes, CStr const &_Status);
-		bool f_RemoveFixes(CStr const &_Job, TCVector<uint32> const &_Fixes);
-		bool f_SetJobSpec(CStr const &_JobSpec);
-		bool f_SetJob(CStr const &_Job);
-		bool f_GetJob(CStr const &_Job, CJob &_Ret);
-		bool f_SetTriggers(CStr const &_Triggers);
-		bool f_JobExists(CStr const &_Job);
-		bool f_DeleteJob(CStr const &_Job);
-		bool f_Describe(uint32 _Changelist, CDescription &_Description);
-		bool f_DescribeShelved(uint32 _Changelist, CDescription &_Description);
-		bool f_Info();
-		bool f_GetUserName(CStr &_UserName);
-		bool f_GetClientName(CStr &_ClientName);
-		bool f_GetClientRoot(CStr &_Root);
-		bool f_OpenForEdit(CStr const &_File);
-		bool f_OpenForEdit(CStr const &_File, CStr const &_Type);
-		bool f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
-		bool f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
-		// Changelist 0 selects the current client's default changelist.
-		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
-		bool f_Add(CStr const &_File, bool _bLiteral = false);
-		bool f_Delete(CStr const &_File);
-		bool f_Move(CStr const &_From, CStr const &_To);
-		bool f_OpenForEditOrMakeWritable(CStr const &_File);
-		bool f_TryOpenForEdit(CStr const &_File);
-		bool f_OpenForWrite(CStr const &_File, bool *o_pRefused = nullptr);
-
-		bool f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files, uint32 &_ChangeList);
-
-		bool f_FindHeadFiles(CStr const &_Pattern, TCVector<CFileRevision> &_Files);
-
-		bool f_GetClients(CStr const &_SearchPattern, TCVector<CStr> &_Clients);
-
-		auto f_GetClients(CStr const &_SearchPattern, CStr const &_Stream, CStr const &_User, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_fProcessor)
+		auto f_GetChangelists(NStr::CStr const &_Path, NContainer::TCVector<CChangeList> &_Ret, bool _bIncludeIntegrated, NStr::CStr const &_Workspace = {}, NStr::CStr const &_Status = {})
 			-> bool
 		;
 
-		bool f_GetClient(CStr const &_ClientName, CStr &_Contents);
-		bool f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_fProcessor);
-		bool f_GetClient(CStr const &_Client, CPerforceClient::CClient &o_Client);
+		bool f_GetFileRevisions(NStr::CStr const &_File, CFileRevisions &_Revisions);
+		bool f_GetFileRevisions(NContainer::TCVector<NStr::CStr> const &_Files, CFileRevisions &_Revisions);
 
-		bool f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
-		bool f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
+		bool f_ChangeExists(CFix const &_Fix);
+
+		bool f_GetFixes(NStr::CStr const &_Job, NContainer::TCVector<CFix> &_Fixes, uint64 _PerforceGUID);
+		bool f_AddFixes(NStr::CStr const &_Job, NContainer::TCVector<uint32> const &_Fixes, NStr::CStr const &_Status);
+		bool f_RemoveFixes(NStr::CStr const &_Job, NContainer::TCVector<uint32> const &_Fixes);
+		bool f_SetJobSpec(NStr::CStr const &_JobSpec);
+		bool f_SetJob(NStr::CStr const &_Job);
+		bool f_GetJob(NStr::CStr const &_Job, CJob &_Ret);
+		bool f_SetTriggers(NStr::CStr const &_Triggers);
+		bool f_JobExists(NStr::CStr const &_Job);
+		bool f_DeleteJob(NStr::CStr const &_Job);
+		bool f_Describe(uint32 _Changelist, CDescription &_Description);
+		bool f_DescribeShelved(uint32 _Changelist, CDescription &_Description);
+		bool f_Info();
+		bool f_GetUserName(NStr::CStr &_UserName);
+		bool f_GetClientName(NStr::CStr &_ClientName);
+		bool f_GetClientRoot(NStr::CStr &_Root);
+		bool f_OpenForEdit(NStr::CStr const &_File);
+		bool f_OpenForEdit(NStr::CStr const &_File, NStr::CStr const &_Type);
+		bool f_Submit(NStr::CStr const &_File, NStr::CStr const &_Comment, NStr::CStr const &_Job = {});
+		bool f_Revert(NStr::CStr const &_File, bool _bOnlyIfUnchanged = false);
+		// Changelist 0 selects the current client's default changelist.
+		bool f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
+		bool f_Add(NStr::CStr const &_File, bool _bLiteral = false);
+		bool f_Delete(NStr::CStr const &_File);
+		bool f_Move(NStr::CStr const &_From, NStr::CStr const &_To);
+		bool f_OpenForEditOrMakeWritable(NStr::CStr const &_File);
+		bool f_TryOpenForEdit(NStr::CStr const &_File);
+		bool f_OpenForWrite(NStr::CStr const &_File, bool *o_pRefused = nullptr);
+
+		bool f_CreateChangelist(NStr::CStr const &_Comment, NContainer::TCVector<NStr::CStr> const &_Jobs, NContainer::TCVector<NStr::CStr> const &_Files, uint32 &_ChangeList);
+
+		bool f_FindHeadFiles(NStr::CStr const &_Pattern, NContainer::TCVector<CFileRevision> &_Files);
+
+		bool f_GetClients(NStr::CStr const &_SearchPattern, NContainer::TCVector<NStr::CStr> &_Clients);
+
+		auto f_GetClients
+			(
+				NStr::CStr const &_SearchPattern
+				, NStr::CStr const &_Stream
+				, NStr::CStr const &_User
+				, NFunction::TCFunction<void (NStr::CStr const &_Client, NStr::CStr const &_Key, NStr::CStr const &_Value)> const &_fProcessor
+			)
+			-> bool
+		;
+
+		bool f_GetClient(NStr::CStr const &_ClientName, NStr::CStr &_Contents);
+		bool f_GetClient(NStr::CStr const &_ClientName, NFunction::TCFunction<void (NStr::CStr const &_Key, NStr::CStr const &_Value)> const &_fProcessor);
+		bool f_GetClient(NStr::CStr const &_Client, CPerforceClient::CClient &o_Client);
+
+		bool f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, NContainer::TCVector<NStr::CStr> const &_Files);
+		bool f_MoveToChangelist(NContainer::TCVector<NStr::CStr> const &_Files, uint32 _ChangeList);
 		// Destination 0 selects the current client's default changelist.
-		bool f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, CStr const &_FileSpec = CStr());
-		bool f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList);
+		bool f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, NStr::CStr const &_FileSpec = {});
+		bool f_UnshelveWithBranch(uint32 _SourceChangelist, NStr::CStr const &_BranchMapping, uint32 _DestinationChangeList);
 		bool f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved, uint32 &_FinalChangelist);
 		bool f_DeleteChangelist(uint32 _Changelist, bool _bForce = false);
-		bool f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs);
-		bool f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
-		bool f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
-		bool f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
-		bool f_GetUnresolvedFiles(CStr const &_File, uint32 _Changelist, TCVector<CUnresolvedFile> &o_Files);
-		bool f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
+		bool f_RemoveJobsFromChangelist(uint32 _Changelist, NContainer::TCVector<NStr::CStr> const &_Jobs);
+		bool f_DeleteShelvedFile(uint32 _Changelist, NStr::CStr const &_File, bool _bForce = false);
+		bool f_ResolveSafe(NStr::CStr const &_File, uint32 _Changelist = 0);
+		bool f_ResolveAutomatic(NStr::CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
+		bool f_GetUnresolvedFiles(NStr::CStr const &_File, uint32 _Changelist, NContainer::TCVector<CUnresolvedFile> &o_Files);
+		bool f_ResolveMine(NStr::CStr const &_File, uint32 _Changelist = 0);
 
 		auto f_CopyStream
 			(
-				CStr const &_FromStream
-				, CStr const &_ToStream
+				NStr::CStr const &_FromStream
+				, NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_MergeStream
 			(
-				CStr const &_FromStream
-				, CStr const &_ToStream
+				NStr::CStr const &_FromStream
+				, NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_IntegrateStream
 			(
-				CStr const &_FromStream
-				, CStr const &_ToStream
+				NStr::CStr const &_FromStream
+				, NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_IntegrateFiles
 			(
-				CStr const &_FromFiles
-				, CStr const &_ToFiles
+				NStr::CStr const &_FromFiles
+				, NStr::CStr const &_ToFiles
 				, bool _bPretend
 				, bool _bEnableBaseless
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
 			)
 			-> bool
 		;
 
 		auto f_CopyStreamToParent
 			(
-				CStr const &_FromStream
+				NStr::CStr const &_FromStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_MergeStreamToParent
 			(
-				CStr const &_FromStream
+				NStr::CStr const &_FromStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_IntegrateStreamToParent
 			(
-				CStr const &_FromStream
+				NStr::CStr const &_FromStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 
 		auto f_CopyStreamFromParent
 			(
-				CStr const &_ToStream
+				NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_MergeStreamFromParent
 			(
-				CStr const &_ToStream
+				NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 		auto f_IntegrateStreamFromParent
 			(
-				CStr const &_ToStream
+				NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CIntegrationResult> &o_Integrated
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
 			-> bool
 		;
 
-		bool f_CreatePatch(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
+		bool f_CreatePatch(NStr::CStr const &_Branch, bool _bFullContext, NStr::CStr &o_Patch);
 
-		bool f_GetStream(CStr const &_StreamName, CStream &_Stream);
+		bool f_GetStream(NStr::CStr const &_StreamName, CStream &_Stream);
 
-		bool f_DeleteStream(CStr const &_StreamName);
+		bool f_DeleteStream(NStr::CStr const &_StreamName);
 		bool f_OpenStreamSpec();
 
-		bool f_Obliterate(CStr const &_Path);
+		bool f_Obliterate(NStr::CStr const &_Path);
 
-		bool f_StreamExists(CStr const &_StreamName);
+		bool f_StreamExists(NStr::CStr const &_StreamName);
 
-		bool f_SetStream(CStr const &_StreamName, CStream const &_Stream);
+		bool f_SetStream(NStr::CStr const &_StreamName, CStream const &_Stream);
 
-		bool f_PopulateStream(CStr const &_StreamName);
+		bool f_PopulateStream(NStr::CStr const &_StreamName);
 
-		bool f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> &o_Streams, TCVector<CStr> const &_StreamSpecs = {});
-		bool f_FindStreamsByViewMatch(TCVector<CStr> const &_Views, TCVector<CStr> &o_Streams);
+		bool f_FindStreams(NStr::CStr const &_SearchQuery, NContainer::TCVector<NStr::CStr> &o_Streams, NContainer::TCVector<NStr::CStr> const &_StreamSpecs = {});
+		bool f_FindStreamsByViewMatch(NContainer::TCVector<NStr::CStr> const &_Views, NContainer::TCVector<NStr::CStr> &o_Streams);
 
-		bool f_GetOpened(CStr const &_Path, CStr const &_Client, TCVector<CStr> &o_Opened);
-		bool f_GetOpenedFiles(CStr const &_Path, CStr const &_Client, TCVector<COpenedFile> &o_Opened);
+		bool f_GetOpened(NStr::CStr const &_Path, NStr::CStr const &_Client, NContainer::TCVector<NStr::CStr> &o_Opened);
+		bool f_GetOpenedFiles(NStr::CStr const &_Path, NStr::CStr const &_Client, NContainer::TCVector<COpenedFile> &o_Opened);
 
-		bool f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
-		bool f_DeleteWorkspace(CStr const &_Workspace);
+		bool f_SwitchWorkspaceStream(NStr::CStr const &_Workspace, NStr::CStr const &_Stream);
+		bool f_DeleteWorkspace(NStr::CStr const &_Workspace);
 
-		bool f_GetEnvVar(CStr const &_Var, CStr &_Value);
-		bool f_SetEnvVar(CStr const &_Var, CStr const &_Value);
+		bool f_GetEnvVar(NStr::CStr const &_Var, NStr::CStr &_Value);
+		bool f_SetEnvVar(NStr::CStr const &_Var, NStr::CStr const &_Value);
 
-		bool f_FileStats(CStr const &_File, CFileStats &_Stats);
-		bool f_OpenedFileStats(CStr const &_File, CFileStats &_Stats);
-		bool f_HaveFileStats(CStr const &_File, CFileStats &_Stats);
-		bool f_DepotFileStats(CStr const &_File, CFileStats &_Stats);
-		bool f_GetRevisionTypes(TCVector<CStr> const &_Revisions, TCVector<CStr> &o_Types);
+		bool f_FileStats(NStr::CStr const &_File, CFileStats &_Stats);
+		bool f_OpenedFileStats(NStr::CStr const &_File, CFileStats &_Stats);
+		bool f_HaveFileStats(NStr::CStr const &_File, CFileStats &_Stats);
+		bool f_DepotFileStats(NStr::CStr const &_File, CFileStats &_Stats);
+		bool f_GetRevisionTypes(NContainer::TCVector<NStr::CStr> const &_Revisions, NContainer::TCVector<NStr::CStr> &o_Types);
 
-		bool f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
-		bool f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
-		bool f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
-		bool f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
+		auto f_CreateStreamClient
+			(
+				NStr::CStr const &_ClientName
+				, NStr::CStr const &_Root
+				, NStr::CStr const &_AltRoot
+				, NStr::CStr const &_Template
+				, NStr::CStr const &_Stream
+				, NContainer::TCVector<NStr::CStr> const *_pOptions = nullptr
+			)
+			-> bool
+		;
+		bool f_CreateClient(NStr::CStr const &_ClientName, NStr::CStr const &_Root, NStr::CStr const &_AltRoot, NStr::CStr const &_Template);
+		auto f_UpdateStreamClient
+			(
+				NStr::CStr const &_ClientName
+				, NStr::CStr const &_Root
+				, NStr::CStr const &_AltRoot
+				, NStr::CStr const &_Template
+				, NStr::CStr const &_Stream
+				, NContainer::TCVector<NStr::CStr> const *_pOptions = nullptr
+			)
+			-> bool
+		;
+		bool f_UpdateClient(NStr::CStr const &_ClientName, NStr::CStr const &_Root, NStr::CStr const &_AltRoot, NStr::CStr const &_Template);
 
-		bool f_CreateBranch(CStr const &_Name, CBranchSpec const &_BranchSpec);
-		bool f_GetBranchForStreams(CStr const &_From, CStr const &_To, CPerforceClient::CBranchSpec &o_Branch);
+		bool f_CreateBranch(NStr::CStr const &_Name, CBranchSpec const &_BranchSpec);
+		bool f_GetBranchForStreams(NStr::CStr const &_From, NStr::CStr const &_To, CPerforceClient::CBranchSpec &o_Branch);
 
-		bool f_DeleteBranch(CStr const &_Name);
+		bool f_DeleteBranch(NStr::CStr const &_Name);
 
-		static CStr fs_FixWhiteSpace(CStr const &_In);
-		static CStr fs_FixLineStartingTabs(CStr const &_In);
-		static CStr fs_FixSpecialChars(CStr const &_In);
-		static CStr fs_EscapeFileName(CStr const &_FileName);
-		static CStr fs_UnescapeFileName(CStr const &_FileName);
+		static NStr::CStr fs_FixWhiteSpace(NStr::CStr const &_In);
+		static NStr::CStr fs_FixLineStartingTabs(NStr::CStr const &_In);
+		static NStr::CStr fs_FixSpecialChars(NStr::CStr const &_In);
+		static NStr::CStr fs_EscapeFileName(NStr::CStr const &_FileName);
+		static NStr::CStr fs_UnescapeFileName(NStr::CStr const &_FileName);
 
-		static CStr fs_ActionToStr(EAction _Action);
+		static NStr::CStr fs_ActionToStr(EAction _Action);
 
-		static bool fs_HasP4Config(CStr const &_Path);
-		static bool fs_HasP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot);
-		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory);
-		static CConnectionInfo fs_GetConnectionInfo(CStr const &_Directory, CPerforceIgnore::CSettings const &_Settings, TCMap<CStr, CStr> const &_Environment);
+		static bool fs_HasP4Config(NStr::CStr const &_Path);
+		static auto fs_HasP4Config
+			(
+				NStr::CStr const &_Path
+				, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment
+				, CPerforceIgnore::CRegistrySettings const &_Registry
+				, NStr::CStr const &_ConfigRoot
+			)
+			-> bool
+		;
+		static CConnectionInfo fs_GetConnectionInfo(NStr::CStr const &_Directory);
+		static auto fs_GetConnectionInfo(NStr::CStr const &_Directory, CPerforceIgnore::CSettings const &_Settings, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment)
+			-> CConnectionInfo
+		;
 
 	private:
 		struct CP4Client;
 
 		void fp_Run(char const *_pFunc);
-		void fp_Run(char const *_pFunc, TCVector<CStr> const &_Arguments);
+		void fp_Run(char const *_pFunc, NContainer::TCVector<NStr::CStr> const &_Arguments);
 		void fp_CheckDropped();
-		bool fp_FileStatClientFiles(TCVector<CStr> const &_Arguments, TCVector<CStr> &o_ClientFiles, TCVector<CFileStats> *o_pStats);
-		bool fp_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CStr> &o_Files, TCVector<CFileStats> *o_pStats);
-		void fp_SetFileNames(CStr const &_WorkingDirectory);
-		void fp_SetTrans(int _Charset, int _ContentCharset, CStr const &_WorkingDirectory);
-		NStr::CAnsiStr fp_EncodeFileName(CStr const &_Name) const;
+		bool fp_FileStatClientFiles(NContainer::TCVector<NStr::CStr> const &_Arguments, NContainer::TCVector<NStr::CStr> &o_ClientFiles, NContainer::TCVector<CFileStats> *o_pStats);
+		auto fp_GetFileStatFilesUnder
+			(
+				NStr::CStr const &_LocalRoot
+				, NContainer::TCVector<NStr::CStr> const &_Arguments
+				, NContainer::TCVector<NStr::CStr> &o_Files
+				, NContainer::TCVector<CFileStats> *o_pStats
+			)
+			-> bool
+		;
+		void fp_SetFileNames(NStr::CStr const &_WorkingDirectory);
+		void fp_SetTrans(int _Charset, int _ContentCharset, NStr::CStr const &_WorkingDirectory);
+		NStr::CAnsiStr fp_EncodeFileName(NStr::CStr const &_Name) const;
 		void fp_SetClientPath();
 		void fp_SetIdentity();
 		static int fsp_FilterSettingsFile(char const *_pPath, int _Charset, char const *_pDirectory, void *_pContext);
 
-		void fp_ReadMergeResult(TCVector<CIntegrationResult> &o_Integrated, TCVector<CStr> &o_MustSync, bool _bInverted, TCVector<CMergeError> &o_Errors);
+		void fp_ReadMergeResult
+			(
+				NContainer::TCVector<CIntegrationResult> &o_Integrated
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, bool _bInverted
+				, NContainer::TCVector<CMergeError> &o_Errors
+			)
+		;
 		bool fp_GetNonTaggedClient();
-		bool fp_CreatePatchNonTagged(CStr const &_Branch, bool _bFullContext, CStr &o_Patch);
-		bool fp_DiffRevisionsNonTagged(CStr const &_File1, CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes);
-		bool fp_FileStats(TCVector<CStr> const &_Options, CStr const &_File, CFileStats &_Stats);
+		bool fp_CreatePatchNonTagged(NStr::CStr const &_Branch, bool _bFullContext, NStr::CStr &o_Patch);
+		bool fp_DiffRevisionsNonTagged(NStr::CStr const &_File1, NStr::CStr const &_File2, CFileDiff &o_Diff, bool _bAnyTypes);
+		bool fp_FileStats(NContainer::TCVector<NStr::CStr> const &_Options, NStr::CStr const &_File, CFileStats &_Stats);
 
-		bool fp_MutateChangelist(uint32 _ChangeList, CStr const &_Operation, bool _bForce, TCFunction<bool (CStr &o_NewDesc, CStr const &_Key, CStr const &_Data)> &&_fMutator);
+		auto fp_MutateChangelist
+			(
+				uint32 _ChangeList
+				, NStr::CStr const &_Operation
+				, bool _bForce
+				, NFunction::TCFunction<bool (NStr::CStr &o_NewDesc, NStr::CStr const &_Key, NStr::CStr const &_Data)> &&_fMutator
+			)
+			-> bool
+		;
 
-		CStr mp_InitError;
-		CStr mp_LastError;
-		CStr mp_LastFunction;
+		NStr::CStr mp_InitError;
+		NStr::CStr mp_LastError;
+		NStr::CStr mp_LastFunction;
 		CP4Client *mp_pClient;
 		ClientApi *mp_pAPI;
 		Enviro *mp_pEnviro = nullptr; // The API's settings, when the connection's overrides are applied before it reads them
-		CStr mp_ConfigRoot;           // The connection's m_ConfigRoot, which the settings' filter needs before the connection is kept
+		NStr::CStr mp_ConfigRoot;     // The connection's m_ConfigRoot, which the settings' filter needs before the connection is kept
 		bool mp_bUTF8 = false;
 		int mp_CommandCharset = 0;    // The CharSetApi charset of the strings the API takes and gives, NOCONV for none
 		int mp_FileNamesCharset = 0;  // The charset of file names (SetTrans' fnames), which decides how the API takes them, NOCONV for none
 		int mp_ContentCharset = 0;    // The charset the settings select for the contents of files, which a login turning to UTF-8 keeps, NOCONV for none
-		TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
+		NStorage::TCUniquePointer<CPerforceClient> mp_pNonTaggedClient;
 
-		CStr mp_LoginDirectory; // The directory the session logged in in, whose settings it has
-		CStr mp_ActiveHost;
-		CStr mp_ActiveClient;
-		CStr mp_ActiveUser;
-		CStr mp_ActiveVersion;
+		NStr::CStr mp_LoginDirectory; // The directory the session logged in in, whose settings it has
+		NStr::CStr mp_ActiveHost;
+		NStr::CStr mp_ActiveClient;
+		NStr::CStr mp_ActiveUser;
+		NStr::CStr mp_ActiveVersion;
 
 		CConnectionInfo mp_ConnectionInfo;
 
@@ -667,275 +739,331 @@ namespace NMib::NPerforce
 
 	struct CPerforceClientThrow
 	{
-		CPerforceClientThrow(CStr const &_Server = CStr(), CStr const &_User = CStr(), CStr const &_Client = CStr(), CStr const &_Host = CStr());
+		CPerforceClientThrow(NStr::CStr const &_Server = {}, NStr::CStr const &_User = {}, NStr::CStr const &_Client = {}, NStr::CStr const &_Host = {});
 		CPerforceClientThrow(CPerforceClient::CConnectionInfo const &_Info);
 
 		void f_ThrowLastError() const;
 		CPerforceClient &f_NoThrow();
 
-		CStr const &f_GetHost() const;
-		CStr const &f_GetServer() const;
-		CStr const &f_GetUser() const;
-		CStr const &f_GetClient() const;
-		CStr f_GetActiveServer();
-		CStr f_GetActiveUser();
-		CStr f_GetActiveClient();
-		CStr f_GetActiveHost();
+		NStr::CStr const &f_GetHost() const;
+		NStr::CStr const &f_GetServer() const;
+		NStr::CStr const &f_GetUser() const;
+		NStr::CStr const &f_GetClient() const;
+		NStr::CStr f_GetActiveServer();
+		NStr::CStr f_GetActiveUser();
+		NStr::CStr f_GetActiveClient();
+		NStr::CStr f_GetActiveHost();
 		CPerforceClient::CConnectionInfo const &f_GetConnectionInfo() const;
 
 		bool f_IsUTF8();
-		void f_Login(CStr const &_Password, CStr const &_WorkingDir = CStr());
-		CStr f_GetSecurityLevel();
-		CStr f_GetLoginTicket(CStr const &_Password, bool _bAllHosts);
-		void f_CreateDepot(CStr const &_Name, CStr const &_Type);
-		void f_SetUserPassword(CStr const &_User, CStr const &_Password, CStr const &_OldPassword = {});
-		void f_SetClient(CStr const &_ClientName, CPerforceClient::CClient const &_Client);
-		void f_SetProtections(TCVector<CStr> const &_Lines);
-		void f_SetTypeMap(TCVector<CStr> const &_Lines);
+		void f_Login(NStr::CStr const &_Password, NStr::CStr const &_WorkingDir = {});
+		NStr::CStr f_GetSecurityLevel();
+		NStr::CStr f_GetLoginTicket(NStr::CStr const &_Password, bool _bAllHosts);
+		void f_CreateDepot(NStr::CStr const &_Name, NStr::CStr const &_Type);
+		void f_SetUserPassword(NStr::CStr const &_User, NStr::CStr const &_Password, NStr::CStr const &_OldPassword = {});
+		void f_SetClient(NStr::CStr const &_ClientName, CPerforceClient::CClient const &_Client);
+		void f_SetProtections(NContainer::TCVector<NStr::CStr> const &_Lines);
+		void f_SetTypeMap(NContainer::TCVector<NStr::CStr> const &_Lines);
 
-		bool f_FileExistsInDepot(CStr const &_File);
-		bool f_FileExistsInDepotNotDeleted(CStr const &_File);
-		bool f_FileExistsInChangeList(CStr const &_File);
-		bool f_FileExists(CStr const &_File);
-		bool f_CanOpenForEdit(CStr const &_File);
+		bool f_FileExistsInDepot(NStr::CStr const &_File);
+		bool f_FileExistsInDepotNotDeleted(NStr::CStr const &_File);
+		bool f_FileExistsInChangeList(NStr::CStr const &_File);
+		bool f_FileExists(NStr::CStr const &_File);
+		bool f_CanOpenForEdit(NStr::CStr const &_File);
 
-		void f_RemoveFromClient(CStr const &_File);
-		void f_Sync(CStr const &_File, TCVector<CStr> &_Synced, TCVector<CStr> &_Removed, bool _bPretend = false);
+		void f_RemoveFromClient(NStr::CStr const &_File);
+		void f_Sync(NStr::CStr const &_File, NContainer::TCVector<NStr::CStr> &_Synced, NContainer::TCVector<NStr::CStr> &_Removed, bool _bPretend = false);
 		void f_Sync
 			(
-				CStr const &_File
-				, TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress = TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
+				NStr::CStr const &_File
+				, NFunction::TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)> const &_fProgress = NFunction::TCFunction<bool (int64 _TotalBytes, int64 _SyncedBytes)>()
 				, bool _bForce = false
-				, TCVector<CStr> const &_MoreFiles = TCVector<CStr>()
+				, NContainer::TCVector<NStr::CStr> const &_MoreFiles = NContainer::TCVector<NStr::CStr>()
 			)
 		;
-		int64 f_GetHeadChangelist(CStr const &_Path);
+		int64 f_GetHeadChangelist(NStr::CStr const &_Path);
 		int64 f_GetHeadChangelistUnsafe();
-		TCVector<CStr> f_Files(CStr const &_Search);
-		TCVector<CStr> f_Files(CStr const &_Search, TCVector<CStr> &_Deleted);
-		TCVector<CStr> f_ClientFiles(CStr const &_Search);
-		TCVector<CStr> f_GetFileStatClientFiles(TCVector<CStr> const &_Arguments);
-		TCVector<CStr> f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments);
-		TCVector<CStr> f_GetFileStatFilesUnder(CStr const &_LocalRoot, TCVector<CStr> const &_Arguments, TCVector<CPerforceClient::CFileStats> &o_Stats);
-		CStr f_GetJobSpec();
-		CRegistry f_GetJobs(CStr const &_JobView);
-		CStr f_GetTriggers();
-		CRegistry f_GetUsers();
-		CStr f_GetDepotPath(CStr const &_ClientPath, bool _bReturnImportedStream = true);
-		CStr f_GetClientPath(CStr const &_DepotPath);
+		NContainer::TCVector<NStr::CStr> f_Files(NStr::CStr const &_Search);
+		NContainer::TCVector<NStr::CStr> f_Files(NStr::CStr const &_Search, NContainer::TCVector<NStr::CStr> &_Deleted);
+		NContainer::TCVector<NStr::CStr> f_ClientFiles(NStr::CStr const &_Search);
+		NContainer::TCVector<NStr::CStr> f_GetFileStatClientFiles(NContainer::TCVector<NStr::CStr> const &_Arguments);
+		NContainer::TCVector<NStr::CStr> f_GetFileStatFilesUnder(NStr::CStr const &_LocalRoot, NContainer::TCVector<NStr::CStr> const &_Arguments);
+		auto f_GetFileStatFilesUnder(NStr::CStr const &_LocalRoot, NContainer::TCVector<NStr::CStr> const &_Arguments, NContainer::TCVector<CPerforceClient::CFileStats> &o_Stats)
+			-> NContainer::TCVector<NStr::CStr>
+		;
+		NStr::CStr f_GetJobSpec();
+		NContainer::CRegistry f_GetJobs(NStr::CStr const &_JobView);
+		NStr::CStr f_GetTriggers();
+		NContainer::CRegistry f_GetUsers();
+		NStr::CStr f_GetDepotPath(NStr::CStr const &_ClientPath, bool _bReturnImportedStream = true);
+		NStr::CStr f_GetClientPath(NStr::CStr const &_DepotPath);
 
-		CStr f_GetWorkspacePath(CStr const &_DepotPath);
-		CStr f_GetTextFileContents(CStr const &_Path);
-		NStorage::TCOptional<CStr> f_GetTextFileContentsIfExists(CStr const &_Path);
-		CByteVector f_GetFileContents(CStr const &_Path, bool _bExpandKeywords = true);
-		TCVector<CPerforceClient::CFileDiff> f_DiffOpenedFiles(TCVector<CStr> const &_Files);
-		CPerforceClient::CFileDiff f_DiffRevisions(CStr const &_File1, CStr const &_File2, bool _bAnyTypes = false);
-		TCVector<CStr> f_GetStreams();
-		TCVector<CStr> f_GetStreamDepots();
+		NStr::CStr f_GetWorkspacePath(NStr::CStr const &_DepotPath);
+		NStr::CStr f_GetTextFileContents(NStr::CStr const &_Path);
+		NStorage::TCOptional<NStr::CStr> f_GetTextFileContentsIfExists(NStr::CStr const &_Path);
+		NContainer::CByteVector f_GetFileContents(NStr::CStr const &_Path, bool _bExpandKeywords = true);
+		NContainer::TCVector<CPerforceClient::CFileDiff> f_DiffOpenedFiles(NContainer::TCVector<NStr::CStr> const &_Files);
+		CPerforceClient::CFileDiff f_DiffRevisions(NStr::CStr const &_File1, NStr::CStr const &_File2, bool _bAnyTypes = false);
+		NContainer::TCVector<NStr::CStr> f_GetStreams();
+		NContainer::TCVector<NStr::CStr> f_GetStreamDepots();
 
 		CPerforceClient::CChangeList f_GetChangelist(uint32 _ChangeList);
-		void f_SetChangelistOwner(uint32 _ChangeList, CStr const &_User);
-		void f_SetChangelistClient(uint32 _ChangeList, CStr const &_Client, bool _bForce = false);
-		void f_SetChangelistDescription(uint32 _ChangeList, CStr const &_Description, bool _bForce = false);
+		void f_SetChangelistOwner(uint32 _ChangeList, NStr::CStr const &_User);
+		void f_SetChangelistClient(uint32 _ChangeList, NStr::CStr const &_Client, bool _bForce = false);
+		void f_SetChangelistDescription(uint32 _ChangeList, NStr::CStr const &_Description, bool _bForce = false);
 
-		TCVector<CPerforceClient::CChangeList> f_GetChangelists(CStr const &_Path, bool _bIncludeIntegrated, CStr const &_Workspace = CStr(), CStr const &_Status = CStr());
+		auto f_GetChangelists(NStr::CStr const &_Path, bool _bIncludeIntegrated, NStr::CStr const &_Workspace = {}, NStr::CStr const &_Status = {})
+			-> NContainer::TCVector<CPerforceClient::CChangeList>
+		;
 
-		CPerforceClient::CFileRevisions f_GetFileRevisions(CStr const &_File);
-		CPerforceClient::CFileRevisions f_GetFileRevisions(TCVector<CStr> const &_Files);
+		CPerforceClient::CFileRevisions f_GetFileRevisions(NStr::CStr const &_File);
+		CPerforceClient::CFileRevisions f_GetFileRevisions(NContainer::TCVector<NStr::CStr> const &_Files);
 
 		bool f_ChangeExists(CPerforceClient::CFix const &_Fix);
 
-		TCVector<CPerforceClient::CFix> f_GetFixes(CStr const &_Job, uint64 _PerforceGUID);
-		void f_AddFixes(CStr const &_Job, TCVector<uint32> const &_Fixes, CStr const &_Status);
-		void f_RemoveFixes(CStr const &_Job, TCVector<uint32> const &_Fixes);
-		void f_SetJobSpec(CStr const &_JobSpec);
-		void f_SetJob(CStr const &_Job);
-		CPerforceClient::CJob f_GetJob(CStr const &_Job);
-		void f_SetTriggers(CStr const &_Triggers);
-		bool f_JobExists(CStr const &_Job);
-		void f_DeleteJob(CStr const &_Job);
+		NContainer::TCVector<CPerforceClient::CFix> f_GetFixes(NStr::CStr const &_Job, uint64 _PerforceGUID);
+		void f_AddFixes(NStr::CStr const &_Job, NContainer::TCVector<uint32> const &_Fixes, NStr::CStr const &_Status);
+		void f_RemoveFixes(NStr::CStr const &_Job, NContainer::TCVector<uint32> const &_Fixes);
+		void f_SetJobSpec(NStr::CStr const &_JobSpec);
+		void f_SetJob(NStr::CStr const &_Job);
+		CPerforceClient::CJob f_GetJob(NStr::CStr const &_Job);
+		void f_SetTriggers(NStr::CStr const &_Triggers);
+		bool f_JobExists(NStr::CStr const &_Job);
+		void f_DeleteJob(NStr::CStr const &_Job);
 		CPerforceClient::CDescription f_Describe(uint32 _Changelist);
 		CPerforceClient::CDescription f_DescribeShelved(uint32 _Changelist);
 		void f_Info();
-		CStr f_GetUserName();
-		CStr f_GetClientName();
-		CStr f_GetClientRoot();
-		void f_OpenForEdit(CStr const &_File);
-		void f_OpenForEdit(CStr const &_File, CStr const &_Type);
-		void f_Submit(CStr const &_File, CStr const &_Comment, CStr const &_Job = "");
-		void f_Revert(CStr const &_File, bool _bOnlyIfUnchanged = false);
+		NStr::CStr f_GetUserName();
+		NStr::CStr f_GetClientName();
+		NStr::CStr f_GetClientRoot();
+		void f_OpenForEdit(NStr::CStr const &_File);
+		void f_OpenForEdit(NStr::CStr const &_File, NStr::CStr const &_Type);
+		void f_Submit(NStr::CStr const &_File, NStr::CStr const &_Comment, NStr::CStr const &_Job = {});
+		void f_Revert(NStr::CStr const &_File, bool _bOnlyIfUnchanged = false);
 		void f_RevertChangelist(uint32 _Changelist, bool _bOnlyIfUnchanged = false, bool _bDeleteAddedFiles = false);
-		void f_Add(CStr const &_File, bool _bLiteral = false);
-		void f_Delete(CStr const &_File);
-		void f_Move(CStr const &_From, CStr const &_To);
-		void f_OpenForEditOrMakeWritable(CStr const &_File);
-		void f_TryOpenForEdit(CStr const &_File);
-		void f_OpenForWrite(CStr const &_File, bool *o_pRefused = nullptr);
+		void f_Add(NStr::CStr const &_File, bool _bLiteral = false);
+		void f_Delete(NStr::CStr const &_File);
+		void f_Move(NStr::CStr const &_From, NStr::CStr const &_To);
+		void f_OpenForEditOrMakeWritable(NStr::CStr const &_File);
+		void f_TryOpenForEdit(NStr::CStr const &_File);
+		void f_OpenForWrite(NStr::CStr const &_File, bool *o_pRefused = nullptr);
 
-		uint32 f_CreateChangelist(CStr const &_Comment, TCVector<CStr> const &_Jobs, TCVector<CStr> const &_Files);
+		uint32 f_CreateChangelist(NStr::CStr const &_Comment, NContainer::TCVector<NStr::CStr> const &_Jobs, NContainer::TCVector<NStr::CStr> const &_Files);
 
-		TCVector<CPerforceClient::CFileRevision> f_FindHeadFiles(CStr const &_Pattern);
+		NContainer::TCVector<CPerforceClient::CFileRevision> f_FindHeadFiles(NStr::CStr const &_Pattern);
 
-		TCVector<CStr> f_GetClients(CStr const &_SearchPattern);
+		NContainer::TCVector<NStr::CStr> f_GetClients(NStr::CStr const &_SearchPattern);
 
 		void f_GetClients
 			(
-				CStr const &_SearchPattern
-				, CStr const &_Stream
-				, CStr const &_User
-				, TCFunction<void (CStr const &_Client, CStr const &_Key, CStr const &_Value)> const &_fProcessor
+				NStr::CStr const &_SearchPattern
+				, NStr::CStr const &_Stream
+				, NStr::CStr const &_User
+				, NFunction::TCFunction<void (NStr::CStr const &_Client, NStr::CStr const &_Key, NStr::CStr const &_Value)> const &_fProcessor
 			)
 		;
 
-		CStr f_GetClient(CStr const &_ClientName);
-		void f_GetClient(CStr const &_ClientName, TCFunction<void (CStr const &_Key, CStr const &_Value)> const &_fProcessor);
-		CPerforceClient::CClient f_GetClientScruct(CStr const &_Client);
+		NStr::CStr f_GetClient(NStr::CStr const &_ClientName);
+		void f_GetClient(NStr::CStr const &_ClientName, NFunction::TCFunction<void (NStr::CStr const &_Key, NStr::CStr const &_Value)> const &_fProcessor);
+		CPerforceClient::CClient f_GetClientScruct(NStr::CStr const &_Client);
 
-		void f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, TCVector<CStr> const &_Files);
-		void f_MoveToChangelist(TCVector<CStr> const &_Files, uint32 _ChangeList);
-		void f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, CStr const &_FileSpec = CStr());
-		void f_UnshelveWithBranch(uint32 _SourceChangelist, CStr const &_BranchMapping, uint32 _DestinationChangeList);
+		void f_ShelveChangelist(uint32 _Changelist, bool _bReplaceFiles, bool _bForce, NContainer::TCVector<NStr::CStr> const &_Files);
+		void f_MoveToChangelist(NContainer::TCVector<NStr::CStr> const &_Files, uint32 _ChangeList);
+		void f_UnshelveInto(uint32 _SourceChangelist, uint32 _DestinationChangelist, NStr::CStr const &_FileSpec = {});
+		void f_UnshelveWithBranch(uint32 _SourceChangelist, NStr::CStr const &_BranchMapping, uint32 _DestinationChangeList);
 		uint32 f_SubmitChangelist(uint32 _Changelist, bool _bSubmitShelved);
 		void f_DeleteChangelist(uint32 _Changelist, bool _bForce = false);
-		void f_RemoveJobsFromChangelist(uint32 _Changelist, TCVector<CStr> const &_Jobs);
-		void f_DeleteShelvedFile(uint32 _Changelist, CStr const &_File, bool _bForce = false);
-		void f_ResolveSafe(CStr const &_File, uint32 _Changelist = 0);
-		void f_ResolveAutomatic(CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
-		TCVector<CPerforceClient::CUnresolvedFile> f_GetUnresolvedFiles(CStr const &_File, uint32 _Changelist = 0);
-		void f_ResolveMine(CStr const &_File, uint32 _Changelist = 0);
+		void f_RemoveJobsFromChangelist(uint32 _Changelist, NContainer::TCVector<NStr::CStr> const &_Jobs);
+		void f_DeleteShelvedFile(uint32 _Changelist, NStr::CStr const &_File, bool _bForce = false);
+		void f_ResolveSafe(NStr::CStr const &_File, uint32 _Changelist = 0);
+		void f_ResolveAutomatic(NStr::CStr const &_File, uint32 _Changelist = 0, bool _bRequireResolved = false);
+		NContainer::TCVector<CPerforceClient::CUnresolvedFile> f_GetUnresolvedFiles(NStr::CStr const &_File, uint32 _Changelist = 0);
+		void f_ResolveMine(NStr::CStr const &_File, uint32 _Changelist = 0);
 
 		auto f_CopyStream
 			(
-				CStr const &_FromStream
-				, CStr const &_ToStream
+				NStr::CStr const &_FromStream
+				, NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CPerforceClient::CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
-			-> TCVector<CPerforceClient::CIntegrationResult>
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 		auto f_MergeStream
 			(
-				CStr const &_FromStream
-				, CStr const &_ToStream
+				NStr::CStr const &_FromStream
+				, NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CPerforceClient::CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
-			-> TCVector<CPerforceClient::CIntegrationResult>
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 		auto f_IntegrateStream
 			(
-				CStr const &_FromStream
-				, CStr const &_ToStream
+				NStr::CStr const &_FromStream
+				, NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CPerforceClient::CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
-			-> TCVector<CPerforceClient::CIntegrationResult>
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 		auto f_IntegrateFiles
 			(
-				CStr const &_FromFiles
-				, CStr const &_ToFiles
+				NStr::CStr const &_FromFiles
+				, NStr::CStr const &_ToFiles
 				, bool _bPretend
 				, bool _bEnableBaseless
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
 			)
-			-> TCVector<CPerforceClient::CIntegrationResult>
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 
-		auto f_CopyStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &o_MustSync, TCVector<CPerforceClient::CMergeError> &o_Errors, CStr const &_ToFileSpec = CStr())
-			-> TCVector<CPerforceClient::CIntegrationResult>
+		auto f_CopyStreamToParent
+			(
+				NStr::CStr const &_FromStream
+				, bool _bPretend
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
+			)
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
-		auto f_MergeStreamToParent(CStr const &_FromStream, bool _bPretend, TCVector<CStr> &o_MustSync, TCVector<CPerforceClient::CMergeError> &o_Errors, CStr const &_ToFileSpec = CStr())
-			-> TCVector<CPerforceClient::CIntegrationResult>
+		auto f_MergeStreamToParent
+			(
+				NStr::CStr const &_FromStream
+				, bool _bPretend
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
+			)
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 		auto f_IntegrateStreamToParent
 			(
-				CStr const &_FromStream
+				NStr::CStr const &_FromStream
 				, bool _bPretend
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CPerforceClient::CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
-			-> TCVector<CPerforceClient::CIntegrationResult>
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 
-		auto f_CopyStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &o_MustSync, TCVector<CPerforceClient::CMergeError> &o_Errors, CStr const &_ToFileSpec = CStr())
-			-> TCVector<CPerforceClient::CIntegrationResult>
+		auto f_CopyStreamFromParent
+			(
+				NStr::CStr const &_ToStream
+				, bool _bPretend
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
+			)
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
-		auto f_MergeStreamFromParent(CStr const &_ToStream, bool _bPretend, TCVector<CStr> &o_MustSync, TCVector<CPerforceClient::CMergeError> &o_Errors, CStr const &_ToFileSpec = CStr())
-			-> TCVector<CPerforceClient::CIntegrationResult>
+		auto f_MergeStreamFromParent
+			(
+				NStr::CStr const &_ToStream
+				, bool _bPretend
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
+			)
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 		auto f_IntegrateStreamFromParent
 			(
-				CStr const &_ToStream
+				NStr::CStr const &_ToStream
 				, bool _bPretend
-				, TCVector<CStr> &o_MustSync
-				, TCVector<CPerforceClient::CMergeError> &o_Errors
-				, CStr const &_ToFileSpec = CStr()
+				, NContainer::TCVector<NStr::CStr> &o_MustSync
+				, NContainer::TCVector<CPerforceClient::CMergeError> &o_Errors
+				, NStr::CStr const &_ToFileSpec = {}
 			)
-			-> TCVector<CPerforceClient::CIntegrationResult>
+			-> NContainer::TCVector<CPerforceClient::CIntegrationResult>
 		;
 
-		CStr f_CreatePatch(CStr const &_Branch, bool _bFullContext);
+		NStr::CStr f_CreatePatch(NStr::CStr const &_Branch, bool _bFullContext);
 
-		CPerforceClient::CStream f_GetStream(CStr const &_StreamName);
+		CPerforceClient::CStream f_GetStream(NStr::CStr const &_StreamName);
 
-		void f_DeleteStream(CStr const &_StreamName);
+		void f_DeleteStream(NStr::CStr const &_StreamName);
 		void f_OpenStreamSpec();
 
-		void f_Obliterate(CStr const &_Path);
+		void f_Obliterate(NStr::CStr const &_Path);
 
-		bool f_StreamExists(CStr const &_StreamName);
+		bool f_StreamExists(NStr::CStr const &_StreamName);
 
-		void f_SetStream(CStr const &_StreamName, CPerforceClient::CStream const &_Stream);
+		void f_SetStream(NStr::CStr const &_StreamName, CPerforceClient::CStream const &_Stream);
 
-		void f_PopulateStream(CStr const &_StreamName);
+		void f_PopulateStream(NStr::CStr const &_StreamName);
 
-		TCVector<CStr> f_FindStreams(CStr const &_SearchQuery, TCVector<CStr> const &_StreamSpecs = {});
-		TCVector<CStr> f_FindStreamsByViewMatch(TCVector<CStr> const &_Views);
+		NContainer::TCVector<NStr::CStr> f_FindStreams(NStr::CStr const &_SearchQuery, NContainer::TCVector<NStr::CStr> const &_StreamSpecs = {});
+		NContainer::TCVector<NStr::CStr> f_FindStreamsByViewMatch(NContainer::TCVector<NStr::CStr> const &_Views);
 
-		TCVector<CStr> f_GetOpened(CStr const &_Path, CStr const &_Client);
+		NContainer::TCVector<NStr::CStr> f_GetOpened(NStr::CStr const &_Path, NStr::CStr const &_Client);
 
-		void f_SwitchWorkspaceStream(CStr const &_Workspace, CStr const &_Stream);
-		void f_DeleteWorkspace(CStr const &_Workspace);
+		void f_SwitchWorkspaceStream(NStr::CStr const &_Workspace, NStr::CStr const &_Stream);
+		void f_DeleteWorkspace(NStr::CStr const &_Workspace);
 
-		CStr f_GetEnvVar(CStr const &_Var);
-		void f_SetEnvVar(CStr const &_Var, CStr const &_Value);
+		NStr::CStr f_GetEnvVar(NStr::CStr const &_Var);
+		void f_SetEnvVar(NStr::CStr const &_Var, NStr::CStr const &_Value);
 
-		CPerforceClient::CFileStats f_FileStats(CStr const &_File);
-		CPerforceClient::CFileStats f_OpenedFileStats(CStr const &_File);
-		CPerforceClient::CFileStats f_HaveFileStats(CStr const &_File);
-		CPerforceClient::CFileStats f_DepotFileStats(CStr const &_File);
-		TCVector<CStr> f_GetRevisionTypes(TCVector<CStr> const &_Revisions);
+		CPerforceClient::CFileStats f_FileStats(NStr::CStr const &_File);
+		CPerforceClient::CFileStats f_OpenedFileStats(NStr::CStr const &_File);
+		CPerforceClient::CFileStats f_HaveFileStats(NStr::CStr const &_File);
+		CPerforceClient::CFileStats f_DepotFileStats(NStr::CStr const &_File);
+		NContainer::TCVector<NStr::CStr> f_GetRevisionTypes(NContainer::TCVector<NStr::CStr> const &_Revisions);
 
-		void f_CreateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
-		void f_CreateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
-		void f_UpdateStreamClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template, CStr const &_Stream, TCVector<CStr> const *_pOptions = nullptr);
-		void f_UpdateClient(CStr const &_ClientName, CStr const &_Root, CStr const &_AltRoot, CStr const &_Template);
+		void f_CreateStreamClient
+			(
+				NStr::CStr const &_ClientName
+				, NStr::CStr const &_Root
+				, NStr::CStr const &_AltRoot
+				, NStr::CStr const &_Template
+				, NStr::CStr const &_Stream
+				, NContainer::TCVector<NStr::CStr> const *_pOptions = nullptr
+			)
+		;
+		void f_CreateClient(NStr::CStr const &_ClientName, NStr::CStr const &_Root, NStr::CStr const &_AltRoot, NStr::CStr const &_Template);
+		void f_UpdateStreamClient
+			(
+				NStr::CStr const &_ClientName
+				, NStr::CStr const &_Root
+				, NStr::CStr const &_AltRoot
+				, NStr::CStr const &_Template
+				, NStr::CStr const &_Stream
+				, NContainer::TCVector<NStr::CStr> const *_pOptions = nullptr
+			)
+		;
+		void f_UpdateClient(NStr::CStr const &_ClientName, NStr::CStr const &_Root, NStr::CStr const &_AltRoot, NStr::CStr const &_Template);
 
-		CPerforceClient::CBranchSpec f_GetBranchForStreams(CStr const &_From, CStr const &_To);
+		CPerforceClient::CBranchSpec f_GetBranchForStreams(NStr::CStr const &_From, NStr::CStr const &_To);
 
-		void f_CreateBranch(CStr const &_Name, CPerforceClient::CBranchSpec const &_BranchSpec);
-		void f_DeleteBranch(CStr const &_Name);
+		void f_CreateBranch(NStr::CStr const &_Name, CPerforceClient::CBranchSpec const &_BranchSpec);
+		void f_DeleteBranch(NStr::CStr const &_Name);
 
-		static bool fs_GetFromP4Config(CStr const &_Path, CPerforceClientThrow &o_Client);
-		static auto fs_GetFromP4Config(CStr const &_Path, TCMap<CStr, CStr> const &_Environment, CPerforceIgnore::CRegistrySettings const &_Registry, CStr const &_ConfigRoot)
+		static bool fs_GetFromP4Config(NStr::CStr const &_Path, CPerforceClientThrow &o_Client);
+		static auto fs_GetFromP4Config
+			(
+				NStr::CStr const &_Path
+				, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment
+				, CPerforceIgnore::CRegistrySettings const &_Registry
+				, NStr::CStr const &_ConfigRoot
+			)
 			-> NStorage::TCUniquePointer<CPerforceClientThrow>
 		;
 		static auto fs_GetFromP4ConfigForFile
 			(
-				CStr const &_Path
-				, TCMap<CStr, CStr> const &_Environment
+				NStr::CStr const &_Path
+				, NContainer::TCMap<NStr::CStr, NStr::CStr> const &_Environment
 				, CPerforceIgnore::CRegistrySettings const &_Registry
-				, CStr const &_ConfigRoot
-				, CStr &o_FileName
+				, NStr::CStr const &_ConfigRoot
+				, NStr::CStr &o_FileName
 			)
 			-> NStorage::TCUniquePointer<CPerforceClientThrow>
 		;

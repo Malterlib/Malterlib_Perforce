@@ -9,72 +9,72 @@ namespace NMib::NPerforce
 	{
 		struct COwnedStreams
 		{
-			void f_AddStream(CStr const &_FromStream, CStr const &_ToStream);
+			void f_AddStream(NStr::CStr const &_FromStream, NStr::CStr const &_ToStream);
 			COwnedStreams operator += (COwnedStreams const &_Other);
 
-			TCLinkedList<TCTuple<CStr, CStr>> m_Streams;
-			TCMap<CStr, CStr> m_StreamMap;
+			NContainer::TCLinkedList<NStorage::TCTuple<NStr::CStr, NStr::CStr>> m_Streams;
+			NContainer::TCMap<NStr::CStr, NStr::CStr> m_StreamMap;
 		};
 
 		struct CSwitchResult
 		{
-			CStr m_Workspace;
-			CStr m_OldStream;
+			NStr::CStr m_Workspace;
+			NStr::CStr m_OldStream;
 		};
 
 		struct CStrippedRoot
 		{
-			CStr m_Root;
-			TCVector<CStr> m_StreamPaths;
+			NStr::CStr m_Root;
+			NContainer::TCVector<NStr::CStr> m_StreamPaths;
 			bool m_bStripped = false;
 		};
 
-		CPerforceFunctions(TCUniquePointer<CPerforceClientThrow> &_pClient);
-		CPerforceClient::CStream const &f_GetStreamCached(CStr const &_Stream);
-		TCUniquePointer<CPerforceClientThrow> &f_GetClientPtr();
+		CPerforceFunctions(NStorage::TCUniquePointer<CPerforceClientThrow> &_pClient);
+		CPerforceClient::CStream const &f_GetStreamCached(NStr::CStr const &_Stream);
+		NStorage::TCUniquePointer<CPerforceClientThrow> &f_GetClientPtr();
 		CPerforceClientThrow &f_GetClient();
 
-		CStr f_GetStreamRootParent(CStr const &_Stream);
+		NStr::CStr f_GetStreamRootParent(NStr::CStr const &_Stream);
 
-		static CStr fs_GetCommonPath(CStr const &_First, CStr const &_Second, CStr &o_FirstSuffix, CStr &o_SecondSuffix);
+		static NStr::CStr fs_GetCommonPath(NStr::CStr const &_First, NStr::CStr const &_Second, NStr::CStr &o_FirstSuffix, NStr::CStr &o_SecondSuffix);
 
-		CStr f_GetCurrentStream() const;
+		NStr::CStr f_GetCurrentStream() const;
 		CStrippedRoot f_GetStrippedRoot();
-		static CStr fs_GetDepot(CStr const &_Stream);
-		static CStr fs_GetStream(CStr const &_Stream);
+		static NStr::CStr fs_GetDepot(NStr::CStr const &_Stream);
+		static NStr::CStr fs_GetStream(NStr::CStr const &_Stream);
 
-		CStr f_GetFullRoot(CStr const &_Stream);
-		CStr f_GetFullRoot(CStr const &_Stream, CStrippedRoot const &_StrippedRoot);
+		NStr::CStr f_GetFullRoot(NStr::CStr const &_Stream);
+		NStr::CStr f_GetFullRoot(NStr::CStr const &_Stream, CStrippedRoot const &_StrippedRoot);
 
 		static bool fs_UsesParentStreamPath(CPerforceClient::CStream const &_Stream);
-		static TCVector<CStr> fs_GetStreamPaths(CStr const &_Depot, CPerforceClient::CStream const &_Stream);
-		static CStrippedRoot fs_StripRoot(CStr const &_Root, TCVector<CStr> const &_StreamPaths, bool _bRemapped);
-		static CStr fs_GetFullRoot(CStr const &_Client, CStrippedRoot const &_StrippedRoot, CStr const &_StreamPath);
+		static NContainer::TCVector<NStr::CStr> fs_GetStreamPaths(NStr::CStr const &_Depot, CPerforceClient::CStream const &_Stream);
+		static CStrippedRoot fs_StripRoot(NStr::CStr const &_Root, NContainer::TCVector<NStr::CStr> const &_StreamPaths, bool _bRemapped);
+		static NStr::CStr fs_GetFullRoot(NStr::CStr const &_Client, CStrippedRoot const &_StrippedRoot, NStr::CStr const &_StreamPath);
 
-		CStr f_GetClientForStream(CStr const &_Stream, CSwitchResult &o_OldStream, bool _bQuiet = false);
-		static CRegistryPreserveAll fs_GetRegistry(CPerforceClient::CStream const &_Stream);
-		static void fs_InitializeStream(CStr const &_Stream, CPerforceFunctions &_Functions);
-		static CSwitchResult fs_SwitchStream(CPerforceFunctions &_Functions, CStr const &_StreamName, bool _bDoSync, bool _bQuiet = false);
-		TCSet<CStr> f_GetDisabledCreate(CPerforceClient::CStream const &_Stream);
-		CStr f_GetPatchPrefix(CPerforceClient::CStream const &_Stream);
+		NStr::CStr f_GetClientForStream(NStr::CStr const &_Stream, CSwitchResult &o_OldStream, bool _bQuiet = false);
+		static NContainer::CRegistryPreserveAll fs_GetRegistry(CPerforceClient::CStream const &_Stream);
+		static void fs_InitializeStream(NStr::CStr const &_Stream, CPerforceFunctions &_Functions);
+		static CSwitchResult fs_SwitchStream(CPerforceFunctions &_Functions, NStr::CStr const &_StreamName, bool _bDoSync, bool _bQuiet = false);
+		NContainer::TCSet<NStr::CStr> f_GetDisabledCreate(CPerforceClient::CStream const &_Stream);
+		NStr::CStr f_GetPatchPrefix(CPerforceClient::CStream const &_Stream);
 
-		COwnedStreams f_GetStreamOwned(CStr const &_Stream, bool _bReversed);
+		COwnedStreams f_GetStreamOwned(NStr::CStr const &_Stream, bool _bReversed);
 
-		TCUniquePointer<CPerforceClientThrow> &m_pClient;
-		TCMap<CStr, CPerforceClient::CStream> m_StreamCache;
+		NStorage::TCUniquePointer<CPerforceClientThrow> &m_pClient;
+		NContainer::TCMap<NStr::CStr, CPerforceClient::CStream> m_StreamCache;
 
 	private:
-		void fp_GetStreamOwned(CStr const &_Stream, COwnedStreams &o_Owned, bool _bReversed);
+		void fp_GetStreamOwned(NStr::CStr const &_Stream, COwnedStreams &o_Owned, bool _bReversed);
 	};
 
 	struct CPerforce_TemporaryStreamSwitcher
 	{
 		CPerforce_TemporaryStreamSwitcher(CPerforceFunctions &_Functions);
 		~CPerforce_TemporaryStreamSwitcher();
-		CStr f_GetClientForStream(CStr const &_StreamName, bool _bQuite = false);
+		NStr::CStr f_GetClientForStream(NStr::CStr const &_StreamName, bool _bQuite = false);
 
 	private:
-		TCMap<CStr, CStr> mp_OriginalStreams;
+		NContainer::TCMap<NStr::CStr, NStr::CStr> mp_OriginalStreams;
 		CPerforceFunctions &mp_Functions;
 	};
 }
